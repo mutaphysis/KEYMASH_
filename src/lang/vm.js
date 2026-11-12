@@ -365,6 +365,8 @@ export class VM {
     if (th.paw) this.emit({ type: 'stroke', pts: [th.paw, [px, py]], w: 1.5, dur: 0.12, color: this.col(th, -10), paw: true }, th);
     th.paw = [px, py];
     th.x = px; th.y = py;
+    // a key-cap lights up where the key sits
+    this.shape(th, 'square', st.big ? 16 : 10, { rot: th.id * 47 + th.gen * 9, life: 0.45, w: 2, dl: 20 });
     if (st.roll) {
       // glissando sweep through the rolled keys
       const pts = st.roll.keys.map((k) => this.keyPos(th, k));
