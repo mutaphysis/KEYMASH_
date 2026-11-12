@@ -81,7 +81,9 @@ export const SPELLS: Op[] = [
 // Spell cooldowns, in seconds of VM time, shared by all threads. Ops in the same group share one
 // cooldown (all hacker banners count as "the hacking spell").
 export const SPELL_COOLDOWN = 1.5;
-export const GROUP_COOLDOWN: Record<string, number> = { hack: 3, answer: 3, crash: 3, radar: 12 };
+/** Banners (hacking, the answer, MATH.EXE) take over the screen, so they wait longest. */
+export const BANNER_COOLDOWN = 4;
+export const GROUP_COOLDOWN: Record<string, number> = { hack: BANNER_COOLDOWN, answer: BANNER_COOLDOWN, crash: BANNER_COOLDOWN, radar: 12 };
 const SPELL_GROUP: Partial<Record<Op, string>> = {
   hack: 'hack', access: 'hack', mainframe: 'hack', virus: 'hack', download: 'hack', matrix: 'hack', bluescreen: 'hack',
 };
@@ -619,7 +621,7 @@ export class VM {
         this.emit({ type: 'view', shake: 14 * k }, th);
         this.sfx(th, 'rumble', vel); break;
       case 'r':
-        this.emit({ type: 'view', rot: 12 * k }, th);
+        this.emit({ type: 'view', rot: 6 * k }, th);
         th.ang += 45; this.sfx(th, 'sweep', vel * 0.6); break;
       case 's': {
         const L = 220 * k, A = 30 * k, f = 2 + (li % 3);

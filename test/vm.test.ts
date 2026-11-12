@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { VM, SPELLS, SPELL_COOLDOWN, hash, tempoOf } from '../src/lang/vm';
+import { VM, SPELLS, SPELL_COOLDOWN, BANNER_COOLDOWN, hash, tempoOf } from '../src/lang/vm';
 import { graphemes } from '../src/lang/lexer';
 import { lex, evalMath, fmtNum } from '../src/lang/lexer';
 import type { VMEvent } from '../src/lang/types';
@@ -112,7 +112,7 @@ test('pathological inputs', () => {
   }
 });
 
-test('spell cooldowns: hacking at most every 3 s, other spells every 1.5 s, across all threads', () => {
+test('spell cooldowns: hacking at most every 4 s, other spells every 1.5 s, across all threads', () => {
   // every chunk on every line hammers the gate; we record when spells actually fire
   const vm = new VM('a\nb\nc');
   const fired: Record<string, number[]> = { hack: [], matrix: [], boom: [] };
@@ -121,13 +121,13 @@ test('spell cooldowns: hacking at most every 3 s, other spells every 1.5 s, acro
     for (const op of ['hack', 'matrix', 'boom'] as const) if (vm.cast(op)) fired[op]!.push(vm.time);
   }
   const hacking = [...fired.hack!, ...fired.matrix!].sort((a, b) => a - b);
-  for (let i = 1; i < hacking.length; i++) expect(hacking[i]! - hacking[i - 1]!).toBeGreaterThanOrEqual(3 - 1e-6);
+  for (let i = 1; i < hacking.length; i++) expect(hacking[i]! - hacking[i - 1]!).toBeGreaterThanOrEqual(BANNER_COOLDOWN - 1e-6);
   expect(hacking.length).toBeGreaterThan(15); // and it does keep firing
   const booms = fired.boom!;
   for (let i = 1; i < booms.length; i++) expect(booms[i]! - booms[i - 1]!).toBeGreaterThanOrEqual(SPELL_COOLDOWN - 1e-6);
 });
 
-test('hacker banners from mashing respect the 3 s cooldown', () => {
+test('hacker banners from mashing respect the 4 s cooldown', () => {
   // find mash chunks whose spell is a hacker spell, and put lots of them on many lines
   const hacker = new Set(['hack', 'access', 'mainframe', 'virus', 'download', 'matrix']);
   const rng = rngFrom(99); const chunks: string[] = [];
@@ -140,24 +140,24 @@ test('hacker banners from mashing respect the 3 s cooldown', () => {
   const banners: number[] = [];
   for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner') banners.push(vm.time);
   expect(banners.length).toBeGreaterThan(10); // the program really is hacking all the time
-  expect(banners.length).toBeLessThanOrEqual(21); // 60 s / 3 s + 1
-  for (let i = 1; i < banners.length; i++) expect(banners[i]! - banners[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
+  expect(banners.length).toBeLessThanOrEqual(Math.floor(vm.time / BANNER_COOLDOWN) + 1);
+  for (let i = 1; i < banners.length; i++) expect(banners[i]! - banners[i - 1]!).toBeGreaterThanOrEqual(BANNER_COOLDOWN - 0.13);
 });
 
-test('the answer (42) shows at most every 3 s', () => {
+test('the answer (42) shows at most every 4 s', () => {
   const vm = new VM('6*7=\n6*7=\n42-0=\n21+21=');
   const shown: number[] = [];
   for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text === 'THE ANSWER.') shown.push(vm.time);
   expect(shown.length).toBeGreaterThan(10);
-  for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
+  for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(BANNER_COOLDOWN - 0.13);
 });
 
-test('MATH.EXE crash banner (division by zero) shows at most every 3 s', () => {
+test('MATH.EXE crash banner (division by zero) shows at most every 4 s', () => {
   const vm = new VM('1/0=\n0/0=\n9^9^9^9=');
   const shown: number[] = [];
   for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text.startsWith('MATH.EXE')) shown.push(vm.time);
   expect(shown.length).toBeGreaterThan(10);
-  for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
+  for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(BANNER_COOLDOWN - 0.13);
 });
 
 test('tempo comes from the text: shouting is faster than calm, always 70..120', () => {

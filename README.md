@@ -64,9 +64,9 @@ Each letter is placed by **where its key sits**:
 | roll over neighbours | `asdf`, `poiu` | glissando + an arcing sweep through the keys |
 | CAPS chunk | `WOOF`, `ASDKJ` | spoken out loud — by the system voice, or by the built-in *babble* voice (pick in 📂 LOAD → VOICE; default on Firefox/macOS, where system speech clicks) |
 | chunk + `?`/`!` | `fjdk?` | spoken as a question / exclamation |
-| long chunk (≥5) | `lkjhgfdsa` | casts a **spell** from the effect library, picked by the chunk's hash (same mash → same spell). Spells have a cooldown shared by all threads: 1.5 s each, and all hacker spells together at most once every 3 s. While a spell cools down, the chunk just floats away as text. |
+| long chunk (≥5) | `lkjhgfdsa` | casts a **spell** from the effect library, picked by the chunk's hash (same mash → same spell). Spells have a cooldown shared by all threads: 1.5 s each, and all hacker spells together at most once every 4 s. While a spell cools down, the chunk just floats away as text. |
 | number | `42` | shown on screen, dialled as DTMF phone tones, becomes the argument of the next op |
-| math | `7*6=`, `12/0` | evaluated and rendered on screen, each result in its own row (max 6 at once); `42` and `∞` have surprises, at most once every 3 s |
+| math | `7*6=`, `12/0` | evaluated and rendered on screen, spread over the stage without overlapping (max 6 at once); `42` and `∞` have surprises, at most once every 4 s |
 | quote | `"hello"` | spoken (unclosed quote: rest of the line) |
 | emoji | `🐶🔥🌈` | stamped on screen; many have powers (🐶 runs and barks, 💥 explodes, 🌀 tunnels…) |
 

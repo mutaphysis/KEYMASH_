@@ -16,9 +16,11 @@ interface Particle { x: number; y: number; vx: number; vy: number; age: number; 
 interface Actor { kind: ActorKind; ch: string; x: number; y: number; size: number; color: Color; age: number; life: number; dir: number; vx: number; vy: number; y0: number; ty: number; step: number }
 interface Banner { text: string; progress?: boolean; age: number; life: number }
 interface Flash { c: Color; a: number; t: number }
-interface View { rot: number; rotT: number; spin: number; zoom: number; zoomT: number; kick: number; shake: number; flip: number; flipT: number; wobble: number }
+interface View { turn: number; spin: number; zoom: number; zoomT: number; kick: number; shake: number; flip: number; flipT: number; wobble: number }
 
 const TAU = Math.PI * 2;
+/** All rotation requests are softened to this fraction. */
+const ROT_SCALE = 0.45;
 const hsl = (c: Color, a = 1): string => `hsla(${c.h | 0},${c.s | 0}%,${c.l | 0}%,${a})`;
 const rand = (a: number, b: number): number => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v));
@@ -48,6 +50,8 @@ export class Renderer {
   bg = { h: 150, l: 4, hT: 150, lT: 4 };
   fade = 0.07; fadeT = 0.07; copyK = 1;
   heads: { x: number; y: number; c: Color }[] = [];
+  /** CSS pixels at the bottom of the stage covered by the log and buttons (set by the player). */
+  reserveBottom = 0;
   /** "Reduce motion" in the system settings: softer flashes, shakes and glitches, no strobing. */
   gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -64,7 +68,7 @@ export class Renderer {
   reset(): void {
     this.strokes = []; this.sprites = []; this.parts = []; this.actors = [];
     this.banner = null; this.flashes = [];
-    this.view = { rot: 0, rotT: 0, spin: 0, zoom: 1, zoomT: 1, kick: 0, shake: 0, flip: 1, flipT: 1, wobble: 0 };
+    this.view = { turn: 0, spin: 0, zoom: 1, zoomT: 1, kick: 0, shake: 0, flip: 1, flipT: 1, wobble: 0 };
     this.fb = { amt: 0, zoom: 1, rot: 0, until: 0 };
     this.mirror = false; this.kaleido = 0;
     this.glitchAmt = 0; this.glitchUntil = 0; this.invertUntil = 0; this.sirenUntil = 0;
@@ -136,7 +140,11 @@ export class Renderer {
         // at most 6 results on screen: older ones fade out quickly, so the newest always get a clear row
         const ms = this.sprites.filter((x): x is MathSprite => x.kind === 'math' && x.life - x.age > 0.15);
         for (const old of ms.slice(0, Math.max(0, ms.length - 5))) old.life = old.age + 0.15;
-        this.addSprite({ ...e, kind: 'math', y: this.mathRow(e.y, !!e.big), age: 0, life: 3.2 }); break;
+        const size = e.big ? 44 : 36;
+        this.ctx.font = `${size}px ${this.font}`;
+        const w = this.ctx.measureText(e.s).width;
+        const [x, y] = this.mathSlot(e.x, e.y, w + 32, size * 1.5);
+        this.addSprite({ ...e, kind: 'math', x, y, w, age: 0, life: 3.2 }); break;
       }
       case 'emoji': this.addSprite({ ...e, kind: 'emoji', age: 0, rot: rand(-0.3, 0.3) }); break;
       case 'actor': this.addActor(e); break;
@@ -145,8 +153,9 @@ export class Renderer {
         if (e.zoom) v.kick += e.zoom;
         if (e.zoomTo) v.zoomT = clamp(e.zoomTo, 0.3, 3);
         if (e.shake) v.shake = Math.min(60, v.shake + e.shake * (this.gentle ? 0.25 : 1));
-        if (e.rot) v.rotT += e.rot * Math.PI / 180;
-        if (e.spin) v.spin = clamp(v.spin + e.spin * Math.PI / 180, -6, 6);
+        // rotation only turns what is already painted; new drawing stays upright (see frame())
+        if (e.rot) v.turn = clamp(v.turn + e.rot * ROT_SCALE * Math.PI / 180, -0.6, 0.6);
+        if (e.spin) v.spin = clamp(v.spin + e.spin * ROT_SCALE * Math.PI / 180, -1.2, 1.2);
         if (e.wobble) v.wobble = Math.min(3, v.wobble + e.wobble);
         if (e.flip) v.flipT *= -1;
         break;
@@ -161,7 +170,7 @@ export class Renderer {
       case 'siren': if (!this.gentle) this.sirenUntil = this.time + (e.dur || 1.5); break;
       case 'trails': this.fadeT = e.v; this.fade = e.v; break;
       case 'calm':
-        v.rotT = 0; v.spin = 0; v.zoomT = 1; v.flipT = 1; v.wobble = 0; this.mirror = false; this.kaleido = 0;
+        v.turn = 0; v.spin = 0; v.zoomT = 1; v.flipT = 1; v.wobble = 0; this.mirror = false; this.kaleido = 0;
         this.fb.until = 0; this.bg.hT = 150; this.bg.lT = 4; break;
       case 'rainbow': {
         for (let i = 0; i < 7; i++) {
@@ -175,20 +184,37 @@ export class Renderer {
     }
   }
 
-  /** Find a free row for a math label near `y`, so results never stack on top of each other. */
-  mathRow(y: number, big: boolean): number {
-    const h = (big ? 44 : 36) * 1.7;
-    const top = -this.hh * 0.85, bottom = this.hh * 0.85;
-    const live = this.sprites.filter((x): x is MathSprite => x.kind === 'math' && x.life - x.age > 0.15);
-    const free = (yy: number) => live.every((m) => Math.abs(m.y - yy) >= h);
-    const y0 = clamp(y, top, bottom);
-    // search outwards: below, above, further below, further above …
-    for (let k = 0; k <= 2 * Math.ceil((bottom - top) / h); k++) {
-      const off = Math.ceil(k / 2) * h * (k % 2 ? 1 : -1);
-      const yy = y0 + off;
-      if (yy >= top && yy <= bottom && free(yy)) return yy;
+  /**
+   * Pick a spot for a math label: free of other labels, near where it was asked for, and away from
+   * the labels already on screen, so results spread over the stage instead of stacking up.
+   */
+  mathSlot(x: number, y: number, w: number, h: number): Point {
+    const maxW = this.hw * 1.7;
+    const sc = Math.min(1, maxW / w); w *= sc; h *= sc;
+    const live = this.sprites.filter((m): m is MathSprite => m.kind === 'math' && m.life - m.age > 0.15);
+    const boxes = live.map((m) => {
+      const mw = Math.min(maxW, (m.w ?? 200) + 32), mh = (m.big ? 44 : 36) * 1.5 * Math.min(1, maxW / ((m.w ?? 200) + 32));
+      return { x: m.x, y: m.y, w: mw, h: mh };
+    });
+    const pad = 14;
+    const fits = (cx: number, cy: number) => boxes.every((b) => Math.abs(b.x - cx) * 2 >= b.w + w + pad || Math.abs(b.y - cy) * 2 >= b.h + h + pad);
+    // margins leave room for the zoom kicks of drums, so labels never touch the edge
+    const ex = this.hw * 0.86, x0 = -ex + w / 2, x1 = ex - w / 2;
+    const bottom = this.hh - this.reserveBottom * this.dpr / this.s; // keep clear of the log and buttons
+    const y0 = -this.hh * 0.8 + h / 2, y1 = Math.max(y0, bottom - h / 2 - 10);
+    let best: Point = [clamp(x, Math.min(x0, x1), Math.max(x0, x1)), clamp(y, y0, y1)];
+    let bestScore = Infinity;
+    const cols = x1 > x0 ? 7 : 1, rows = 12;
+    for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
+      const cx = cols === 1 ? 0 : x0 + (x1 - x0) * j / (cols - 1);
+      const cy = y0 + (y1 - y0) * i / (rows - 1);
+      if (!fits(cx, cy)) continue;
+      const near = Math.hypot(cx - x, cy - y);
+      const crowd = boxes.reduce((m, b) => Math.min(m, Math.hypot(b.x - cx, b.y - cy)), Infinity);
+      const score = near * 0.6 - Math.min(crowd, this.hw) * 0.8 + Math.random() * 60;
+      if (score < bestScore) { bestScore = score; best = [cx, cy]; }
     }
-    return y0;
+    return best;
   }
 
   addSprite(s: Sprite): void { if (this.sprites.length > 260) this.sprites.shift(); this.sprites.push(s); }
@@ -258,8 +284,11 @@ export class Renderer {
     const T = this.time;
 
     // view dynamics
-    v.rotT += v.spin * dt; v.spin *= Math.pow(0.6, dt);
-    v.rot += (v.rotT - v.rot) * Math.min(1, dt * 4);
+    // how far to turn the painted layer this frame: ease out the pending turn, plus decaying spin
+    const ease = v.turn * Math.min(1, dt * 3);
+    v.turn -= ease;
+    const paintTurn = ease + v.spin * dt;
+    v.spin *= Math.pow(0.25, dt);
     v.zoom += (v.zoomT - v.zoom) * Math.min(1, dt * 3);
     v.zoomT += (1 - v.zoomT) * dt * 0.08;
     v.kick *= Math.pow(0.002, dt);
@@ -283,12 +312,19 @@ export class Renderer {
     pc.fillRect(0, 0, W, H);
     pc.globalCompositeOperation = 'source-over';
 
+    if (Math.abs(paintTurn) > 1e-4) {
+      // lossy by design: the paint is resampled into a turned copy of itself
+      this.tctx.setTransform(1, 0, 0, 1, 0, 0); this.tctx.clearRect(0, 0, W, H); this.tctx.drawImage(this.paint, 0, 0);
+      pc.save(); pc.clearRect(0, 0, W, H);
+      pc.translate(W / 2, H / 2); pc.rotate(paintTurn); pc.translate(-W / 2, -H / 2);
+      pc.drawImage(this.tmp, 0, 0); pc.restore();
+    }
     if (this.fb.until > T) {
       // lossy feedback: the paint is redrawn onto itself, rotated + scaled -> tunnels, vortices
       const k = Math.min(1, (this.fb.until - T) / 0.5) * this.fb.amt;
       this.tctx.setTransform(1, 0, 0, 1, 0, 0); this.tctx.clearRect(0, 0, W, H); this.tctx.drawImage(this.paint, 0, 0);
       pc.save(); pc.globalAlpha = k * 0.7;
-      pc.translate(W / 2, H / 2); pc.rotate(this.fb.rot * dt); pc.scale(1 + (this.fb.zoom - 1) * dt * 60, 1 + (this.fb.zoom - 1) * dt * 60); pc.translate(-W / 2, -H / 2);
+      pc.translate(W / 2, H / 2); pc.rotate(this.fb.rot * dt * (this.gentle ? 0.3 : 0.6)); pc.scale(1 + (this.fb.zoom - 1) * dt * 60, 1 + (this.fb.zoom - 1) * dt * 60); pc.translate(-W / 2, -H / 2);
       pc.drawImage(this.tmp, 0, 0); pc.restore();
     }
 
@@ -329,9 +365,9 @@ export class Renderer {
 
     const shx = (Math.random() - 0.5) * v.shake * s * 2, shy = (Math.random() - 0.5) * v.shake * s * 2;
     const zoom = v.zoom * (1 + v.kick + bass * 0.04);
-    const rot = v.rot + Math.sin(T * 5) * v.wobble * 0.08;
+    const sway = Math.sin(T * 5) * v.wobble * 10 * s; // wobble sways sideways, it never tilts new content
     c.save();
-    c.translate(W / 2 + shx, H / 2 + shy); c.rotate(rot); c.scale(zoom, zoom * v.flip);
+    c.translate(W / 2 + shx + sway, H / 2 + shy); c.scale(zoom, zoom * v.flip);
 
     // cyber grid, pulsing with the audio
     c.save(); c.scale(s, s);
@@ -451,11 +487,10 @@ export class Renderer {
           const n = Math.min(sp.s.length, Math.floor(sp.age * 160)); // fast typewriter: results must be readable
           const txt = sp.s.slice(0, n);
           c.save();
-          const x = clamp(sp.x, -this.hw * 0.9, this.hw * 0.9), y = clamp(sp.y, -this.hh * 0.85, this.hh * 0.85);
-          c.translate(x, y);
+          c.translate(sp.x, sp.y);
           c.font = `${size}px ${this.font}`; c.textAlign = 'center'; c.textBaseline = 'middle';
           const w = sp.w || (sp.w = c.measureText(sp.s).width);
-          const sc = Math.min(1, (this.hw * 1.8) / (w + 40));
+          const sc = Math.min(1, (this.hw * 1.7) / (w + 32));
           c.scale(sc, sc);
           c.fillStyle = `rgba(0,10,5,${0.88 * alpha})`; c.fillRect(-w / 2 - 16, -size * 0.75, w + 32, size * 1.5);
           c.strokeStyle = hsl(sp.color, alpha); c.lineWidth = 2; c.strokeRect(-w / 2 - 16, -size * 0.75, w + 32, size * 1.5);

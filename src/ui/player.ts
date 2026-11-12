@@ -46,6 +46,7 @@ export class Player {
     const r = this.wrap.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
     this.r.resize(r.width, r.height);
+    this.r.reserveBottom = r.height - this.logEl.offsetTop + 4 * 16; // log grows upwards to 4 lines
     if (this.vm) this.vm.setBounds(this.r.hw, this.r.hh);
   }
 
