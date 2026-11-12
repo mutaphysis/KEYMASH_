@@ -17,6 +17,9 @@ bun test                # fuzz + unit tests for the interpreter
 
 Open `dist/index.html` in a browser. Type. Press **RUN**.
 
+Every push to `main` runs the tests, builds the page and deploys it to GitHub
+Pages (`.github/workflows/pages.yml`).
+
 ## The language
 
 Keysmash doesn't produce real words, so KEYMASH never looks words up. It reads
