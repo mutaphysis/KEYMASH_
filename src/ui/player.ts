@@ -1,6 +1,6 @@
 // Play mode: runs the VM against the audio clock, feeds the renderer and the
 // scrolling, highlighted code view.
-import { VM } from '../lang/vm';
+import { VM, MAX_BPM } from '../lang/vm';
 import { Renderer } from '../engine/render';
 import type { AudioEngine } from '../engine/audio';
 import { isSound } from '../lang/types';
@@ -164,7 +164,7 @@ export class Player {
     const gaps = [1, 2, 3].map((i) => this.taps[i]! - this.taps[i - 1]!);
     const mean = (gaps[0]! + gaps[1]! + gaps[2]!) / 3;
     if (mean < 0.3 || mean > 1 || gaps.some((g) => Math.abs(g - mean) > mean * 0.2)) return;
-    this.tapBpm = Math.round(60 / mean);
+    this.tapBpm = Math.min(MAX_BPM, Math.round(60 / mean));
     this.vm.baseBpm = this.vm.bpm = this.tapBpm;
     this.audio.setBpm(this.tapBpm);
     this.log(`TAP TEMPO :: ${this.tapBpm} BPM`);

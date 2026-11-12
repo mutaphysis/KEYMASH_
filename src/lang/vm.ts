@@ -89,8 +89,9 @@ const SPELL_GROUP: Partial<Record<Op, string>> = {
 /**
  * The tempo comes from the text itself, there is no setting: shouty mashing (CAPS, "!", held keys)
  * plays faster, calm text (spaces, dots, "~") plays slower, and the text's hash adds a few BPM of
- * its own character. Always between 76 and 176.
+ * its own character. Always between 70 and 120 (MAX_BPM): faster than that gets hectic.
  */
+export const MIN_BPM = 70, MAX_BPM = 120;
 export function tempoOf(gs: string[], seed: number): number {
   let n = 0, loud = 0, calm = 0, prev = '';
   for (const g of gs) {
@@ -103,9 +104,9 @@ export function tempoOf(gs: string[], seed: number): number {
     if (g === prev && g !== ' ') loud += 0.5; // held key
     prev = g;
   }
-  if (!n) return 120;
-  const bpm = 112 + 70 * Math.min(1, loud / n * 1.5) - 50 * Math.min(1, calm / n * 1.6) + (seed % 17 - 8);
-  return Math.round(Math.max(76, Math.min(176, bpm)));
+  if (!n) return 100;
+  const bpm = 98 + 26 * Math.min(1, loud / n * 1.5) - 30 * Math.min(1, calm / n * 1.6) + (seed % 11 - 5);
+  return Math.round(Math.max(MIN_BPM, Math.min(MAX_BPM, bpm)));
 }
 
 const SLOW_DRAW = new Set<Op>(['sierpinski', 'koch', 'dragoncurve', 'lorenz', 'spirograph', 'fibonacci', 'tenprint', 'heartbeat', 'radar', 'barcode', 'constellation', 'meteor', 'tree', 'spiral', 'rose', 'knot']);
@@ -969,8 +970,8 @@ export class VM {
         break;
       }
       // ---------- music ----------
-      case 'fast': this.bpm = Math.min(184, this.bpm * 1.12); th.speed = Math.min(4, th.speed * 2); this.sfx(th, 'sweep', 0.4, 2); this.particles(th, 'warp', 20); break;
-      case 'slow': this.bpm = Math.max(66, this.bpm * 0.88); th.speed = Math.max(0.25, th.speed / 2); this.sfx(th, 'sweep', 0.4, 0.4); break;
+      case 'fast': this.bpm = Math.min(MAX_BPM, this.bpm * 1.12); th.speed = Math.min(4, th.speed * 2); this.sfx(th, 'sweep', 0.4, 2); this.particles(th, 'warp', 20); break;
+      case 'slow': this.bpm = Math.max(60, this.bpm * 0.88); th.speed = Math.max(0.25, th.speed / 2); this.sfx(th, 'sweep', 0.4, 0.4); break;
       case 'major': case 'minor': case 'blues': case 'spooky': case 'japan':
         this.scale = op; this.text(th, `♫ ${op.toUpperCase()}`, { size: 34 });
         for (const d of [0, 2, 4]) this.note(th, d, { inst: 'pad', dur: 4, vel: 0.35 });

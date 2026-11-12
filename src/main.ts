@@ -219,7 +219,19 @@ function openDrawer(): void {
   body.appendChild(item('📋 copy program text', 'paste it anywhere — any text is a program', async () => {
     try { await navigator.clipboard.writeText(editor.value); toast('COPIED'); } catch (e) { toast('COPY BLOCKED'); }
   }));
+  const ha = document.createElement('h4'); ha.textContent = 'APP · ' + VERSION_LABEL; body.appendChild(ha);
+  body.appendChild(item('⟳ reload app', 'fetch the newest version — your text is kept', reloadApp));
   $('drawer').hidden = false;
+}
+
+/** Reload, for the home-screen app that has no reload button. The text survives as the draft. */
+function reloadApp(): void {
+  store.setDraft(editor.value);
+  player.stop();
+  // a fresh query string makes the installed app fetch the page again instead of reusing its copy
+  const framed = window.top !== window;
+  if (!framed && /^https?:$/.test(location.protocol)) location.replace(location.pathname + '?r=' + Date.now().toString(36));
+  else location.reload();
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;

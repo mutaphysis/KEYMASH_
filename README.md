@@ -114,7 +114,7 @@ drum fill, a blue screen) and more creatures (bee, frog, owl, whale, snake).
 
 ### Tempo
 There is no tempo setting. The text sets it: shouty mashing (CAPS, `!`, held keys) plays
-faster, calm text (spaces, dots, `~`) plays slower, between 76 and 176 BPM. Speed-up and
+faster, calm text (spaces, dots, `~`) plays slower, between 70 and 120 BPM (never faster). Speed-up and
 slow-down spells push it around and it drifts back. Tap the stage four times in a steady
 rhythm and the program follows your beat.
 

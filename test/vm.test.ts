@@ -160,11 +160,19 @@ test('MATH.EXE crash banner (division by zero) shows at most every 3 s', () => {
   for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
 });
 
-test('tempo comes from the text: shouting is faster than calm, always 76..176', () => {
+test('tempo comes from the text: shouting is faster than calm, always 70..120', () => {
   const t = (src: string) => tempoOf(graphemes(src), hash(src));
-  expect(t('AAAA!!! WOOF!!! JJJJJJJ!!!')).toBeGreaterThan(t('a . . . b . . . ~ ~ ~   c') + 40);
-  expect(t('')).toBe(120);
+  expect(t('AAAA!!! WOOF!!! JJJJJJJ!!!')).toBeGreaterThan(t('a . . . b . . . ~ ~ ~   c') + 20);
+  expect(t('')).toBe(100);
   const rng = rngFrom(5);
-  for (let i = 0; i < 300; i++) { const b = t(randomProgram(rng, 1 + Math.floor(rng() * 120))); expect(b).toBeGreaterThanOrEqual(76); expect(b).toBeLessThanOrEqual(176); }
+  for (let i = 0; i < 300; i++) { const b = t(randomProgram(rng, 1 + Math.floor(rng() * 120))); expect(b).toBeGreaterThanOrEqual(70); expect(b).toBeLessThanOrEqual(120); }
   expect(new VM('asdf jkl').bpm).toBe(t('asdf jkl'));
+});
+
+test('no program ever runs faster than 120 BPM, whatever spells it casts', () => {
+  const rng = rngFrom(11);
+  for (let i = 0; i < 60; i++) {
+    const vm = new VM(randomProgram(rng, 200));
+    for (let t = 0; t < 300; t++) { vm.tick(); expect(vm.bpm).toBeLessThanOrEqual(120); }
+  }
 });
