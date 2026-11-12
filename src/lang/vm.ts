@@ -80,7 +80,7 @@ export const SPELLS: Op[] = [
 // Spell cooldowns, in seconds of VM time, shared by all threads. Ops in the same group share one
 // cooldown (all hacker banners count as "the hacking spell").
 export const SPELL_COOLDOWN = 1.5;
-export const GROUP_COOLDOWN: Record<string, number> = { hack: 3 };
+export const GROUP_COOLDOWN: Record<string, number> = { hack: 3, answer: 3, crash: 3 };
 const SPELL_GROUP: Partial<Record<Op, string>> = {
   hack: 'hack', access: 'hack', mainframe: 'hack', virus: 'hack', download: 'hack', matrix: 'hack',
 };
@@ -170,7 +170,7 @@ export class VM {
   }
 
   boot() {
-    this.emit({ type: 'log', text: `KEYMASH v1.0 :: ${this.gs.length} glyphs :: ${this.threads.length} thread(s) :: 0 errors` });
+    this.emit({ type: 'log', text: `KEYMASH :: ${this.gs.length} glyphs :: ${this.threads.length} thread(s) :: 0 errors` });
   }
 
   emit<E extends EvInput>(e: E, th?: Thread): E & EvBase {
@@ -321,8 +321,8 @@ export class VM {
         this.doOp(th, () => {
           this.emit({ type: 'math', s: label, x: th.x, y: th.y, color: this.col(th, 15) }, th);
           this.emit({ type: 'dtmf', digits: fmtNum(v).replace(/\D/g, '').slice(0, 10) || '0' }, th);
-          if (v === 42) { this.emit({ type: 'banner', text: 'THE ANSWER.' }, th); this.particles(th, 'stars', 60); }
-          if (!Number.isFinite(v)) { this.emit({ type: 'glitch', amt: 1, dur: 0.8 }, th); this.emit({ type: 'banner', text: 'MATH.EXE HAS STOPPED' }, th); }
+          if (v === 42 && this.cast('answer')) { this.emit({ type: 'banner', text: 'THE ANSWER.' }, th); this.particles(th, 'stars', 60); }
+          if (!Number.isFinite(v) && this.cast('crash')) { this.emit({ type: 'glitch', amt: 1, dur: 0.8 }, th); this.emit({ type: 'banner', text: 'MATH.EXE HAS STOPPED' }, th); }
         });
         th.arg = Number.isFinite(v) ? v : null;
         th.pc++; return true;
@@ -455,9 +455,9 @@ export class VM {
     }
   }
 
-  /** Spell cooldown gate: true (and the cooldown starts) if `op` may fire now. */
-  cast(op: Op): boolean {
-    const group = SPELL_GROUP[op] ?? op;
+  /** Cooldown gate for spells and easter eggs: true (and the cooldown starts) if `op` may fire now. */
+  cast(op: Op | 'answer' | 'crash'): boolean {
+    const group = (op !== 'answer' && op !== 'crash' && SPELL_GROUP[op]) || op;
     const readyAt = this.cooldowns.get(group) ?? 0;
     if (this.time + 1e-9 < readyAt) return false;
     this.cooldowns.set(group, this.time + (GROUP_COOLDOWN[group] ?? SPELL_COOLDOWN));

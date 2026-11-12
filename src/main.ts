@@ -1,15 +1,20 @@
 import './style.css';
 import { AudioEngine } from './engine/audio';
-import type { TypingKind } from './engine/audio';
+import type { TypingKind, VoiceMode } from './engine/audio';
 import { $ } from './ui/dom';
 import { Editor } from './ui/editor';
 import { Player } from './ui/player';
 import { store, DEMOS, pawMash } from './ui/storage';
 import { lex } from './lang/lexer';
 import { keyInfo } from './lang/keys';
+import { VERSION_LABEL, BUILD_TIME } from './version';
 
 const app = $('app');
 const audio = new AudioEngine();
+
+const ver = $('version');
+ver.textContent = VERSION_LABEL;
+ver.title = `built ${BUILD_TIME}`;
 
 // ---- keep the layout above the on-screen keyboard ----
 function fitViewport() {
@@ -170,6 +175,18 @@ function openDrawer(): void {
   const slots = store.slots();
   if (!slots.length) { const p = document.createElement('div'); p.style.cssText = 'opacity:.5;font-size:13px;padding:6px 2px'; p.textContent = 'nothing yet. press 💾 SAVE.'; body.appendChild(p); }
   slots.forEach((s, i) => body.appendChild(item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => { store.remove(i); openDrawer(); })));
+  const hv = document.createElement('h4'); hv.textContent = 'VOICE'; body.appendChild(hv);
+  const voices: [VoiceMode, string, string][] = [
+    ['system', '🗣 system speech', 'real words from your device — Firefox on macOS may click'],
+    ['babble', '🤖 keymash babble', 'made right here, sounds the same everywhere, never clicks'],
+  ];
+  for (const [mode, name, sub] of voices) {
+    body.appendChild(item((audio.voice === mode ? '✓ ' : '') + name, sub, () => {
+      audio.setVoice(mode); audio.init();
+      setTimeout(() => audio.speak('hello, i am keymash!', 1, 1), 150);
+      openDrawer();
+    }));
+  }
   const h3 = document.createElement('h4'); h3.textContent = 'SHARE'; body.appendChild(h3);
   body.appendChild(item('📋 copy program text', 'paste it anywhere — any text is a program', async () => {
     try { await navigator.clipboard.writeText(editor.value); toast('COPIED'); } catch (e) { toast('COPY BLOCKED'); }

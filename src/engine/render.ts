@@ -131,10 +131,10 @@ export class Renderer {
       case 'particles': this.spawn(e); break;
       case 'text': this.addSprite({ ...e, kind: 'text', age: 0, life: e.style === 'big' ? 1.6 : e.style === 'sub' ? 3 : 1.8, vy: e.style === 'sub' ? 0 : -40 }); break;
       case 'math': {
-        const ms = this.sprites.filter((x) => x.kind === 'math');
-        const oldest = ms[0];
-        if (ms.length >= 3 && oldest) oldest.age = Math.max(oldest.age, oldest.life - 0.2);
-        this.addSprite({ ...e, kind: 'math', age: 0, life: 3.2 }); break;
+        // at most 6 results on screen: older ones fade out quickly, so the newest always get a clear row
+        const ms = this.sprites.filter((x): x is MathSprite => x.kind === 'math' && x.life - x.age > 0.15);
+        for (const old of ms.slice(0, Math.max(0, ms.length - 5))) old.life = old.age + 0.15;
+        this.addSprite({ ...e, kind: 'math', y: this.mathRow(e.y, !!e.big), age: 0, life: 3.2 }); break;
       }
       case 'emoji': this.addSprite({ ...e, kind: 'emoji', age: 0, rot: rand(-0.3, 0.3) }); break;
       case 'actor': this.addActor(e); break;
@@ -171,6 +171,22 @@ export class Renderer {
       }
       case 'banner': this.banner = { text: e.text, progress: e.progress, age: 0, life: 2.4 }; break;
     }
+  }
+
+  /** Find a free row for a math label near `y`, so results never stack on top of each other. */
+  mathRow(y: number, big: boolean): number {
+    const h = (big ? 44 : 36) * 1.7;
+    const top = -this.hh * 0.85, bottom = this.hh * 0.85;
+    const live = this.sprites.filter((x): x is MathSprite => x.kind === 'math' && x.life - x.age > 0.15);
+    const free = (yy: number) => live.every((m) => Math.abs(m.y - yy) >= h);
+    const y0 = clamp(y, top, bottom);
+    // search outwards: below, above, further below, further above …
+    for (let k = 0; k <= 2 * Math.ceil((bottom - top) / h); k++) {
+      const off = Math.ceil(k / 2) * h * (k % 2 ? 1 : -1);
+      const yy = y0 + off;
+      if (yy >= top && yy <= bottom && free(yy)) return yy;
+    }
+    return y0;
   }
 
   addSprite(s: Sprite): void { if (this.sprites.length > 260) this.sprites.shift(); this.sprites.push(s); }
@@ -430,7 +446,7 @@ export class Renderer {
         }
         case 'math': {
           const size = sp.big ? 44 : 36;
-          const n = Math.min(sp.s.length, Math.floor(sp.age * 40));
+          const n = Math.min(sp.s.length, Math.floor(sp.age * 160)); // fast typewriter: results must be readable
           const txt = sp.s.slice(0, n);
           c.save();
           const x = clamp(sp.x, -this.hw * 0.9, this.hw * 0.9), y = clamp(sp.y, -this.hh * 0.85, this.hh * 0.85);

@@ -22,7 +22,7 @@ export class AudioEngine {
   noiseBuf!: AudioBuffer; distCurve!: Float32Array<ArrayBuffer>;
   ui!: GainNode; uiRev!: GainNode; uiDel!: GainNode;
   bus!: GainNode; busRev!: GainNode; busDel!: GainNode;
-  voicesList: SpeechSynthesisVoice[] = []; speaking = 0;
+  voicesList: SpeechSynthesisVoice[] = []; speaking = 0; warmedUp = false; babbleUntil = 0;
   lastType = 0; typeRate = 0; typeCount = 0;
   pad: { g: GainNode; oscs: OscillatorNode[]; root: number } | null = null;
   padTimer: ReturnType<typeof setTimeout> | undefined;
@@ -44,8 +44,9 @@ export class AudioEngine {
     lim.threshold.value = -2; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.1;
     this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 256;
     // final soft clipper: nothing a dog types can make it crackle
-    const clip = ctx.createWaveShaper(); const cc = new Float32Array(2048);
-    for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; cc[i] = Math.tanh(x * 1.6) / Math.tanh(1.6) * 0.96; }
+    // odd length, so input 0 lands exactly on the centre sample (an even length adds a small DC offset)
+    const clip = ctx.createWaveShaper(); const cc = new Float32Array(2049);
+    for (let i = 0; i < 2049; i++) { const x = i / 1024 - 1; cc[i] = Math.tanh(x * 1.6) / Math.tanh(1.6) * 0.96; }
     clip.curve = cc; clip.oversample = '2x';
     this.master.connect(comp); comp.connect(lim); lim.connect(clip); clip.connect(this.analyser); this.analyser.connect(ctx.destination);
     this.fft = new Uint8Array(this.analyser.frequencyBinCount);
@@ -132,7 +133,7 @@ export class AudioEngine {
     o.connect(dest); o.start(t); o.stop(end); return o;
   }
   noise(t: number, dur: number, dest: AudioNode): AudioBufferSourceNode {
-    const s = this.c.createBufferSource(); s.buffer = this.noiseBuf;
+    const s = this.c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
     s.connect(dest); s.start(t, Math.random() * 1.5); s.stop(t + dur); return s;
   }
   env(param: AudioParam, t: number, a: number, peak: number, d: number, sus = 0.0001): void {
@@ -450,32 +451,116 @@ export class AudioEngine {
   padStop(): void { if (this.pad && this.ctx) this.pad.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.3); }
 
   // ---- speech ----
+  // Two voices:
+  //  'system' – the OS text-to-speech via speechSynthesis. Real words, but the browser plays it
+  //             outside WebAudio, so we can't shape its envelope (Firefox on macOS clicks at the end).
+  //  'babble' – our own formant "animalese" made with WebAudio: smooth envelopes, no clicks,
+  //             identical in every browser, and keysmash is gibberish anyway.
+  voice: VoiceMode = defaultVoice();
+
+  setVoice(v: VoiceMode): void { this.voice = v; try { localStorage.setItem(VOICE_KEY, v); } catch (e) { /* private mode */ } }
+
   speechInit(): void {
     try {
       if (!('speechSynthesis' in window)) return;
-      const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u);
-      speechSynthesis.onvoiceschanged = () => { this.voicesList = speechSynthesis.getVoices(); };
       this.voicesList = speechSynthesis.getVoices();
+      speechSynthesis.onvoiceschanged = () => { this.voicesList = speechSynthesis.getVoices(); };
       this.speaking = 0;
-    } catch (e) {}
+      // iOS/Safari only speak after a speak() inside a user gesture; elsewhere skip the silent
+      // warm-up utterance (it is one more stream start/stop, i.e. one more chance to click)
+      if (this.voice === 'system' && isWebKit() && !this.warmedUp) {
+        const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u);
+        this.warmedUp = true;
+      }
+    } catch (e) { /* speech is optional */ }
   }
-  speak(text: string, pitch = 1, rate = 1): void {
+
+  speak(text: string, pitch = 1, rate = 1, pan = 0): void {
+    if (this.muted) return;
+    if (this.voice === 'babble' || !('speechSynthesis' in window)) { this.babble(text, pitch, rate, pan); return; }
     try {
-      if (this.muted || !('speechSynthesis' in window)) return;
       if (this.speaking >= 2) return; // don't let the dog flood the speech queue
-      const u = new SpeechSynthesisUtterance(text);
-      u.pitch = Math.max(0, Math.min(2, pitch)); u.rate = Math.max(0.5, Math.min(1.6, rate)); u.volume = 1;
+      // end on a sentence boundary so the engine finishes with its own falling tail
+      const said = /[.!?…]\s*$/.test(text) ? text : text + '.';
+      const u = new SpeechSynthesisUtterance(said);
+      u.pitch = Math.max(0.1, Math.min(2, pitch)); u.rate = Math.max(0.5, Math.min(1.6, rate));
+      u.volume = 0.85; // a little headroom against the music
       const de = /[äöüß]/i.test(text);
-      const list = this.voicesList || [];
       const want = de ? 'de' : (navigator.language || 'en').slice(0, 2);
-      const v = list.find((x) => x.lang && x.lang.toLowerCase().startsWith(want));
+      const v = this.voicesList.find((x) => x.lang && x.lang.toLowerCase().startsWith(want));
       if (v) { u.voice = v; u.lang = v.lang; }
       this.speaking++;
-      const done = () => { this.speaking = Math.max(0, this.speaking - 1); };
+      let finished = false;
+      const done = () => { if (finished) return; finished = true; this.speaking = Math.max(0, this.speaking - 1); };
       u.onend = done; u.onerror = done;
-      setTimeout(done, 6000);
+      setTimeout(done, 8000);
       speechSynthesis.speak(u);
-    } catch (e) {}
+    } catch (e) { /* speech is optional */ }
   }
-  speechStop(): void { try { if ('speechSynthesis' in window) speechSynthesis.cancel(); this.speaking = 0; } catch (e) {} }
+
+  speechStop(): void {
+    try {
+      // cancelling mid-word is a hard cut too, so only cancel when something is actually queued
+      if ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
+    } catch (e) { /* ignore */ }
+    this.speaking = 0;
+    this.babbleUntil = 0;
+  }
+
+  /** WebAudio "animalese": one formant-filtered saw per utterance, every syllable shaped with setTargetAtTime. */
+  babble(text: string, pitch = 1, rate = 1, pan = 0): void {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const ctx = this.ctx;
+    const chars = Array.from(text.toLowerCase()).slice(0, 48);
+    const step = 0.072 / Math.max(0.5, Math.min(1.6, rate));
+    const t0 = Math.max(ctx.currentTime + 0.02, this.babbleUntil); // queue behind the previous one
+    if (t0 - ctx.currentTime > 2.5) return; // too much backlog: drop it, like the system voice would
+    const end = t0 + chars.length * step;
+    this.babbleUntil = end + 0.12;
+    const f0 = 110 + Math.max(0.1, Math.min(2, pitch)) * 85;
+    const out = this.out(t0, pan * 0.6, 0.25, 0.08, end - ctx.currentTime + 1);
+    const g = this.gain(0); g.gain.setValueAtTime(0, t0); g.connect(out);
+    const src = this.osc('sawtooth', f0, t0, end + 0.6, this.gain(0));
+    src.disconnect();
+    const f1 = this.filter('bandpass', 700, 5), f2 = this.filter('bandpass', 1200, 7);
+    const g2 = this.gain(0.7);
+    src.connect(f1); src.connect(f2); f1.connect(g); f2.connect(g2); g2.connect(g);
+    // consonant hiss
+    const hiss = this.gain(0); hiss.gain.setValueAtTime(0, t0); hiss.connect(out);
+    const hp = this.filter('bandpass', 4200, 1.2); hp.connect(hiss);
+    this.noise(t0, end - t0 + 0.6, hp);
+    const question = /\?\s*$/.test(text);
+    chars.forEach((c, i) => {
+      const t = t0 + i * step;
+      const fm = FORMANTS[stripMarks(c)];
+      const contour = 1 + 0.12 * Math.sin(i * 1.7) + (question ? 0.5 * (i / chars.length) ** 2 : -0.1 * (i / chars.length));
+      src.frequency.setTargetAtTime(f0 * contour * (fm ? 1 : 1.08), t, 0.012);
+      if (fm) {
+        f1.frequency.setTargetAtTime(fm[0], t, 0.015); f2.frequency.setTargetAtTime(fm[1], t, 0.015);
+        g.gain.setTargetAtTime(0.32, t, 0.01); g.gain.setTargetAtTime(0, t + step * 0.72, 0.014);
+      } else if (/\p{L}/u.test(c)) {
+        f1.frequency.setTargetAtTime(450, t, 0.01); f2.frequency.setTargetAtTime(1800, t, 0.01);
+        g.gain.setTargetAtTime(0.12, t, 0.008); g.gain.setTargetAtTime(0, t + step * 0.4, 0.01);
+        hiss.gain.setTargetAtTime(/[szxcfh]/.test(c) ? 0.09 : 0.035, t, 0.005); hiss.gain.setTargetAtTime(0, t + step * 0.35, 0.01);
+      } // spaces and punctuation: silence
+    });
+    // exponential approach to zero, then stop well after: no step at the end, no click
+    g.gain.setTargetAtTime(0, end, 0.02); hiss.gain.setTargetAtTime(0, end, 0.02);
+  }
 }
+
+export type VoiceMode = 'system' | 'babble';
+const VOICE_KEY = 'keymash.voice.v1';
+function isWebKit(): boolean { return /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Firefox|FxiOS/.test(navigator.userAgent) || /iP(hone|ad|od)/.test(navigator.userAgent); }
+function defaultVoice(): VoiceMode {
+  try { const v = localStorage.getItem(VOICE_KEY); if (v === 'system' || v === 'babble') return v; } catch (e) { /* ignore */ }
+  // Firefox on macOS clicks at the end of every system utterance; babble there by default
+  if (typeof navigator !== 'undefined' && /Firefox/.test(navigator.userAgent) && /Mac/.test(navigator.platform || navigator.userAgent)) return 'babble';
+  return typeof window !== 'undefined' && 'speechSynthesis' in window ? 'system' : 'babble';
+}
+const stripMarks = (c: string): string => c.normalize('NFD').replace(/\p{M}/gu, '');
+// rough vowel formants (F1, F2) in Hz
+const FORMANTS: Record<string, [number, number]> = {
+  a: [800, 1250], e: [450, 2100], i: [300, 2600], o: [520, 900], u: [340, 760], y: [300, 2300],
+};
+

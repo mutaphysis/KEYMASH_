@@ -6,6 +6,7 @@ import type { AudioEngine } from '../engine/audio';
 import { isSound } from '../lang/types';
 import type { VMEvent, EventOf } from '../lang/types';
 import { $ } from './dom';
+import { VERSION_LABEL } from '../version';
 
 type UIEvent = EventOf<'hl' | 'log' | 'gen' | 'die' | 'say'>;
 const isUI = (e: VMEvent): e is UIEvent => e.type === 'hl' || e.type === 'log' || e.type === 'gen' || e.type === 'die' || e.type === 'say';
@@ -95,7 +96,7 @@ export class Player {
   bootSequence(): Promise<void> {
     const vm = this.vm!;
     const lines = [
-      '> keymash --run program.mash',
+      `> keymash ${VERSION_LABEL} --run program.mash`,
       `> lexing ${vm.gs.length} glyphs ......... ok`,
       `> spawning ${vm.threads.length || 0} thread(s) ....... ok`,
       '> syntax errors: 0 (there are never errors)',
@@ -180,7 +181,7 @@ export class Player {
     switch (e.type) {
       case 'hl': this.highlight(e); break;
       case 'log': this.log(e.text); break;
-      case 'say': this.audio.speak(e.text, e.pitch, e.rate); break;
+      case 'say': this.audio.speak(e.text, e.pitch, e.rate, e.pan ?? 0); break;
       case 'gen': if (e.gen % 4 === 0) this.log(`t${e.th} :: generation ${e.gen} :: mutating…`); break;
       case 'die': this.log(`t${e.th} :: exited (0)`); break;
     }

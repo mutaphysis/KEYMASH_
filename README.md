@@ -23,6 +23,10 @@ bun test           # fuzz + unit tests for the interpreter
 The build is a single HTML file with everything inlined (vite-plugin-singlefile),
 so it also works opened straight from disk or as a Claude artifact.
 
+The header shows the build: `v<package version> · #<CI run> · <commit>` (local builds
+omit the run number, the dev server shows `dev`). Bump the version with
+`npm version minor --no-git-tag-version` (or edit `package.json`).
+
 Every push to `main` runs the tests, builds the page and deploys it to GitHub
 Pages (`.github/workflows/pages.yml`).
 
@@ -53,11 +57,11 @@ Each letter is placed by **where its key sits**:
 |---|---|---|
 | held key | `jjjjjjj` | ratchet: the sound repeats as a roll, stream of particles, shake when long |
 | roll over neighbours | `asdf`, `poiu` | glissando + an arcing sweep through the keys |
-| CAPS chunk | `WOOF`, `ASDKJ` | spoken out loud (gibberish through speech synthesis) |
+| CAPS chunk | `WOOF`, `ASDKJ` | spoken out loud — by the system voice, or by the built-in *babble* voice (pick in 📂 LOAD → VOICE; default on Firefox/macOS, where system speech clicks) |
 | chunk + `?`/`!` | `fjdk?` | spoken as a question / exclamation |
 | long chunk (≥5) | `lkjhgfdsa` | casts a **spell** from the effect library, picked by the chunk's hash (same mash → same spell). Spells have a cooldown shared by all threads: 1.5 s each, and all hacker spells together at most once every 3 s. While a spell cools down, the chunk just floats away as text. |
 | number | `42` | shown on screen, dialled as DTMF phone tones, becomes the argument of the next op |
-| math | `7*6=`, `12/0` | evaluated and rendered on screen; `42` and `∞` have surprises |
+| math | `7*6=`, `12/0` | evaluated and rendered on screen, each result in its own row (max 6 at once); `42` and `∞` have surprises, at most once every 3 s |
 | quote | `"hello"` | spoken (unclosed quote: rest of the line) |
 | emoji | `🐶🔥🌈` | stamped on screen; many have powers (🐶 runs and barks, 💥 explodes, 🌀 tunnels…) |
 

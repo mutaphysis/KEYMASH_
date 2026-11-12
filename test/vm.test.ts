@@ -142,3 +142,19 @@ test('hacker banners from mashing respect the 3 s cooldown', () => {
   expect(banners.length).toBeLessThanOrEqual(21); // 60 s / 3 s + 1
   for (let i = 1; i < banners.length; i++) expect(banners[i]! - banners[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
 });
+
+test('the answer (42) shows at most every 3 s', () => {
+  const vm = new VM('6*7=\n6*7=\n42-0=\n21+21=');
+  const shown: number[] = [];
+  for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text === 'THE ANSWER.') shown.push(vm.time);
+  expect(shown.length).toBeGreaterThan(10);
+  for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
+});
+
+test('MATH.EXE crash banner (division by zero) shows at most every 3 s', () => {
+  const vm = new VM('1/0=\n0/0=\n9^9^9^9=');
+  const shown: number[] = [];
+  for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text.startsWith('MATH.EXE')) shown.push(vm.time);
+  expect(shown.length).toBeGreaterThan(10);
+  for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
+});
