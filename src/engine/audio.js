@@ -14,13 +14,17 @@ export class AudioEngine {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     const ctx = this.ctx = new AC({ latencyHint: 'interactive' });
-    this.master = ctx.createGain(); this.master.gain.value = 0.75;
+    this.master = ctx.createGain(); this.master.gain.value = 0.6;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
     const lim = ctx.createDynamicsCompressor();
     lim.threshold.value = -2; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.1;
     this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 256;
-    this.master.connect(comp); comp.connect(lim); lim.connect(this.analyser); this.analyser.connect(ctx.destination);
+    // final soft clipper: nothing a dog types can make it crackle
+    const clip = ctx.createWaveShaper(); const cc = new Float32Array(2048);
+    for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; cc[i] = Math.tanh(x * 1.6) / Math.tanh(1.6) * 0.96; }
+    clip.curve = cc; clip.oversample = '2x';
+    this.master.connect(comp); comp.connect(lim); lim.connect(clip); clip.connect(this.analyser); this.analyser.connect(ctx.destination);
     this.fft = new Uint8Array(this.analyser.frequencyBinCount);
 
     // shared reverb + echo
