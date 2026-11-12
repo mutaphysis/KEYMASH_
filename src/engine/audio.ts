@@ -35,8 +35,6 @@ export class AudioEngine {
     if (this.ctx) { if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    // iOS: play like a media app, so the ring/silent switch doesn't mute the whole thing
-    try { const as = (navigator as Navigator & { audioSession?: { type: string } }).audioSession; if (as) as.type = 'playback'; } catch (e) { /* older iOS */ }
     const ctx = new AC({ latencyHint: 'interactive' });
     this.ctx = ctx;
     this.master = ctx.createGain(); this.master.gain.value = 0.6;
@@ -108,6 +106,15 @@ export class AudioEngine {
     if (m) this.speechStop();
   }
   setBpm(bpm: number): void { if (this.ctx) this.delay.delayTime.setTargetAtTime(Math.min(1.9, 60 / bpm * 0.75), this.ctx.currentTime, 0.1); }
+  /** Try to wake a suspended or interrupted context (at most once a second). */
+  revive(): void {
+    const t = performance.now();
+    if (!this.ctx || this.ctx.state === 'running' || t - this.lastRevive < 1000) return;
+    this.lastRevive = t;
+    this.ctx.resume().catch(() => {});
+  }
+  lastRevive = 0;
+
   get now(): number { return this.ctx ? this.ctx.currentTime : performance.now() / 1000; }
 
   readLevel(): number {

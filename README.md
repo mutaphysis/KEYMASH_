@@ -23,8 +23,8 @@ bun test           # fuzz + unit tests for the interpreter
 The build is a single HTML file with everything inlined (vite-plugin-singlefile),
 so it also works opened straight from disk or as a Claude artifact.
 
-It is an installable web app (`public/manifest.webmanifest`) that also starts offline
-(`public/sw.js`, network first) and respects the system's "reduce motion" setting: on iOS use Share → Add to
+It is an installable web app (`public/manifest.webmanifest`) with the fonts baked in (no
+external requests at all) and it respects the system's "reduce motion" setting: on iOS use Share → Add to
 Home Screen, on Android/desktop Chrome the install button. The icon (a paw whose toes
 are the A S D F keycaps) lives in `scripts/icon.svg`; `bun scripts/icons.ts` re-renders the PNGs.
 

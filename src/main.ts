@@ -1,3 +1,4 @@
+import './fonts.css';
 import './style.css';
 import { AudioEngine } from './engine/audio';
 import type { TypingKind, VoiceMode } from './engine/audio';
@@ -55,10 +56,11 @@ async function keepAwake(on: boolean): Promise<void> {
   } catch (e) { wake = null; /* not allowed or not supported */ }
 }
 
-// offline start for the installed app (not inside the Claude page, which runs in a frame)
-if (import.meta.env.PROD && 'serviceWorker' in navigator && window.top === window && /^https?:$/.test(location.protocol)) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
-}
+// v0.2.0 registered a caching service worker; it is gone again. Clean up after it.
+try {
+  navigator.serviceWorker?.getRegistrations().then((rs) => rs.forEach((r) => void r.unregister())).catch(() => {});
+  if ('caches' in window) caches.keys().then((ks) => ks.forEach((k) => void caches.delete(k))).catch(() => {});
+} catch (e) { /* not available here */ }
 
 // ---- status line ----
 function status(src: string): void {

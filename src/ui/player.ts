@@ -31,6 +31,7 @@ export class Player {
   hlLast: HTMLSpanElement | null = null;
   activity = new Map<number, number>();
   taps: number[] = []; tapBpm = 0;
+  lastAudio = -1; stall = 0; offset = 0;
   raf = 0; nextTick = 0; lastFrame = 0; restartAt = 0; hudTick = 0;
 
   constructor(audio: AudioEngine) {
@@ -91,6 +92,7 @@ export class Player {
     this.logEl.textContent = '';
     await this.bootSequence();
     this.running = true;
+    this.lastAudio = -1; this.stall = 0; this.offset = 0;
     this.nextTick = this.audio.now + 0.05;
     this.lastFrame = performance.now();
     cancelAnimationFrame(this.raf);
@@ -141,6 +143,19 @@ export class Player {
     this.audio.play({ type: 'note', dt: 0, inst: 'bell', midi, dur: 2, vel: 0.6, glide: 0, vib: 0, echo: 0, pan: x / this.r.hw }, this.audio.now, 0.125);
   }
 
+  /**
+   * The program runs on the audio clock. If that clock stops (Safari interrupts or suspends the
+   * AudioContext now and then), carry on with wall-clock time so the program never freezes;
+   * sound is skipped until the context is back.
+   */
+  clock(dt: number): number {
+    const a = this.audio.now;
+    if (a === this.lastAudio) { this.stall += dt; if (this.stall > 0.25) { this.offset += dt; this.audio.revive(); } }
+    else { this.stall = 0; this.lastAudio = a; }
+    return a + this.offset;
+  }
+  get stalled(): boolean { return this.stall > 0.25; }
+
   /** Four taps in a steady rhythm on the stage set the tempo. No button, no setting. */
   tapTempo(): void {
     const now = performance.now() / 1000;
@@ -160,7 +175,7 @@ export class Player {
     if (!this.running || !this.vm) return;
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, (t - this.lastFrame) / 1000); this.lastFrame = t;
-    const now = this.audio.now;
+    const now = this.clock(dt);
     const vm = this.vm;
 
     if (this.nextTick < now - 0.25) this.nextTick = now + 0.02; // we were in the background: skip ahead
@@ -171,7 +186,7 @@ export class Player {
       const evs = vm.tick();
       for (const e of evs) {
         const when = this.nextTick + (e.dt || 0) * tickDur + (e.at || 0);
-        if (isSound(e)) this.audio.play(e, when, tickDur);
+        if (isSound(e)) { if (!this.stalled) this.audio.play(e, when - this.offset, tickDur); }
         else this.queue.push({ when, e });
       }
       if (vm.bpm !== bpmBefore) this.audio.setBpm(vm.bpm);
