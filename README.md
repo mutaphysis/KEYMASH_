@@ -55,7 +55,7 @@ Each letter is placed by **where its key sits**:
 | roll over neighbours | `asdf`, `poiu` | glissando + an arcing sweep through the keys |
 | CAPS chunk | `WOOF`, `ASDKJ` | spoken out loud (gibberish through speech synthesis) |
 | chunk + `?`/`!` | `fjdk?` | spoken as a question / exclamation |
-| long chunk (≥5) | `lkjhgfdsa` | casts a **spell** from the effect library, picked by the chunk's hash (same mash → same spell) |
+| long chunk (≥5) | `lkjhgfdsa` | casts a **spell** from the effect library, picked by the chunk's hash (same mash → same spell). Spells have a cooldown shared by all threads: 1.5 s each, and all hacker spells together at most once every 3 s. While a spell cools down, the chunk just floats away as text. |
 | number | `42` | shown on screen, dialled as DTMF phone tones, becomes the argument of the next op |
 | math | `7*6=`, `12/0` | evaluated and rendered on screen; `42` and `∞` have surprises |
 | quote | `"hello"` | spoken (unclosed quote: rest of the line) |

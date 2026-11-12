@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { VM, SPELLS } from '../src/lang/vm';
+import { VM, SPELLS, SPELL_COOLDOWN, hash } from '../src/lang/vm';
 import { lex, evalMath, fmtNum } from '../src/lang/lexer';
 import type { VMEvent } from '../src/lang/types';
 
@@ -109,4 +109,36 @@ test('pathological inputs', () => {
     const vm = new VM(src);
     for (let t = 0; t < 200; t++) checkEvents(vm.tick());
   }
+});
+
+test('spell cooldowns: hacking at most every 3 s, other spells every 1.5 s, across all threads', () => {
+  // every chunk on every line hammers the gate; we record when spells actually fire
+  const vm = new VM('a\nb\nc');
+  const fired: Record<string, number[]> = { hack: [], matrix: [], boom: [] };
+  for (let t = 0; t < 480; t++) { // 60 s at 120 BPM
+    vm.tick();
+    for (const op of ['hack', 'matrix', 'boom'] as const) if (vm.cast(op)) fired[op]!.push(vm.time);
+  }
+  const hacking = [...fired.hack!, ...fired.matrix!].sort((a, b) => a - b);
+  for (let i = 1; i < hacking.length; i++) expect(hacking[i]! - hacking[i - 1]!).toBeGreaterThanOrEqual(3 - 1e-6);
+  expect(hacking.length).toBeGreaterThan(15); // and it does keep firing
+  const booms = fired.boom!;
+  for (let i = 1; i < booms.length; i++) expect(booms[i]! - booms[i - 1]!).toBeGreaterThanOrEqual(SPELL_COOLDOWN - 1e-6);
+});
+
+test('hacker banners from mashing respect the 3 s cooldown', () => {
+  // find mash chunks whose spell is a hacker spell, and put lots of them on many lines
+  const hacker = new Set(['hack', 'access', 'mainframe', 'virus', 'download', 'matrix']);
+  const rng = rngFrom(99); const chunks: string[] = [];
+  while (chunks.length < 12) {
+    let w = ''; for (let i = 0; i < 6; i++) w += 'qwertzuiopasdfghjklyxcvbnm'[Math.floor(rng() * 26)];
+    if (hacker.has(SPELLS[hash(w) % SPELLS.length]!)) chunks.push(w);
+  }
+  const src = Array.from({ length: 8 }, (_, i) => chunks.slice(i % 4, i % 4 + 6).join(' ')).join('\n');
+  const vm = new VM(src);
+  const banners: number[] = [];
+  for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner') banners.push(vm.time);
+  expect(banners.length).toBeGreaterThan(10); // the program really is hacking all the time
+  expect(banners.length).toBeLessThanOrEqual(21); // 60 s / 3 s + 1
+  for (let i = 1; i < banners.length; i++) expect(banners[i]! - banners[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
 });

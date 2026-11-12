@@ -77,6 +77,14 @@ export const SPELLS: Op[] = [
   'rocket', 'ball', 'bone', 'squirrel', 'poop', 'pizza', 'cake', 'banana', 'car', 'train', 'fork', 'chaos',
 ];
 
+// Spell cooldowns, in seconds of VM time, shared by all threads. Ops in the same group share one
+// cooldown (all hacker banners count as "the hacking spell").
+export const SPELL_COOLDOWN = 1.5;
+export const GROUP_COOLDOWN: Record<string, number> = { hack: 3 };
+const SPELL_GROUP: Partial<Record<Op, string>> = {
+  hack: 'hack', access: 'hack', mainframe: 'hack', virus: 'hack', download: 'hack', matrix: 'hack',
+};
+
 let THREAD_ID = 0;
 
 export class Thread {
@@ -113,6 +121,8 @@ export class Thread {
 export class VM {
   src: string; gs: string[]; lines: Token[][]; seed: number; rng: () => number;
   hw: number; hh: number; bpm: number; tickN: number; scale: ScaleName; root: number;
+  /** VM time in seconds (sum of tick durations) and when each spell (group) may fire again. */
+  time = 0; cooldowns = new Map<string, number>();
   threads: Thread[]; ev: VMEvent[]; curDt: number; done: boolean; lineThreads: number;
   private plans = new WeakMap<WordTok, Step[]>();
 
@@ -155,6 +165,7 @@ export class VM {
     this.threads = this.threads.filter((t) => t.alive || !t.child);
     if (this.threads.length && this.threads.every((t) => !t.alive)) this.done = true;
     this.tickN++;
+    this.time += this.tickDur;
     return this.ev;
   }
 
@@ -434,13 +445,23 @@ export class VM {
   chunkEnd(th: Thread, tok: WordTok): void {
     const len = tok.letters.length;
     const h = hash(tok.lower);
-    if (len >= 5 || (len >= 3 && h % 3 === 0)) {
-      const op = SPELLS[h % SPELLS.length];
+    const op = SPELLS[h % SPELLS.length];
+    if ((len >= 5 || (len >= 3 && h % 3 === 0)) && this.cast(op)) {
       this.keyword(th, op, Math.min(3, 1 + Math.floor(len / 8)));
       this.emit({ type: 'log', text: `SPELL ${tok.text.slice(0, 16)} -> ${op.toUpperCase()} :: t${th.id} :: 0x${(h & 0xffff).toString(16).toUpperCase().padStart(4, '0')}` }, th);
-    } else if (len >= 3 && h % 5 === 1) {
+    } else if (len >= 5 || (len >= 3 && h % 5 === 1)) {
+      // spell still cooling down (or no spell): the chunk just floats away
       this.text(th, tok.text, { style: 'float', size: 30 + len * 3 });
     }
+  }
+
+  /** Spell cooldown gate: true (and the cooldown starts) if `op` may fire now. */
+  cast(op: Op): boolean {
+    const group = SPELL_GROUP[op] ?? op;
+    const readyAt = this.cooldowns.get(group) ?? 0;
+    if (this.time + 1e-9 < readyAt) return false;
+    this.cooldowns.set(group, this.time + (GROUP_COOLDOWN[group] ?? SPELL_COOLDOWN));
+    return true;
   }
 
   execSym(th: Thread, tok: SymTok): boolean {
@@ -673,7 +694,7 @@ export class VM {
   emoji(th: Thread, ch: string, n: number): void {
     const power = EMOJI_POWERS[ch] || EMOJI_POWERS[ch.replace(/️/g, '')];
     this.emit({ type: 'emoji', ch, x: th.x, y: th.y, size: 60 + 18 * Math.min(n, 5), life: 2.5 }, th);
-    if (power) { this.keyword(th, power, Math.min(3, n)); }
+    if (power && this.cast(power)) { this.keyword(th, power, Math.min(3, n)); }
     else {
       this.particles(th, 'emoji', 6 + 6 * Math.min(n, 6), { ch });
       this.note(th, hash(ch) % 10, { inst: 'bell', vel: 0.5 });

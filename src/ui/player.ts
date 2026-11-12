@@ -65,6 +65,7 @@ export class Player {
     const old = this.vm;
     this.vm = new VM(src, { hw: this.r.hw, hh: this.r.hh });
     this.vm.tickN = Math.max(1, old ? old.tickN : 1); // skip the boot log, keep the harmony moving
+    if (old) { this.vm.time = old.time; this.vm.cooldowns = old.cooldowns; } // editing doesn't reset spell cooldowns
     this.buildCode(this.vm.gs, true);
     this.queue = this.queue.filter((q) => q.e.type !== 'hl');
     this.hlPrev.clear(); this.hlLast = null; this.restartAt = 0;
