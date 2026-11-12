@@ -48,6 +48,8 @@ export class Renderer {
   bg = { h: 150, l: 4, hT: 150, lT: 4 };
   fade = 0.07; fadeT = 0.07; copyK = 1;
   heads: { x: number; y: number; c: Color }[] = [];
+  /** "Reduce motion" in the system settings: softer flashes, shakes and glitches, no strobing. */
+  gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   constructor(canvas: HTMLCanvasElement) {
     this.cv = canvas;
@@ -138,11 +140,11 @@ export class Renderer {
       }
       case 'emoji': this.addSprite({ ...e, kind: 'emoji', age: 0, rot: rand(-0.3, 0.3) }); break;
       case 'actor': this.addActor(e); break;
-      case 'glitch': this.glitchAmt = Math.max(this.glitchAmt, e.amt || 0.4); this.glitchUntil = Math.max(this.glitchUntil, this.time + (e.dur || 0.3)); break;
+      case 'glitch': this.glitchAmt = Math.max(this.glitchAmt, (e.amt || 0.4) * (this.gentle ? 0.35 : 1)); this.glitchUntil = Math.max(this.glitchUntil, this.time + (e.dur || 0.3)); break;
       case 'view':
         if (e.zoom) v.kick += e.zoom;
         if (e.zoomTo) v.zoomT = clamp(e.zoomTo, 0.3, 3);
-        if (e.shake) v.shake = Math.min(60, v.shake + e.shake);
+        if (e.shake) v.shake = Math.min(60, v.shake + e.shake * (this.gentle ? 0.25 : 1));
         if (e.rot) v.rotT += e.rot * Math.PI / 180;
         if (e.spin) v.spin = clamp(v.spin + e.spin * Math.PI / 180, -6, 6);
         if (e.wobble) v.wobble = Math.min(3, v.wobble + e.wobble);
@@ -153,10 +155,10 @@ export class Renderer {
         if (e.mirror === 'toggle') this.mirror = !this.mirror;
         if (e.kaleido === 'toggle') this.kaleido = this.kaleido ? 0 : 3 + Math.floor(Math.random() * 5);
         break;
-      case 'flash': this.flashes.push({ c: e.color, a: e.a || 0.2, t: 0 }); break;
+      case 'flash': this.flashes.push({ c: e.color, a: (e.a || 0.2) * (this.gentle ? 0.25 : 1), t: 0 }); break;
       case 'bg': if (e.h !== undefined) this.bg.hT = e.h; if (e.l !== undefined) this.bg.lT = e.l; break;
-      case 'invert': this.invertUntil = this.time + (e.dur || 0.5); break;
-      case 'siren': this.sirenUntil = this.time + (e.dur || 1.5); break;
+      case 'invert': if (!this.gentle) this.invertUntil = this.time + (e.dur || 0.5); break;
+      case 'siren': if (!this.gentle) this.sirenUntil = this.time + (e.dur || 1.5); break;
       case 'trails': this.fadeT = e.v; this.fade = e.v; break;
       case 'calm':
         v.rotT = 0; v.spin = 0; v.zoomT = 1; v.flipT = 1; v.wobble = 0; this.mirror = false; this.kaleido = 0;

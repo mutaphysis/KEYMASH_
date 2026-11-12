@@ -17,25 +17,48 @@ ver.textContent = VERSION_LABEL;
 ver.title = `built ${BUILD_TIME}`;
 
 // ---- keep the layout above the on-screen keyboard ----
-function fitViewport() {
+// The app normally fills the screen via CSS (inset: 0), which is what an installed iOS web app
+// reports most reliably. Only while the keyboard covers part of it do we pin it to the visible area.
+let fullH = 0, fullW = 0;
+function fitViewport(): void {
   const vv = window.visualViewport;
   const h = vv ? vv.height : window.innerHeight;
-  const top = vv ? vv.offsetTop : 0;
-  document.documentElement.style.setProperty('--vh', h + 'px');
-  document.documentElement.style.setProperty('--vt', top + 'px');
+  const w = vv ? vv.width : window.innerWidth;
+  if (w !== fullW) { fullW = w; fullH = 0; } // rotated: forget the old height
+  fullH = Math.max(fullH, h);
+  const kbd = h < fullH - 120;
+  const root = document.documentElement.style;
+  root.setProperty('--vh', h + 'px');
+  root.setProperty('--vt', (kbd && vv ? vv.offsetTop : 0) + 'px');
   if (window.scrollY) window.scrollTo(0, 0);
-  // on-screen keyboard open? squeeze the header a bit
-  app.classList.toggle('kb', h < window.innerHeight * 0.78 && document.activeElement?.id === 'code');
+  app.classList.toggle('kbd', kbd);
+  // squeeze the header a bit while typing
+  app.classList.toggle('kb', kbd && document.activeElement?.id === 'code');
 }
 window.visualViewport?.addEventListener('resize', fitViewport);
 window.visualViewport?.addEventListener('scroll', fitViewport);
 window.addEventListener('resize', fitViewport);
+window.addEventListener('orientationchange', () => { fullH = 0; setTimeout(fitViewport, 300); });
 fitViewport();
 
-// first touch anywhere unlocks audio
+// the first touch unlocks audio; later touches revive it (iOS suspends it after calls, Siri, app switches)
 const unlock = () => { audio.init(); };
-window.addEventListener('pointerdown', unlock, { once: true, capture: true });
-window.addEventListener('keydown', unlock, { once: true, capture: true });
+window.addEventListener('pointerdown', unlock, { capture: true });
+window.addEventListener('keydown', unlock, { capture: true });
+
+// keep the screen awake while a program plays
+let wake: { release(): Promise<void> } | null = null;
+async function keepAwake(on: boolean): Promise<void> {
+  try {
+    if (on && !wake && 'wakeLock' in navigator) wake = await navigator.wakeLock.request('screen');
+    if (!on && wake) { const w = wake; wake = null; await w.release(); }
+  } catch (e) { wake = null; /* not allowed or not supported */ }
+}
+
+// offline start for the installed app (not inside the Claude page, which runs in a frame)
+if (import.meta.env.PROD && 'serviceWorker' in navigator && window.top === window && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
 
 // ---- status line ----
 function status(src: string): void {
@@ -72,7 +95,8 @@ const player = new Player(audio);
 
 function isSplit(): boolean { return app.classList.contains('split'); }
 function layout(): void {
-  const split = window.innerWidth >= 820 && window.innerWidth > window.innerHeight * 1.05;
+  // side by side needs room in both directions: tablets and desktops, not a phone on its side
+  const split = window.innerWidth >= 820 && window.innerHeight >= 560 && window.innerWidth > window.innerHeight * 1.05;
   app.classList.toggle('split', split);
   app.classList.toggle('playing', state.playing);
   if (split) { $('edit').hidden = false; $('play').hidden = false; }
@@ -99,6 +123,7 @@ function run(): void {
   if (!isSplit()) editor.ta.blur();
   glitchSwitch();
   state.playing = true;
+  void keepAwake(true);
   layout();
   requestAnimationFrame(() => player.start(src));
 }
@@ -106,6 +131,7 @@ function edit(): void {
   player.stop();
   if (!isSplit()) glitchSwitch();
   state.playing = false;
+  void keepAwake(false);
   layout();
 }
 
@@ -207,6 +233,7 @@ function toast(text: string, action?: string, fn?: () => void): void {
 document.addEventListener('visibilitychange', () => {
   if (!audio.ctx) return;
   if (document.hidden) audio.ctx.suspend().catch(() => {}); else audio.ctx.resume().catch(() => {});
+  if (!document.hidden && state.playing) { wake = null; void keepAwake(true); } // the lock is dropped when hidden
 });
 
 // handle for debugging and the browser tests

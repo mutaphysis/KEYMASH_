@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { VM, SPELLS, SPELL_COOLDOWN, hash } from '../src/lang/vm';
+import { VM, SPELLS, SPELL_COOLDOWN, hash, tempoOf } from '../src/lang/vm';
+import { graphemes } from '../src/lang/lexer';
 import { lex, evalMath, fmtNum } from '../src/lang/lexer';
 import type { VMEvent } from '../src/lang/types';
 
@@ -157,4 +158,13 @@ test('MATH.EXE crash banner (division by zero) shows at most every 3 s', () => {
   for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text.startsWith('MATH.EXE')) shown.push(vm.time);
   expect(shown.length).toBeGreaterThan(10);
   for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(3 - 0.13);
+});
+
+test('tempo comes from the text: shouting is faster than calm, always 76..176', () => {
+  const t = (src: string) => tempoOf(graphemes(src), hash(src));
+  expect(t('AAAA!!! WOOF!!! JJJJJJJ!!!')).toBeGreaterThan(t('a . . . b . . . ~ ~ ~   c') + 40);
+  expect(t('')).toBe(120);
+  const rng = rngFrom(5);
+  for (let i = 0; i < 300; i++) { const b = t(randomProgram(rng, 1 + Math.floor(rng() * 120))); expect(b).toBeGreaterThanOrEqual(76); expect(b).toBeLessThanOrEqual(176); }
+  expect(new VM('asdf jkl').bpm).toBe(t('asdf jkl'));
 });

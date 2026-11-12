@@ -62,4 +62,7 @@ export const EMOJI_POWERS: Record<string, Op> = {
   '☀️': 'sun', '🌞': 'sun', '🌙': 'moon', '🌕': 'moon', '🌳': 'tree', '🌲': 'tree', '🌸': 'flower', '🌻': 'flower', '🌷': 'flower',
   '🫧': 'bubbles', '💨': 'smoke', '⚡': 'zigzag', '🌊': 'wave', '🐛': 'glitch', '🦠': 'virus', '☠️': 'virus', '💀': 'spooky',
   '🔔': 'chime', '📢': 'siren', '🚨': 'siren', '🎲': 'random', '🤪': 'chaos', '🧮': 'math', '📈': 'math',
+  '🐝': 'bee', '🐸': 'frog', '🦉': 'owl', '🐋': 'whale', '🐳': 'whale', '🐍': 'snake', '🪩': 'disco', '🕺': 'disco', '💃': 'disco',
+  '☄️': 'meteor', '🌠': 'meteor', '🕳️': 'blackhole', '🌌': 'aurora', '🔭': 'constellation', '📡': 'radar', '🎺': 'fanfare',
+  '💓': 'heartbeat', '💗': 'heartbeat', '🥧': 'pi', '🔺': 'sierpinski', '🐚': 'fibonacci', '🦋': 'lorenz',
 };

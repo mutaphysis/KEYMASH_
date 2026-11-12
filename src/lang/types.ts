@@ -29,6 +29,9 @@ export const OPS = [
   // creatures and things
   'dog', 'paws', 'cat', 'cow', 'duck', 'pig', 'bird', 'fish', 'dino', 'dragon', 'unicorn', 'ghost', 'alien', 'robot',
   'rocket', 'ball', 'bone', 'squirrel', 'poop', 'pizza', 'cake', 'banana', 'car', 'train',
+  // sky, maths, set pieces, more creatures
+  'aurora', 'blackhole', 'constellation', 'meteor', 'sierpinski', 'koch', 'dragoncurve', 'lorenz', 'spirograph', 'fibonacci', 'pi', 'tenprint',
+  'heartbeat', 'radar', 'barcode', 'disco', 'fanfare', 'drumfill', 'bluescreen', 'bee', 'frog', 'owl', 'whale', 'snake',
   // control
   'fork', 'random', 'chaos',
 ] as const;
@@ -40,7 +43,7 @@ export type SfxKind =
   | 'data' | 'computer' | 'granted' | 'spawn' | 'boing' | 'ooh' | 'rumble' | 'sweep' | 'whoosh' | 'chirp' | 'zap'
   | 'laser' | 'gliss' | 'question' | 'explode' | 'chime' | 'crunch' | 'kaching' | 'fire' | 'rain' | 'party'
   | 'whistle' | 'bubbles' | 'warp' | 'bloop' | 'drop' | 'siren' | 'bark' | 'meow' | 'moo' | 'quack' | 'oink'
-  | 'roar' | 'fart' | 'vroom' | 'robot' | 'ghost' | 'ufo' | 'rocket' | 'train';
+  | 'roar' | 'fart' | 'vroom' | 'robot' | 'ghost' | 'ufo' | 'rocket' | 'train' | 'buzz' | 'ribbit' | 'hoot' | 'whalesong' | 'hiss';
 export type ShapeKind = 'circle' | 'ring' | 'dot' | 'square' | 'tri' | 'poly' | 'star' | 'heart' | 'flower' | 'sun' | 'moon' | 'cross';
 export type ParticleKind =
   | 'burst' | 'dots' | 'stream' | 'stars' | 'sparkle' | 'confetti' | 'chars' | 'emoji' | 'paws' | 'fire' | 'rain'

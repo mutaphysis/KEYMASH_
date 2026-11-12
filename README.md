@@ -23,7 +23,8 @@ bun test           # fuzz + unit tests for the interpreter
 The build is a single HTML file with everything inlined (vite-plugin-singlefile),
 so it also works opened straight from disk or as a Claude artifact.
 
-It is an installable web app (`public/manifest.webmanifest`): on iOS use Share → Add to
+It is an installable web app (`public/manifest.webmanifest`) that also starts offline
+(`public/sw.js`, network first) and respects the system's "reduce motion" setting: on iOS use Share → Add to
 Home Screen, on Android/desktop Chrome the install button. The icon (a paw whose toes
 are the A S D F keycaps) lives in `scripts/icon.svg`; `bun scripts/icons.ts` re-renders the PNGs.
 
@@ -104,6 +105,18 @@ bubbles, money), screen tricks (glitch, spin, zoom, flip, mirror, kaleidoscope,
 feedback tunnel, warp), instrument and scale changes, hacker banners
 (`ACCESS GRANTED`, `DOWNLOADING MORE RAM`…), and creatures: dogs, cats, dinos,
 dragons, unicorns, a squirrel that gives every thread the zoomies.
+
+Also: fractals and attractors drawn live with their formula (Sierpiński triangle, Koch
+snowflake, dragon curve, Lorenz attractor, spirograph, golden spiral, π, `10 PRINT`),
+sky effects (aurora, black hole, constellations with made-up names, meteor shower),
+instruments (ECG heartbeat, radar sweep, barcode scanner), set pieces (disco, fanfare,
+drum fill, a blue screen) and more creatures (bee, frog, owl, whale, snake).
+
+### Tempo
+There is no tempo setting. The text sets it: shouty mashing (CAPS, `!`, held keys) plays
+faster, calm text (spaces, dots, `~`) plays slower, between 76 and 176 BPM. Speed-up and
+slow-down spells push it around and it drifts back. Tap the stage four times in a steady
+rhythm and the program follows your beat.
 
 ### In play mode
 Tap the screen to play notes and bursts yourself.

@@ -30,6 +30,7 @@ export class Player {
   hlPrev = new Map<number, [number, number]>();
   hlLast: HTMLSpanElement | null = null;
   activity = new Map<number, number>();
+  taps: number[] = []; tapBpm = 0;
   raf = 0; nextTick = 0; lastFrame = 0; restartAt = 0; hudTick = 0;
 
   constructor(audio: AudioEngine) {
@@ -70,6 +71,8 @@ export class Player {
     this.buildCode(this.vm.gs, true);
     this.queue = this.queue.filter((q) => q.e.type !== 'hl');
     this.hlPrev.clear(); this.hlLast = null; this.restartAt = 0;
+    if (this.tapBpm) this.vm.baseBpm = this.vm.bpm = this.tapBpm; // a tapped tempo survives edits
+    this.audio.setBpm(this.vm.bpm);
     this.log(`HOT-SWAP :: ${this.vm.gs.length} glyphs :: ${this.vm.threads.length} thread(s) :: 0 errors`);
     this.r.handle({ type: 'glitch', dt: 0, amt: 0.25, dur: 0.12 });
   }
@@ -82,6 +85,7 @@ export class Player {
     this.vm = new VM(src, { hw: this.r.hw, hh: this.r.hh });
     this.buildCode(this.vm.gs);
     this.r.reset();
+    this.taps = []; this.tapBpm = 0;
     this.audio.newSession(); this.audio.setBpm(this.vm.bpm);
     this.queue = []; this.logs = []; this.hlPrev.clear(); this.hlLast = null; this.restartAt = 0;
     this.logEl.textContent = '';
@@ -126,6 +130,7 @@ export class Player {
 
   tap(e: PointerEvent): void {
     if (!this.running) return;
+    this.tapTempo();
     const rect = this.stage.getBoundingClientRect();
     const [x, y] = this.r.toWorld(e.clientX - rect.left, e.clientY - rect.top);
     const hue = (x / this.r.hw * 120 + 200) % 360;
@@ -134,6 +139,21 @@ export class Player {
     const deg = Math.round((x / this.r.hw + 1) * 5);
     const midi = 57 + [0, 3, 5, 7, 10][((deg % 5) + 5) % 5] + 12 * Math.floor(deg / 5) - (y > 0 ? 12 : 0);
     this.audio.play({ type: 'note', dt: 0, inst: 'bell', midi, dur: 2, vel: 0.6, glide: 0, vib: 0, echo: 0, pan: x / this.r.hw }, this.audio.now, 0.125);
+  }
+
+  /** Four taps in a steady rhythm on the stage set the tempo. No button, no setting. */
+  tapTempo(): void {
+    const now = performance.now() / 1000;
+    this.taps.push(now); if (this.taps.length > 4) this.taps.shift();
+    if (this.taps.length < 4 || !this.vm) return;
+    const gaps = [1, 2, 3].map((i) => this.taps[i]! - this.taps[i - 1]!);
+    const mean = (gaps[0]! + gaps[1]! + gaps[2]!) / 3;
+    if (mean < 0.3 || mean > 1 || gaps.some((g) => Math.abs(g - mean) > mean * 0.2)) return;
+    this.tapBpm = Math.round(60 / mean);
+    this.vm.baseBpm = this.vm.bpm = this.tapBpm;
+    this.audio.setBpm(this.tapBpm);
+    this.log(`TAP TEMPO :: ${this.tapBpm} BPM`);
+    this.taps = [];
   }
 
   loop(t: number): void {

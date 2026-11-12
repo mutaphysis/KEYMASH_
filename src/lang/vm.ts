@@ -74,7 +74,8 @@ export const SPELLS: Op[] = [
   'fast', 'slow', 'major', 'minor', 'blues', 'spooky', 'japan',
   'hack', 'access', 'mainframe', 'virus', 'download', 'matrix', 'hack', 'hack',
   'dog', 'dog', 'paws', 'cat', 'cow', 'duck', 'pig', 'bird', 'fish', 'dino', 'dragon', 'unicorn', 'ghost', 'alien', 'robot',
-  'rocket', 'ball', 'bone', 'squirrel', 'poop', 'pizza', 'cake', 'banana', 'car', 'train', 'fork', 'chaos',
+  'rocket', 'ball', 'bone', 'squirrel', 'poop', 'pizza', 'cake', 'banana', 'car', 'train', 'fork', 'chaos',  'aurora', 'blackhole', 'constellation', 'meteor', 'sierpinski', 'koch', 'dragoncurve', 'lorenz', 'spirograph', 'fibonacci', 'pi', 'tenprint',
+  'heartbeat', 'radar', 'barcode', 'disco', 'fanfare', 'drumfill', 'bluescreen', 'bee', 'frog', 'owl', 'whale', 'snake',
 ];
 
 // Spell cooldowns, in seconds of VM time, shared by all threads. Ops in the same group share one
@@ -82,8 +83,32 @@ export const SPELLS: Op[] = [
 export const SPELL_COOLDOWN = 1.5;
 export const GROUP_COOLDOWN: Record<string, number> = { hack: 3, answer: 3, crash: 3 };
 const SPELL_GROUP: Partial<Record<Op, string>> = {
-  hack: 'hack', access: 'hack', mainframe: 'hack', virus: 'hack', download: 'hack', matrix: 'hack',
+  hack: 'hack', access: 'hack', mainframe: 'hack', virus: 'hack', download: 'hack', matrix: 'hack', bluescreen: 'hack',
 };
+
+/**
+ * The tempo comes from the text itself, there is no setting: shouty mashing (CAPS, "!", held keys)
+ * plays faster, calm text (spaces, dots, "~") plays slower, and the text's hash adds a few BPM of
+ * its own character. Always between 76 and 176.
+ */
+export function tempoOf(gs: string[], seed: number): number {
+  let n = 0, loud = 0, calm = 0, prev = '';
+  for (const g of gs) {
+    if (g === '\n') { prev = g; continue; }
+    n++;
+    if (g === ' ' || g === '~') calm += 1;
+    else if (g === '.' || g === ',' || g === '…') calm += 0.2;
+    else if (g === '!') loud += 2;
+    else if (g !== g.toLowerCase()) loud += 1; // uppercase
+    if (g === prev && g !== ' ') loud += 0.5; // held key
+    prev = g;
+  }
+  if (!n) return 120;
+  const bpm = 112 + 70 * Math.min(1, loud / n * 1.5) - 50 * Math.min(1, calm / n * 1.6) + (seed % 17 - 8);
+  return Math.round(Math.max(76, Math.min(176, bpm)));
+}
+
+const SLOW_DRAW = new Set<Op>(['sierpinski', 'koch', 'dragoncurve', 'lorenz', 'spirograph', 'fibonacci', 'tenprint', 'heartbeat', 'radar', 'barcode', 'constellation', 'meteor', 'tree', 'spiral', 'rose', 'knot']);
 
 let THREAD_ID = 0;
 
@@ -123,6 +148,8 @@ export class VM {
   hw: number; hh: number; bpm: number; tickN: number; scale: ScaleName; root: number;
   /** VM time in seconds (sum of tick durations) and when each spell (group) may fire again. */
   time = 0; cooldowns = new Map<string, number>();
+  /** The program's own tempo (see tempoOf); spells push `bpm` around and it drifts back to this. */
+  baseBpm = 120;
   threads: Thread[]; ev: VMEvent[]; curDt: number; done: boolean; lineThreads: number;
   private plans = new WeakMap<WordTok, Step[]>();
 
@@ -133,7 +160,7 @@ export class VM {
     this.seed = opts.seed ?? hash(this.src);
     this.rng = mulberry32(this.seed);
     this.hw = opts.hw ?? 500; this.hh = opts.hh ?? 500;
-    this.bpm = 120; this.tickN = 0; this.scale = 'penta'; this.root = 57;
+    this.baseBpm = this.bpm = tempoOf(this.gs, this.seed); this.tickN = 0; this.scale = 'penta'; this.root = 57;
     this.threads = []; this.ev = []; this.curDt = 0; this.done = false;
     THREAD_ID = 0;
     for (const toks of this.lines) {
@@ -211,6 +238,7 @@ export class VM {
     th.hue = (th.hue + 23) % 360;
     th.ang += 11;
     th.speed = 1 + (th.speed - 1) * 0.5; // zoomies wear off
+    this.bpm += (this.baseBpm - this.bpm) * 0.25; // and the tempo drifts home
     th.size = 1 + (th.size - 1) * 0.5;
     this.emit({ type: 'gen', gen: th.gen }, th);
     return true;
@@ -718,6 +746,8 @@ export class VM {
   keyword(th: Thread, op: Op, boost = 1, tok: WordTok | null = null): void {
     const b = Math.max(1, Math.min(3, boost));
     const R = () => this.r();
+    // slow drawings need the paint to stay: hold the trails while they build up
+    if (SLOW_DRAW.has(op)) this.emit({ type: 'trails', v: 0.008 }, th);
     switch (op) {
       // ---------- shapes ----------
       case 'circle': this.shape(th, 'circle', this.takeArg(th, 50, 2, 600) * b, { life: 2.5, w: 4 }); this.note(th, 2, { inst: 'bell' }); break;
@@ -907,7 +937,7 @@ export class VM {
       case 'tunnel': this.emit({ type: 'feedback', amt: 0.85, zoom: 1.035, rot: 1.2, dur: 4 * b }, th); this.sfx(th, 'whoosh', 0.7, 0.6); break;
       case 'warp': this.emit({ type: 'feedback', amt: 0.8, zoom: 1.06, rot: 0, dur: 3 * b }, th); this.particles(th, 'warp', 80, { x: 0, y: 0 }); this.sfx(th, 'warp', 0.8); break;
       case 'tilt': this.emit({ type: 'view', rot: 25 * b }, th); this.sfx(th, 'sweep', 0.4); break;
-      case 'calm': this.emit({ type: 'calm' }, th); this.note(th, 0, { inst: 'pad', dur: 6, vel: 0.4 }); break;
+      case 'calm': this.bpm = this.baseBpm; this.emit({ type: 'calm' }, th); this.note(th, 0, { inst: 'pad', dur: 6, vel: 0.4 }); break;
       case 'trails': this.emit({ type: 'trails', v: 0.02 }, th); this.note(th, 4, { echo: 1 }); break;
       // ---------- sound ----------
       case 'beep': this.note(th, 7, { inst: 'chip', oct: 1, dur: 0.5 }); this.shape(th, 'square', 8, { fill: true, life: 0.5 }); break;
@@ -939,8 +969,8 @@ export class VM {
         break;
       }
       // ---------- music ----------
-      case 'fast': th.speed = Math.min(4, th.speed * 2); this.sfx(th, 'sweep', 0.4, 2); this.particles(th, 'warp', 20); break;
-      case 'slow': th.speed = Math.max(0.25, th.speed / 2); this.sfx(th, 'sweep', 0.4, 0.4); break;
+      case 'fast': this.bpm = Math.min(184, this.bpm * 1.12); th.speed = Math.min(4, th.speed * 2); this.sfx(th, 'sweep', 0.4, 2); this.particles(th, 'warp', 20); break;
+      case 'slow': this.bpm = Math.max(66, this.bpm * 0.88); th.speed = Math.max(0.25, th.speed / 2); this.sfx(th, 'sweep', 0.4, 0.4); break;
       case 'major': case 'minor': case 'blues': case 'spooky': case 'japan':
         this.scale = op; this.text(th, `♫ ${op.toUpperCase()}`, { size: 34 });
         for (const d of [0, 2, 4]) this.note(th, d, { inst: 'pad', dur: 4, vel: 0.35 });
@@ -1012,6 +1042,210 @@ export class VM {
       case 'chaos':
         for (let i = 0; i < 3; i++) this.keyword(th, 'random', 1);
         this.emit({ type: 'glitch', amt: 0.9, dur: 0.6 }, th); this.emit({ type: 'view', spin: (R() - 0.5) * 80 }, th); break;
+      // ---------- sky ----------
+      case 'aurora': {
+        for (let j = 0; j < 5; j++) {
+          const pts: Point[] = []; const y0 = -this.hh * 0.55 + j * 34; const ph = R() * 6, f = 1.5 + R() * 2;
+          for (let i = 0; i <= 90; i++) { const x = -this.hw + i / 90 * 2 * this.hw; pts.push([x, y0 + Math.sin(i / 90 * Math.PI * f + ph) * 60 + Math.sin(i * 0.4 + ph) * 8]); }
+          this.emit({ type: 'stroke', pts, w: 10 - j, dur: 1.6, delay: j * 0.15, color: { h: 130 + j * 35, s: 90, l: 60 } }, th);
+        }
+        this.emit({ type: 'bg', h: 170, l: 2 }, th); this.emit({ type: 'trails', v: 0.02 }, th);
+        for (const d of [0, 4, 7]) this.note(th, d, { inst: 'pad', dur: 8, vel: 0.3 });
+        break;
+      }
+      case 'blackhole':
+        this.emit({ type: 'feedback', amt: 0.9, zoom: 0.955, rot: 2.4, dur: 3.5 * b }, th);
+        this.shape(th, 'circle', 34, { x: 0, y: 0, fill: true, life: 3.5, color: { h: 270, s: 60, l: 4 } });
+        this.shape(th, 'ring', 46, { x: 0, y: 0, life: 3.5, w: 5, color: { h: 35, s: 100, l: 65 } });
+        this.particles(th, 'warp', 60, { x: 0, y: 0 });
+        this.emit({ type: 'view', spin: 20 }, th); this.sfx(th, 'drop', 0.8); this.sfx(th, 'warp', 0.5, 0.5); break;
+      case 'constellation': {
+        const n = 5 + (R() * 4 | 0); const pts: Point[] = [];
+        let x = th.x * 0.5, y = th.y * 0.5;
+        for (let i = 0; i < n; i++) {
+          pts.push([x, y]); const a = R() * 6.283, d = 70 + R() * 90;
+          x = Math.max(-this.hw * 0.85, Math.min(this.hw * 0.85, x + Math.cos(a) * d));
+          y = Math.max(-this.hh * 0.8, Math.min(this.hh * 0.8, y + Math.sin(a) * d));
+        }
+        pts.forEach((p, i) => {
+          this.shape(th, 'star', 9 + R() * 8, { x: p[0], y: p[1], fill: true, life: 4, color: { h: 50, s: 60, l: 88 } }).at = i * 0.12;
+          this.note(th, (i * 2) % 9, { inst: 'bell', vel: 0.4, dur: 3, echo: 1 }).at = i * 0.12;
+        });
+        this.emit({ type: 'stroke', pts, w: 1.5, dur: n * 0.12, color: { h: 200, s: 50, l: 75 } }, th);
+        this.text(th, this.pick(['CANIS MAJOR', 'CANIS MINOR', 'URSA WOOFER', 'THE GREAT PAW', 'LEPUS', 'VULPECULA', 'SQUIRREL NEBULA']), { x: pts[0]![0], y: pts[0]![1] - 40, size: 24 });
+        this.emit({ type: 'bg', h: 230, l: 2 }, th); break;
+      }
+      case 'meteor': {
+        for (let i = 0; i < 6 + b; i++) {
+          const x0 = (R() - 0.3) * 2 * this.hw, y0 = -this.hh * (0.4 + R() * 0.6), L = 260 + R() * 260;
+          const end: Point = [x0 - L * 0.8, y0 + L * 0.6];
+          this.emit({ type: 'stroke', pts: [[x0, y0], end], w: 3, dur: 0.22, delay: i * 0.18, color: { h: 40 + R() * 20, s: 90, l: 80 } }, th);
+          this.particles(th, 'stars', 5, { x: end[0], y: end[1] }).at = i * 0.18 + 0.22;
+        }
+        this.sfx(th, 'whoosh', 0.7); this.sfx(th, 'chime', 0.3, 2).at = 0.5; break;
+      }
+      // ---------- fractals and other maths ----------
+      case 'sierpinski': {
+        const tris: [Point, Point, Point][] = [];
+        const mid = (p: Point, q: Point): Point => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+        const rec = (p: Point, q: Point, r: Point, d: number): void => {
+          if (d === 0) { tris.push([p, q, r]); return; }
+          const pq = mid(p, q), qr = mid(q, r), pr = mid(p, r);
+          rec(p, pq, pr, d - 1); rec(pq, q, qr, d - 1); rec(pr, qr, r, d - 1);
+        };
+        const S = Math.min(this.hw, this.hh) * 0.7, cx = th.x * 0.3, cy = th.y * 0.3;
+        rec([cx, cy - S], [cx - S, cy + S * 0.75], [cx + S, cy + S * 0.75], 4);
+        tris.forEach(([p, q, r], i) => this.emit({ type: 'stroke', pts: [p, q, r, p], w: 1.5, dur: 0.1, delay: i * 0.012, color: { h: (th.hue + i * 3) % 360, s: 90, l: 60 } }, th));
+        this.emit({ type: 'math', s: 'Sierpiński · dim = log 3 / log 2 ≈ 1.585', x: 0, y: -this.hh * 0.8, color: this.col(th, 20) }, th);
+        for (let i = 0; i < 3; i++) this.note(th, i * 2, { inst: 'bell', dur: 2 }).at = i * 0.15;
+        break;
+      }
+      case 'koch': {
+        const S = Math.min(this.hw, this.hh) * 0.6, cx = th.x * 0.3, cy = th.y * 0.3;
+        let pts: Point[] = [];
+        for (let i = 0; i <= 3; i++) { const a = (-90 + i * 120) * Math.PI / 180; pts.push([cx + Math.cos(a) * S, cy + Math.sin(a) * S]); }
+        for (let d = 0; d < 3; d++) {
+          const next: Point[] = [];
+          for (let i = 0; i < pts.length - 1; i++) {
+            const [x0, y0] = pts[i]!, [x1, y1] = pts[i + 1]!; const dx = (x1 - x0) / 3, dy = (y1 - y0) / 3;
+            next.push([x0, y0], [x0 + dx, y0 + dy], [x0 + dx + dx * 0.5 + dy * 0.866, y0 + dy + dy * 0.5 - dx * 0.866], [x0 + 2 * dx, y0 + 2 * dy]);
+          }
+          next.push(pts[pts.length - 1]!); pts = next;
+        }
+        this.stroke(th, pts, 2.5, 1.6, 15);
+        this.emit({ type: 'math', s: 'Koch snowflake · length × (4/3)ⁿ', x: 0, y: -this.hh * 0.8, color: this.col(th, 20) }, th);
+        this.sfx(th, 'chime', 0.6); this.note(th, 4, { inst: 'bell', dur: 3, echo: 1 }); break;
+      }
+      case 'dragoncurve': {
+        const N = 1024; const raw: Point[] = [[0, 0]]; let x = 0, y = 0, dir = 0;
+        for (let n = 1; n <= N; n++) {
+          x += [1, 0, -1, 0][dir]!; y += [0, 1, 0, -1][dir]!; raw.push([x, y]);
+          dir = (dir + ((((n & -n) << 1) & n) ? 1 : 3)) % 4;
+        }
+        let x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+        for (const [px, py] of raw) { x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py); }
+        const sc = Math.min(this.hw * 1.5 / (x1 - x0), this.hh * 1.4 / (y1 - y0));
+        const pts = raw.map(([px, py]): Point => [(px - (x0 + x1) / 2) * sc, (py - (y0 + y1) / 2) * sc]);
+        this.stroke(th, pts, 2, 2.6, 10);
+        this.emit({ type: 'math', s: 'dragon curve · 10 folds · 1024 turns', x: 0, y: -this.hh * 0.8, color: this.col(th, 20) }, th);
+        for (let i = 0; i < 10; i++) this.note(th, [0, 2, 4, 2, 5, 4, 7, 5, 9, 7][i]!, { dur: 1, vel: 0.4 }).at = i * 0.26;
+        break;
+      }
+      case 'lorenz': {
+        let x = 0.1, y = 0, z = 0; const pts: Point[] = []; const sc = Math.min(this.hw, this.hh) / 26;
+        for (let i = 0; i < 1400; i++) {
+          const dt = 0.008; const dx = 10 * (y - x), dy = x * (28 - z) - y, dz = x * y - 8 / 3 * z;
+          x += dx * dt; y += dy * dt; z += dz * dt;
+          if (i > 60) pts.push([x * sc, (z - 25) * -sc]);
+        }
+        this.stroke(th, pts, 1.8, 3.2, 10);
+        this.emit({ type: 'math', s: 'dx/dt = σ(y − x) · Lorenz attractor', x: 0, y: -this.hh * 0.75, color: this.col(th, 20) }, th);
+        this.note(th, 0, { inst: 'lead', glide: 12, vib: 1, dur: 10, vel: 0.35 }); this.note(th, 4, { inst: 'pad', dur: 10, vel: 0.3 }); break;
+      }
+      case 'spirograph': {
+        const R0 = 8, r = this.pick([3, 5, 7]), d = 2 + (R() * 5 | 0); const S = Math.min(this.hw, this.hh) * 0.65 / (R0 - r + d);
+        const pts: Point[] = []; const n = 120 * r;
+        for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2 * r; pts.push([th.x * 0.3 + ((R0 - r) * Math.cos(t) + d * Math.cos((R0 - r) / r * t)) * S, th.y * 0.3 + ((R0 - r) * Math.sin(t) - d * Math.sin((R0 - r) / r * t)) * S]); }
+        this.stroke(th, pts, 2, 2.2, 5);
+        this.emit({ type: 'math', s: `hypotrochoid · R=${R0} r=${r} d=${d}`, x: th.x * 0.3, y: -this.hh * 0.8, color: this.col(th, 20) }, th);
+        this.note(th, 0, { inst: 'bell' }); this.note(th, r, { inst: 'bell' }); this.note(th, d + 2, { inst: 'bell' }); break;
+      }
+      case 'fibonacci': {
+        const pts: Point[] = []; const phi = 1.618034; const a0 = Math.min(this.hw, this.hh) * 0.012;
+        for (let i = 0; i <= 260; i++) { const t = i / 260 * Math.PI * 7; const rr = a0 * Math.pow(phi, 2 * t / Math.PI); pts.push([th.x * 0.2 + Math.cos(t) * rr, th.y * 0.2 + Math.sin(t) * rr]); }
+        this.stroke(th, pts, 3, 1.8, 10);
+        this.emit({ type: 'math', s: '1 1 2 3 5 8 13 21 … φ ≈ 1.618', x: 0, y: -this.hh * 0.8, color: this.col(th, 20) }, th);
+        [1, 1, 2, 3, 5, 8, 13].forEach((f, i) => { this.note(th, f - 1, { inst: 'pluck', dur: 1.5, vel: 0.5 }).at = i * 0.14; });
+        break;
+      }
+      case 'pi':
+        this.shape(th, 'circle', 110, { x: 0, y: 0, life: 3, w: 4 });
+        this.stroke(th, [[-110, 0], [110, 0]], 2, 0.5, 20);
+        this.emit({ type: 'math', s: 'π = 3.14159265358979323846…', x: 0, y: -160, color: this.col(th, 20), big: true }, th);
+        this.emit({ type: 'dtmf', digits: '3141592653' }, th); break;
+      case 'tenprint': {
+        const cell = Math.max(60, Math.sqrt(4 * this.hw * this.hh / 180)); let i = 0;
+        for (let y = -this.hh; y < this.hh; y += cell) for (let x = -this.hw; x < this.hw; x += cell) {
+          const pts: Point[] = R() < 0.5 ? [[x, y], [x + cell, y + cell]] : [[x + cell, y], [x, y + cell]];
+          this.emit({ type: 'stroke', pts, w: 3, dur: 0.05, delay: i++ * 0.012, color: this.col(th, 5) }, th);
+        }
+        this.emit({ type: 'math', s: '10 PRINT CHR$(205.5+RND(1)); : GOTO 10', x: 0, y: -this.hh * 0.8, color: this.col(th, 20) }, th);
+        this.sfx(th, 'computer', 0.5); this.sfx(th, 'data', 0.5).at = 0.6; break;
+      }
+      // ---------- instruments of science ----------
+      case 'heartbeat': {
+        const pts: Point[] = []; const y0 = th.y * 0.4; const beats = [-0.5, 0, 0.5];
+        for (let i = 0; i <= 200; i++) {
+          const u = i / 200 * 2 - 1; let v = 0;
+          for (const c of beats) { const q = (u - c) * 14; v += -120 * Math.exp(-q * q * 6) + 35 * Math.exp(-(q - 0.7) * (q - 0.7) * 5) - 14 * Math.exp(-(q + 1.6) * (q + 1.6) * 2) - 22 * Math.exp(-(q - 2.6) * (q - 2.6) * 1.2); }
+          pts.push([u * this.hw, y0 + v]);
+        }
+        this.emit({ type: 'stroke', pts, w: 3, dur: 1.5, color: { h: 140, s: 100, l: 60 } }, th);
+        beats.forEach((_, i) => { this.drum(th, 'kick', 0.9).at = 0.25 + i * 0.5; this.drum(th, 'tom', 0.5).at = 0.4 + i * 0.5; this.note(th, 9, { inst: 'chip', dur: 0.3, vel: 0.3 }).at = 0.25 + i * 0.5; });
+        this.shape(th, 'heart', 26, { x: this.hw * 0.6, y: y0 - 150, fill: true, life: 2, grow: 0.4, color: { h: 350, s: 90, l: 60 } });
+        this.text(th, `♥ ${60 + (R() * 80 | 0)} BPM`, { x: this.hw * 0.25, y: y0 - 150, size: 32 }); break;
+      }
+      case 'radar': {
+        const c: Color = { h: 130, s: 100, l: 55 }; const Rr = Math.min(this.hw, this.hh) * 0.8;
+        for (const k of [0.33, 0.66, 1]) this.shape(th, 'ring', Rr * k, { x: 0, y: 0, life: 3, w: 1.5, color: c });
+        this.emit({ type: 'stroke', pts: [[-Rr, 0], [Rr, 0]], w: 1, dur: 0.2, color: c }, th); this.emit({ type: 'stroke', pts: [[0, -Rr], [0, Rr]], w: 1, dur: 0.2, color: c }, th);
+        for (let i = 0; i < 36; i++) { const a = i / 36 * 6.283 - 1.57; this.emit({ type: 'stroke', pts: [[0, 0], [Math.cos(a) * Rr, Math.sin(a) * Rr]], w: 3, dur: 0.06, delay: i * 0.07, color: c }, th); }
+        for (let i = 0; i < 3; i++) {
+          const k = (4 + R() * 28) | 0, a = k / 36 * 6.283 - 1.57, d = Rr * (0.3 + R() * 0.6);
+          this.shape(th, 'circle', 9, { x: Math.cos(a) * d, y: Math.sin(a) * d, fill: true, life: 1.4, grow: 1, color: { h: 130, s: 100, l: 80 } }).at = k * 0.07;
+          this.note(th, 12, { inst: 'chip', dur: 0.4, vel: 0.5, echo: 1 }).at = k * 0.07;
+        }
+        this.text(th, this.pick(['SCANNING…', 'SQUIRREL DETECTED', 'TREAT AT 3 O\'CLOCK', 'CAT ON RADAR']), { x: 0, y: Rr + 30, size: 26 }); this.emit({ type: 'bg', h: 130 }, th); break;
+      }
+      case 'barcode': {
+        let x = -190; let i = 0; const y = th.y * 0.4;
+        while (x < 190) { const w = 2 + (R() * 4 | 0) * 2; this.emit({ type: 'stroke', pts: [[x, y - 70], [x, y + 70]], w, dur: 0.04, delay: i++ * 0.015, color: { h: 0, s: 0, l: 92 } }, th); x += w + 4 + (R() * 3 | 0) * 3; }
+        this.emit({ type: 'stroke', pts: [[-230, y], [230, y]], w: 2.5, dur: 0.35, delay: 0.7, color: { h: 0, s: 100, l: 60 } }, th);
+        this.note(th, 14, { inst: 'chip', dur: 0.6, vel: 0.6 }).at = 1.05;
+        this.text(th, this.pick(['1× GOOD BOY', '1× TENNIS BALL', '3× TREATS', '1× KEYBOARD (CHEWED)']) + '  ' + (R() * 9 + 1).toFixed(2) + ' €', { x: 0, y: y + 160, size: 26 }).at = 1.05; break;
+      }
+      // ---------- little set pieces ----------
+      case 'disco': {
+        const step = this.tickDur * 2;
+        for (let i = 0; i < 8; i++) {
+          this.drum(th, i % 2 ? 'hat' : 'kick', i % 2 ? 0.6 : 1).at = i * step;
+          if (i % 4 === 2) this.drum(th, 'clap', 0.8).at = i * step;
+          this.emit({ type: 'flash', color: { h: i * 47 % 360, s: 100, l: 55 }, a: 0.2 }, th).at = i * step;
+          this.note(th, i % 2 ? 4 : 0, { inst: 'bass', oct: -1, dur: 1.5, vel: 0.7 }).at = i * step;
+          this.emit({ type: 'view', zoom: 0.05 }, th).at = i * step;
+        }
+        this.emit({ type: 'emoji', ch: '🪩', x: 0, y: -this.hh * 0.45, size: 130, life: 8 * step + 0.5 }, th);
+        this.particles(th, 'sparkle', 60, { x: 0, y: -this.hh * 0.45, spread: 2 }); break;
+      }
+      case 'fanfare': {
+        const seq: [number, number][] = [[0, 0], [0, 0.14], [0, 0.28], [4, 0.42], [2, 0.75], [4, 0.9], [7, 1.05]];
+        for (const [d, at] of seq) { this.note(th, d, { inst: 'lead', dur: at > 1 ? 6 : 1.2, vel: 0.6 }).at = at; this.note(th, d + 2, { inst: 'organ', dur: at > 1 ? 6 : 1.2, vel: 0.3 }).at = at; }
+        this.emit({ type: 'emoji', ch: '🎺', x: th.x, y: th.y, size: 110, life: 2 }, th);
+        this.particles(th, 'confetti', 70).at = 1.05; this.drum(th, 'crash', 0.6).at = 1.05; break;
+      }
+      case 'drumfill': {
+        const s = this.tickDur * 0.5;
+        for (let i = 0; i < 12; i++) {
+          this.drum(th, i < 4 ? 'snare' : i % 2 ? 'tom' : 'snare', 0.4 + i * 0.05).at = i * s;
+          this.shape(th, 'ring', 12 + i * 5, { life: 0.3, w: 2 }).at = i * s;
+        }
+        this.drum(th, 'crash', 0.9).at = 12 * s; this.drum(th, 'kick', 1).at = 12 * s;
+        this.emit({ type: 'view', shake: 22, zoom: 0.15 }, th).at = 12 * s; this.particles(th, 'burst', 50).at = 12 * s; break;
+      }
+      case 'bluescreen':
+        this.emit({ type: 'banner', text: this.pick([':( DOG.SYS HAS CRASHED', ':( YOUR PC RAN INTO A SQUIRREL', 'STOP 0x000000WOOF', 'GURU MEDITATION #00000004']) }, th);
+        this.emit({ type: 'flash', color: { h: 225, s: 100, l: 45 }, a: 0.7 }, th); this.emit({ type: 'bg', h: 225, l: 8 }, th);
+        this.emit({ type: 'glitch', amt: 0.8, dur: 0.5 }, th); this.sfx(th, 'crunch', 0.8); this.sfx(th, 'bloop', 0.6, 0.4).at = 0.3;
+        this.emit({ type: 'log', text: 'collecting error info… 0% (it will stay at 0%)' }, th); break;
+      // ---------- more creatures ----------
+      case 'bee': this.particles(th, 'emoji', 10 * b, { ch: '🐝' }); this.sfx(th, 'buzz', 0.7); this.text(th, 'BZZZ', { size: 44 }); this.keyword(th, 'scribble', 1); break;
+      case 'frog': this.creature(th, '🐸', 'ribbit', 'RIBBIT', { kind: 'pop' }); this.shape(th, 'ring', 20, { grow: 5, life: 1.2, color: { h: 190, s: 80, l: 60 } }); break;
+      case 'owl': this.creature(th, '🦉', 'hoot', 'HOO HOO', { kind: 'float' }); this.emit({ type: 'bg', h: 240, l: 2 }, th); this.particles(th, 'stars', 20, { spread: 3 }); break;
+      case 'whale': this.creature(th, '🐋', 'whalesong', null, { kind: 'swim', size: 130 }); this.particles(th, 'bubbles', 25); this.emit({ type: 'bg', h: 205, l: 5 }, th); this.emit({ type: 'view', wobble: 1.2 }, th); break;
+      case 'snake': {
+        this.creature(th, '🐍', 'hiss', 'SSSSS', { kind: 'run' });
+        this.curve(th, 60, (t) => [t * 420, Math.sin(t * Math.PI * 6) * 30 * (1 - t * 0.5)], { dur: 1, w: 5 }); break;
+      }
       default:
         this.letter(th, op[0] || 'a', false);
     }

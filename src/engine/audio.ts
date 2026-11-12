@@ -35,6 +35,8 @@ export class AudioEngine {
     if (this.ctx) { if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
+    // iOS: play like a media app, so the ring/silent switch doesn't mute the whole thing
+    try { const as = (navigator as Navigator & { audioSession?: { type: string } }).audioSession; if (as) as.type = 'playback'; } catch (e) { /* older iOS */ }
     const ctx = new AC({ latencyHint: 'interactive' });
     this.ctx = ctx;
     this.master = ctx.createGain(); this.master.gain.value = 0.6;
@@ -379,6 +381,11 @@ export class AudioEngine {
       case 'ufo': { const s = this.sweep('sine', 800, 900, t, 1.2, v * 0.5, pan, { a: 0.1, rev: 0.5 }); const l = this.c.createOscillator(); l.frequency.value = 9; const lg = this.gain(300); l.connect(lg); lg.connect(s.osc.frequency); l.start(t); l.stop(t + 1.3); break; }
       case 'rocket': this.noiseSweep(200, 1200, t, 1.6, v * 1.2, pan, 'lowpass', 1, { a: 0.4, rev: 0.4 }); this.sweep('sawtooth', 60, 300, t, 1.6, v * 0.4, pan, { lp: 600 }); break;
       case 'train': for (let i = 0; i < 2; i++) [554, 659, 784].forEach((f) => this.sweep('sawtooth', f, f * 0.98, t + i * 0.45, 0.35, v * 0.25, pan, { lp: 1800, a: 0.03, rev: 0.4 })); break;
+      case 'buzz': { const s = this.sweep('sawtooth', 185, 170, t, 0.8, v * 0.9, pan, { lp: 1100, q: 2, a: 0.05 }); const l = this.c.createOscillator(); l.frequency.value = 31; const lg = this.gain(28); l.connect(lg); lg.connect(s.osc.frequency); l.start(t); l.stop(t + 0.9); break; }
+      case 'ribbit': for (const k of [0, 0.2]) { const s = this.sweep('sawtooth', 105, 190, t + k, 0.13, v * 1.3, pan, { bp: 750, q: 5 }); const l = this.c.createOscillator(); l.frequency.value = 58; const lg = this.gain(45); l.connect(lg); lg.connect(s.osc.frequency); l.start(t + k); l.stop(t + k + 0.2); } break;
+      case 'hoot': this.sweep('sine', 395, 370, t, 0.22, v, pan, { a: 0.05, rev: 0.6 }); this.sweep('sine', 395, 350, t + 0.34, 0.5, v, pan, { a: 0.06, rev: 0.6 }); break;
+      case 'whalesong': { const s = this.sweep('sine', 170, 250, t, 2.4, v * 0.9, pan, { a: 0.5, rev: 0.9, del: 0.5 }); s.osc.frequency.cancelScheduledValues(t); s.osc.frequency.setValueAtTime(170, t); s.osc.frequency.exponentialRampToValueAtTime(540, t + 1); s.osc.frequency.exponentialRampToValueAtTime(230, t + 2.3); break; }
+      case 'hiss': this.noiseSweep(5000, 7500, t, 0.9, v * 0.7, pan, 'highpass', 1, { a: 0.15 }); break;
       default: this.sweep('triangle', 400 * p, 800 * p, t, 0.1, v * 0.6, pan);
     }
   }
