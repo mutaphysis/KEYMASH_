@@ -172,3 +172,9 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
   #code { font-size: 22px; }
   .logo { font-size: 30px; }
 }
+
+/* fallback message: invisible for the first second so a normal start never flashes it */
+#nojs { position: fixed; inset: 0; z-index: 100; background: var(--bg); color: var(--g); display: flex; flex-direction: column; justify-content: center; gap: 14px;
+  padding: calc(24px + var(--sat)) calc(24px + var(--sar)) calc(24px + var(--sab)) calc(24px + var(--sal)); font: 16px/1.5 var(--mono); opacity: 0; animation: nojsIn .3s 1s forwards; }
+#nojs p { margin: 0; max-width: 34em; color: #9fe8b6; }
+@keyframes nojsIn { to { opacity: 1; } }

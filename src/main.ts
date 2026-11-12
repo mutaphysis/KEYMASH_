@@ -254,3 +254,6 @@ document.addEventListener('visibilitychange', () => {
 const KEYMASH = { editor, player, audio, run, edit, state };
 declare global { interface Window { KEYMASH: typeof KEYMASH } }
 window.KEYMASH = KEYMASH;
+
+// everything is up: take the "waiting for JavaScript" message away
+document.getElementById('nojs')?.remove();
