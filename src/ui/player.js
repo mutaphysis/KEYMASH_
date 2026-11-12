@@ -152,7 +152,7 @@ export class Player {
       case 'hl': this.highlight(e); break;
       case 'log': this.log(e.text); break;
       case 'say': this.audio.speak(e.text, e.pitch, e.rate); break;
-      case 'gen': if (e.gen % 2 === 0) this.log(`t${e.th} :: generation ${e.gen} :: mutating…`); break;
+      case 'gen': if (e.gen % 4 === 0) this.log(`t${e.th} :: generation ${e.gen} :: mutating…`); break;
       case 'die': this.log(`t${e.th} :: exited (0)`); break;
     }
   }

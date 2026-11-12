@@ -73,9 +73,10 @@ header { padding: calc(10px + var(--sat)) 14px 6px; display: flex; align-items: 
 #controls { display: flex; gap: 6px; padding: 4px 10px calc(10px + var(--sab)); flex: 0 0 auto; }
 #controls button, .playbtns button, #drawer button {
   flex: 1; height: 46px; border-radius: 6px; background: rgba(0,0,0,.6); color: var(--g); border: 1px solid rgba(57,255,122,.45);
-  font-size: 13px; letter-spacing: 1px; text-shadow: 0 0 6px rgba(57,255,122,.7); white-space: nowrap; touch-action: manipulation;
+  font-size: 12px; letter-spacing: .5px; text-shadow: 0 0 6px rgba(57,255,122,.7); white-space: nowrap; touch-action: manipulation;
+  min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: clip;
 }
-#controls button.primary, .playbtns button.primary { background: var(--g); color: #000; text-shadow: none; font-weight: bold; box-shadow: 0 0 18px rgba(57,255,122,.6); flex: 1.6; font-size: 16px; }
+#controls button.primary, .playbtns button.primary { background: var(--g); color: #000; text-shadow: none; font-weight: bold; box-shadow: 0 0 18px rgba(57,255,122,.6); flex: 1.4; font-size: 15px; }
 #controls button:active, .playbtns button:active { transform: scale(.95); }
 
 /* ---------- play mode ---------- */
@@ -91,7 +92,7 @@ header { padding: calc(10px + var(--sat)) 14px 6px; display: flex; align-items: 
 .playbtns { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
 .playbtns button { flex: 0 0 auto; height: 42px; min-width: 46px; padding: 0 12px; font-size: 16px; }
 #codeview {
-  flex: 1; overflow-y: auto; padding: 14px 14px calc(30vh + var(--sab)); font: 18px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all;
+  position: relative; flex: 1; overflow-y: auto; padding: 14px 14px calc(30vh + var(--sab)); font: 18px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all;
   color: rgba(57,255,122,.42); background: linear-gradient(#000a03, #000); scrollbar-width: none;
 }
 #codeview::-webkit-scrollbar { display: none; }
@@ -118,6 +119,7 @@ header { padding: calc(10px + var(--sat)) 14px 6px; display: flex; align-items: 
 #app.switching { animation: switchGlitch .35s steps(4); }
 @keyframes switchGlitch { 0% { filter: hue-rotate(0) contrast(1); transform: translateY(var(--vt)) } 25% { filter: hue-rotate(90deg) contrast(2); transform: translate(6px, var(--vt)) skewX(4deg) } 50% { filter: invert(1); transform: translate(-6px, var(--vt)) } 75% { filter: hue-rotate(200deg) saturate(3); transform: translateY(var(--vt)) scaleY(.98) } 100% { filter: none; } }
 
+@media (max-width: 380px) { #controls button { font-size: 11px; } }
 @media (min-width: 800px) {
   #code { font-size: 22px; }
   .logo { font-size: 32px; }

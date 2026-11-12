@@ -818,7 +818,7 @@ export class VM {
         this.emit({ type: 'rainbow' }, th); this.emit({ type: 'emoji', ch: '🌈', x: th.x, y: th.y, size: 110, life: 2.5 }, th);
         this.note(th, 0, { inst: 'bell' }); this.note(th, 2, { inst: 'bell' }); this.note(th, 4, { inst: 'bell' }); this.note(th, 7, { inst: 'bell' }); break;
       case 'dark': this.emit({ type: 'bg', l: 0 }, th); th.lit = Math.max(30, th.lit - 15); this.note(th, 0, { oct: -1, inst: 'pad', dur: 4 }); break;
-      case 'light': this.emit({ type: 'bg', l: 14 }, th); th.lit = Math.min(85, th.lit + 15); this.note(th, 7, { inst: 'bell' }); break;
+      case 'light': this.emit({ type: 'bg', l: 8 }, th); th.lit = Math.min(85, th.lit + 15); this.note(th, 7, { inst: 'bell' }); break;
       case 'invert': this.emit({ type: 'invert', dur: 1.2 * b }, th); this.sfx(th, 'crunch', 0.5); break;
       // ---------- particles ----------
       case 'fire': this.particles(th, 'fire', 70 * b); this.sfx(th, 'fire', 0.7); this.emit({ type: 'bg', h: 15 }, th); break;

@@ -36,7 +36,7 @@ export class Renderer {
   }
 
   resize(cssW, cssH) {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const W = Math.max(2, Math.round(cssW * dpr)), H = Math.max(2, Math.round(cssH * dpr));
     if (W === this.W && H === this.H) return;
     // keep the old paint when resizing
@@ -51,22 +51,23 @@ export class Renderer {
   }
 
   // ---------- glyph cache (emoji are slow to draw) ----------
-  glyph(ch, px) {
+  glyph(ch, px, color) {
     const b = px <= 24 ? 24 : px <= 48 ? 48 : px <= 96 ? 96 : 160;
-    const key = ch + '|' + b;
+    const key = ch + '|' + b + '|' + (color || '');
     let g = this.glyphs.get(key);
     if (!g) {
       if (this.glyphs.size > 300) this.glyphs.clear();
       g = document.createElement('canvas'); g.width = g.height = Math.ceil(b * 1.3);
       const c = g.getContext('2d');
-      c.font = `${b}px ${EMOJI_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = color ? `${b}px ${this.font}` : `${b}px ${EMOJI_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      if (color) { c.fillStyle = color; c.shadowColor = color; c.shadowBlur = b * 0.25; }
       c.fillText(ch, g.width / 2, g.height / 2 + b * 0.06);
       this.glyphs.set(key, g);
     }
     return g;
   }
-  drawGlyph(c, ch, x, y, px, rot = 0, alpha = 1, flipX = false) {
-    const g = this.glyph(ch, px);
+  drawGlyph(c, ch, x, y, px, rot = 0, alpha = 1, flipX = false, color) {
+    const g = this.glyph(ch, px, color);
     const sz = px * 1.3;
     c.save(); c.globalAlpha = alpha; c.translate(x, y); if (rot) c.rotate(rot); if (flipX) c.scale(-1, 1);
     c.drawImage(g, -sz / 2, -sz / 2, sz, sz); c.restore();
@@ -93,7 +94,11 @@ export class Renderer {
         this.addSprite({ ...e, kind: 'shape', shape: e.kind, age: 0, life: e.life || 1.2 }); break;
       case 'particles': this.spawn(e); break;
       case 'text': this.addSprite({ kind: 'text', ...e, age: 0, life: e.style === 'big' ? 1.6 : e.style === 'sub' ? 3 : 1.8, vy: e.style === 'sub' ? 0 : -40 }); break;
-      case 'math': this.addSprite({ kind: 'math', ...e, age: 0, life: 3.2 }); break;
+      case 'math': {
+        const ms = this.sprites.filter((x) => x.kind === 'math');
+        if (ms.length >= 3) ms[0].age = Math.max(ms[0].age, ms[0].life - 0.2);
+        this.addSprite({ ...e, kind: 'math', age: 0, life: 3.2 }); break;
+      }
       case 'emoji': this.addSprite({ kind: 'emoji', ...e, age: 0, rot: rand(-0.3, 0.3) }); break;
       case 'actor': this.addActor(e); break;
       case 'glitch': this.glitchAmt = Math.max(this.glitchAmt, e.amt || 0.4); this.glitchUntil = Math.max(this.glitchUntil, this.time + (e.dur || 0.3)); break;
@@ -181,7 +186,7 @@ export class Renderer {
       }
       this.parts.push(p);
     }
-    if (this.parts.length > 1800) this.parts.splice(0, this.parts.length - 1800);
+    if (this.parts.length > 1000) this.parts.splice(0, this.parts.length - 1000);
   }
 
   // ---------- per frame ----------
@@ -205,13 +210,17 @@ export class Renderer {
     this.bg.h += ((((this.bg.hT - this.bg.h) % 360) + 540) % 360 - 180) * dt * 1.5;
     this.bg.l += (this.bg.lT - this.bg.l) * dt * 2;
     this.bg.hT += (150 - this.bg.hT) * dt * 0.05;
+    this.bg.lT += (4 - this.bg.lT) * dt * 0.1;
     this.fade += (this.fadeT - this.fade) * dt; this.fadeT += (0.07 - this.fadeT) * dt * 0.1;
 
     // ---- paint layer ----
     const pc = this.pctx;
     pc.setTransform(1, 0, 0, 1, 0, 0);
     pc.globalCompositeOperation = 'destination-out';
-    pc.globalAlpha = 1; pc.fillStyle = `rgba(0,0,0,${clamp(this.fade * dt * 60, 0.005, 0.5)})`;
+    const copies = (this.kaleido || 1) * (this.mirror ? 2 : 1);
+    this.copyK = 1 / Math.sqrt(copies);
+    const fade = this.fade * (1 + 0.2 * (copies - 1)) * (this.fb.until > T ? 1.6 : 1);
+    pc.globalAlpha = 1; pc.fillStyle = `rgba(0,0,0,${clamp(fade * dt * 60, 0.005, 0.5)})`;
     pc.fillRect(0, 0, W, H);
     pc.globalCompositeOperation = 'source-over';
 
@@ -219,7 +228,7 @@ export class Renderer {
       // lossy feedback: the paint is redrawn onto itself, rotated + scaled -> tunnels, vortices
       const k = Math.min(1, (this.fb.until - T) / 0.5) * this.fb.amt;
       this.tctx.setTransform(1, 0, 0, 1, 0, 0); this.tctx.clearRect(0, 0, W, H); this.tctx.drawImage(this.paint, 0, 0);
-      pc.save(); pc.globalAlpha = k * 0.85;
+      pc.save(); pc.globalAlpha = k * 0.7;
       pc.translate(W / 2, H / 2); pc.rotate(this.fb.rot * dt); pc.scale(1 + (this.fb.zoom - 1) * dt * 60, 1 + (this.fb.zoom - 1) * dt * 60); pc.translate(-W / 2, -H / 2);
       pc.drawImage(this.tmp, 0, 0); pc.restore();
     }
@@ -239,8 +248,9 @@ export class Renderer {
         this.sym(pc, (c) => {
           c.beginPath(); c.moveTo(seg[0][0], seg[0][1]);
           for (let i = 1; i < seg.length; i++) c.lineTo(seg[i][0], seg[i][1]);
-          c.strokeStyle = hsl(st.color, st.paw ? 0.08 : 0.16); c.lineWidth = st.w * 4.5; c.stroke();
-          c.strokeStyle = hsl(st.color, st.paw ? 0.5 : 0.95); c.lineWidth = st.w; c.stroke();
+          const k = this.copyK;
+          c.strokeStyle = hsl(st.color, (st.paw ? 0.08 : 0.14) * k); c.lineWidth = st.w * 4; c.stroke();
+          c.strokeStyle = hsl(st.color, (st.paw ? 0.5 : 0.9) * k); c.lineWidth = st.w; c.stroke();
         });
         st.idx = target;
         if (prog < 1) this.heads.push({ x: seg[seg.length - 1][0], y: seg[seg.length - 1][1], c: st.color });
@@ -254,7 +264,7 @@ export class Renderer {
     const c = this.ctx;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
-    const bl = this.bg.l + level * 6;
+    const bl = Math.min(9, this.bg.l + level * 3);
     c.fillStyle = `hsl(${this.bg.h | 0},70%,${bl.toFixed(1)}%)`;
     c.fillRect(0, 0, W, H);
 
@@ -360,7 +370,7 @@ export class Renderer {
           let txt = sp.s;
           if (sp.style === 'sub') {
             const n = Math.floor(sp.age * 30); txt = sp.s.slice(0, n) + (n < sp.s.length ? '█' : '');
-            const w = c.measureText(sp.s).width;
+            const w = sp.tw || (sp.tw = c.measureText(sp.s).width);
             c.fillStyle = `rgba(0,0,0,${0.6 * alpha})`; c.fillRect(-w / 2 - 14, -size * 0.7, w + 28, size * 1.4);
           }
           if (sp.style === 'big') {
@@ -385,10 +395,10 @@ export class Renderer {
           const x = clamp(sp.x, -this.hw * 0.9, this.hw * 0.9), y = clamp(sp.y, -this.hh * 0.85, this.hh * 0.85);
           c.translate(x, y);
           c.font = `${size}px ${this.font}`; c.textAlign = 'center'; c.textBaseline = 'middle';
-          const w = c.measureText(sp.s).width;
+          const w = sp.w || (sp.w = c.measureText(sp.s).width);
           const sc = Math.min(1, (this.hw * 1.8) / (w + 40));
           c.scale(sc, sc);
-          c.fillStyle = `rgba(0,10,5,${0.7 * alpha})`; c.fillRect(-w / 2 - 16, -size * 0.75, w + 32, size * 1.5);
+          c.fillStyle = `rgba(0,10,5,${0.88 * alpha})`; c.fillRect(-w / 2 - 16, -size * 0.75, w + 32, size * 1.5);
           c.strokeStyle = hsl(sp.color, alpha); c.lineWidth = 2; c.strokeRect(-w / 2 - 16, -size * 0.75, w + 32, size * 1.5);
           c.fillStyle = hsl({ ...sp.color, l: 88 }, alpha);
           c.textAlign = 'left'; c.fillText(txt + (n < sp.s.length || (sp.age * 3 | 0) % 2 ? '▌' : ''), -w / 2, 0);
@@ -408,7 +418,7 @@ export class Renderer {
     this.sym(pc, (cc) => {
       cc.save(); cc.translate(sp.x, sp.y); cc.rotate((sp.rot || 0) * Math.PI / 180 + sp.age * 0.6);
       this.shapePath(cc, sp, sp.r * (1 + (sp.grow || 0)));
-      cc.strokeStyle = hsl(sp.color, 0.35); cc.lineWidth = 1.5; cc.stroke(); cc.restore();
+      cc.strokeStyle = hsl(sp.color, 0.3 * this.copyK); cc.lineWidth = 1.5; cc.stroke(); cc.restore();
     });
     pc.globalCompositeOperation = 'source-over';
   }
@@ -428,11 +438,11 @@ export class Renderer {
       const t = p.age / p.life; const a = 1 - t;
       switch (p.kind) {
         case 'emoji': this.drawGlyph(c, p.ch, p.x, p.y, p.size, p.rot, Math.min(1, a * 2)); break;
-        case 'char': case 'matrix':
-          c.font = `${p.size | 0}px ${this.font}`; c.textAlign = 'center'; c.textBaseline = 'middle';
-          if (p.kind === 'matrix') { if (Math.random() < 0.1) p.ch = SCRAMBLE[(Math.random() * SCRAMBLE.length) | 0]; c.fillStyle = `rgba(120,255,140,${a})`; }
-          else c.fillStyle = hsl({ ...p.c, l: 80 }, a);
-          c.fillText(p.ch, p.x, p.y); break;
+        case 'char': case 'matrix': {
+          if (p.kind === 'matrix' && Math.random() < 0.1) p.ch = SCRAMBLE[(Math.random() * SCRAMBLE.length) | 0];
+          const col = p.kind === 'matrix' ? '#78ff8c' : `hsl(${(Math.round(p.c.h / 30) * 30) % 360},${p.c.s | 0}%,80%)`;
+          this.drawGlyph(c, p.ch, p.x, p.y, p.size, 0, a, false, col); break;
+        }
         case 'rect':
           c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.scale(1, Math.cos(p.rot * 2));
           c.fillStyle = hsl(p.c, Math.min(1, a * 2)); c.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); c.restore(); break;
@@ -594,14 +604,15 @@ export class Renderer {
         const y = Math.random() * H, h = rand(4, 40) * this.dpr * (0.5 + g), dx = (Math.random() - 0.5) * g * 120 * this.dpr;
         c.drawImage(this.cv, 0, y, W, h, dx, y, W, h);
       }
-      c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(0.5, 0.25 * g);
+      // colour fringe without brightening the frame
+      c.globalCompositeOperation = 'lighten'; c.globalAlpha = Math.min(0.6, 0.3 * g);
       c.drawImage(this.cv, (Math.random() * 10 + 4) * g * this.dpr, 0);
       c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
       if (Math.random() < 0.4 * g) {
         for (let i = 0; i < 3; i++) { c.fillStyle = `hsla(${[120, 300, 180][i]},100%,55%,0.35)`; c.fillRect(Math.random() * W, Math.random() * H, rand(20, 200) * this.dpr, rand(4, 30) * this.dpr); }
       }
     } else this.glitchAmt *= 0.5;
-    if (this.invertUntil > T) { c.globalCompositeOperation = 'difference'; c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; }
+    if (this.invertUntil > T && (T * 14 | 0) % 2) { c.globalCompositeOperation = 'difference'; c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; }
   }
 
   // tap-to-world helper for the UI
