@@ -114,3 +114,7 @@ src/ui/*.js          matrix editor, key bar, play mode, storage
 
 The VM is pure (no DOM): `vm.tick()` returns a list of timed events that the
 audio engine schedules and the renderer replays at the right moment.
+
+## License
+
+CC0 1.0 Universal — public domain. Mash freely.
