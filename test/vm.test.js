@@ -1,0 +1,110 @@
+import { test, expect } from 'bun:test';
+import { VM, SPELLS } from '../src/lang/vm.js';
+import { lex, evalMath, fmtNum } from '../src/lang/lexer.js';
+
+const POOL = [
+  ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZäöüßÄÖÜ0123456789',
+  ...'!?.,;:~-_|/\\*#@$%^+=<>&(){}[]`\'"“”«»…€£ \n\n\t',
+  '🐶', '🐱', '🔥', '🌈', '💥', '❤️', '👨‍👩‍👧', '🇩🇪', '🐿️', '😵‍💫', 'é', 'ñ', '漢', '字', 'Ж', 'ي', '\u0000', '￿', '\uD800',
+];
+
+function randomProgram(rng, len) {
+  let s = '';
+  for (let i = 0; i < len; i++) s += POOL[Math.floor(rng() * POOL.length)];
+  return s;
+}
+
+function rngFrom(seed) {
+  let a = seed;
+  return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+}
+
+function checkEvents(evs) {
+  for (const e of evs) {
+    for (const k of ['x', 'y', 'r', 'midi', 'size']) {
+      if (k in e) expect(Number.isFinite(e[k])).toBe(true);
+    }
+    if (e.pts) for (const [x, y] of e.pts) { expect(Number.isFinite(x)).toBe(true); expect(Number.isFinite(y)).toBe(true); }
+  }
+}
+
+test('lexer never throws and covers every grapheme', () => {
+  const rng = rngFrom(1);
+  for (let i = 0; i < 500; i++) {
+    const src = randomProgram(rng, Math.floor(rng() * 200));
+    const L = lex(src);
+    expect(L.gs.join('')).toBe(src);
+  }
+});
+
+test('math', () => {
+  expect(evalMath([2, 3, 4], ['+', '*'])).toBe(14);
+  expect(evalMath([2, 3, 2], ['^', '^'])).toBe(512);
+  expect(fmtNum(1 / 0)).toBe('∞');
+  const L = lex('7*6= and 3x4');
+  const m = L.lines[0].filter((t) => t.t === 'math');
+  expect(m.length).toBe(2);
+  expect(m[0].value).toBe(42);
+  expect(m[1].value).toBe(12);
+});
+
+test('fuzz: 150 random programs x 300 ticks, no exceptions, finite output', () => {
+  const rng = rngFrom(42);
+  let total = 0;
+  for (let i = 0; i < 150; i++) {
+    const src = randomProgram(rng, Math.floor(rng() * 300));
+    const vm = new VM(src, { hw: 300, hh: 500 });
+    for (let t = 0; t < 300; t++) {
+      const ev = vm.tick();
+      checkEvents(ev);
+      total += ev.length;
+      expect(vm.threads.length).toBeLessThanOrEqual(13);
+    }
+  }
+  expect(total).toBeGreaterThan(1000);
+}, 60000);
+
+test('the VM never catches its own errors on random input (no SEGFAULT logs)', () => {
+  const rng = rngFrom(7);
+  for (let i = 0; i < 200; i++) {
+    const vm = new VM(randomProgram(rng, 150));
+    for (let t = 0; t < 200; t++) {
+      for (const e of vm.tick()) if (e.type === 'log') expect(e.text.includes('SEGFAULT')).toBe(false);
+    }
+  }
+});
+
+test('every spell runs', () => {
+  const vm = new VM('a');
+  const th = vm.threads[0];
+  for (const op of new Set(SPELLS)) {
+    vm.ev = [];
+    vm.keyword(th, op, 2);
+    checkEvents(vm.ev);
+  }
+});
+
+test('dog keysmash produces sound and visuals every tick', () => {
+  const vm = new VM('jfkdlsaöä asdfghjkl JJJJJJJ kkkkkkkkkkkkk');
+  let sound = 0, vis = 0;
+  for (let t = 0; t < 64; t++) for (const e of vm.tick()) {
+    if (['note', 'drum', 'sfx', 'say'].includes(e.type)) sound++;
+    if (['stroke', 'shape', 'particles'].includes(e.type)) vis++;
+  }
+  expect(sound).toBeGreaterThan(40);
+  expect(vis).toBeGreaterThan(40);
+});
+
+test('lines are parallel threads; brackets spawn; & forks', () => {
+  const vm = new VM('abc\ndef\n[ghi] & xyz');
+  expect(vm.threads.length).toBe(3);
+  for (let t = 0; t < 10; t++) vm.tick();
+  expect(vm.threads.length).toBeGreaterThan(3);
+});
+
+test('pathological inputs', () => {
+  for (const src of ['', ' ', '\n\n\n', '((((((((', '))))))))', '()()()', '[[[[[[[[[[[]]]]]]]]', '&&&&&&&&&&&&&&&&&', ':::::', '""""', '"', '9'.repeat(400), '9^9^9^9', '0/0', 'a'.repeat(5000), '🐶'.repeat(300)]) {
+    const vm = new VM(src);
+    for (let t = 0; t < 200; t++) checkEvents(vm.tick());
+  }
+});
