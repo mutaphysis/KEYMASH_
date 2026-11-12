@@ -176,3 +176,11 @@ test('no program ever runs faster than 120 BPM, whatever spells it casts', () =>
     for (let t = 0; t < 300; t++) { vm.tick(); expect(vm.bpm).toBeLessThanOrEqual(120); }
   }
 });
+
+test('radar: at most once every 12 s', () => {
+  const vm = new VM('a');
+  const fired: number[] = [];
+  for (let t = 0; t < 600; t++) { vm.tick(); if (vm.cast('radar')) fired.push(vm.time); }
+  expect(fired.length).toBeGreaterThan(2);
+  for (let i = 1; i < fired.length; i++) expect(fired[i]! - fired[i - 1]!).toBeGreaterThanOrEqual(12 - 1e-6);
+});

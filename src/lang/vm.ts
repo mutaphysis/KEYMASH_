@@ -81,7 +81,7 @@ export const SPELLS: Op[] = [
 // Spell cooldowns, in seconds of VM time, shared by all threads. Ops in the same group share one
 // cooldown (all hacker banners count as "the hacking spell").
 export const SPELL_COOLDOWN = 1.5;
-export const GROUP_COOLDOWN: Record<string, number> = { hack: 3, answer: 3, crash: 3 };
+export const GROUP_COOLDOWN: Record<string, number> = { hack: 3, answer: 3, crash: 3, radar: 12 };
 const SPELL_GROUP: Partial<Record<Op, string>> = {
   hack: 'hack', access: 'hack', mainframe: 'hack', virus: 'hack', download: 'hack', matrix: 'hack', bluescreen: 'hack',
 };
@@ -109,7 +109,7 @@ export function tempoOf(gs: string[], seed: number): number {
   return Math.round(Math.max(MIN_BPM, Math.min(MAX_BPM, bpm)));
 }
 
-const SLOW_DRAW = new Set<Op>(['sierpinski', 'koch', 'dragoncurve', 'lorenz', 'spirograph', 'fibonacci', 'tenprint', 'heartbeat', 'radar', 'barcode', 'constellation', 'meteor', 'tree', 'spiral', 'rose', 'knot']);
+const SLOW_DRAW = new Set<Op>(['sierpinski', 'koch', 'dragoncurve', 'lorenz', 'spirograph', 'fibonacci', 'tenprint', 'heartbeat', 'barcode', 'constellation', 'meteor', 'tree', 'spiral', 'rose', 'knot']);
 
 let THREAD_ID = 0;
 
@@ -1188,13 +1188,13 @@ export class VM {
       }
       case 'radar': {
         const c: Color = { h: 130, s: 100, l: 55 }; const Rr = Math.min(this.hw, this.hh) * 0.8;
-        for (const k of [0.33, 0.66, 1]) this.shape(th, 'ring', Rr * k, { x: 0, y: 0, life: 3, w: 1.5, color: c });
+        for (const k of [0.33, 0.66, 1]) this.shape(th, 'ring', Rr * k, { x: 0, y: 0, life: 1.5, w: 1.5, color: c });
         this.emit({ type: 'stroke', pts: [[-Rr, 0], [Rr, 0]], w: 1, dur: 0.2, color: c }, th); this.emit({ type: 'stroke', pts: [[0, -Rr], [0, Rr]], w: 1, dur: 0.2, color: c }, th);
-        for (let i = 0; i < 36; i++) { const a = i / 36 * 6.283 - 1.57; this.emit({ type: 'stroke', pts: [[0, 0], [Math.cos(a) * Rr, Math.sin(a) * Rr]], w: 3, dur: 0.06, delay: i * 0.07, color: c }, th); }
+        for (let i = 0; i < 36; i++) { const a = i / 36 * 6.283 - 1.57; this.emit({ type: 'stroke', pts: [[0, 0], [Math.cos(a) * Rr, Math.sin(a) * Rr]], w: 3, dur: 0.04, delay: i * 0.035, color: c }, th); }
         for (let i = 0; i < 3; i++) {
           const k = (4 + R() * 28) | 0, a = k / 36 * 6.283 - 1.57, d = Rr * (0.3 + R() * 0.6);
-          this.shape(th, 'circle', 9, { x: Math.cos(a) * d, y: Math.sin(a) * d, fill: true, life: 1.4, grow: 1, color: { h: 130, s: 100, l: 80 } }).at = k * 0.07;
-          this.note(th, 12, { inst: 'chip', dur: 0.4, vel: 0.5, echo: 1 }).at = k * 0.07;
+          this.shape(th, 'circle', 9, { x: Math.cos(a) * d, y: Math.sin(a) * d, fill: true, life: 1.4, grow: 1, color: { h: 130, s: 100, l: 80 } }).at = k * 0.035;
+          this.note(th, 12, { inst: 'chip', dur: 0.4, vel: 0.5, echo: 1 }).at = k * 0.035;
         }
         this.text(th, this.pick(['SCANNING…', 'SQUIRREL DETECTED', 'TREAT AT 3 O\'CLOCK', 'CAT ON RADAR']), { x: 0, y: Rr + 30, size: 26 }); this.emit({ type: 'bg', h: 130 }, th); break;
       }
