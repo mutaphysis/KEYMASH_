@@ -33,8 +33,8 @@ export class Player {
     if (this.vm) this.vm.setBounds(this.r.hw, this.r.hh);
   }
 
-  buildCode(gs) {
-    const cv = this.codeview; cv.textContent = '';
+  buildCode(gs, keepScroll = false) {
+    const cv = this.codeview; const top = cv.scrollTop; cv.textContent = '';
     const frag = document.createDocumentFragment();
     this.spans = gs.map((g) => {
       const s = document.createElement('span');
@@ -42,7 +42,21 @@ export class Player {
       frag.appendChild(s); return s;
     });
     cv.appendChild(frag);
-    cv.scrollTop = 0;
+    cv.scrollTop = keepScroll ? top : 0;
+  }
+
+  // live coding: swap in a new program without stopping the clock, the picture or the sound
+  hotSwap(src) {
+    if (!this.running || src === this.src) return;
+    this.src = src;
+    const old = this.vm;
+    this.vm = new VM(src, { hw: this.r.hw, hh: this.r.hh });
+    this.vm.tickN = Math.max(1, old ? old.tickN : 1); // skip the boot log, keep the harmony moving
+    this.buildCode(this.vm.gs, true);
+    this.queue = this.queue.filter((q) => q.e.type !== 'hl');
+    this.hlPrev.clear(); this.hlLast = null; this.restartAt = 0;
+    this.log(`HOT-SWAP :: ${this.vm.gs.length} glyphs :: ${this.vm.threads.length} thread(s) :: 0 errors`);
+    this.r.handle({ type: 'glitch', amt: 0.25, dur: 0.12 });
   }
 
   async start(src) {

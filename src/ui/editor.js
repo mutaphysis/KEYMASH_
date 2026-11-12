@@ -15,6 +15,7 @@ export class Editor {
     this.sc = this.sparks.getContext('2d');
     this.onChange = opts.onChange || (() => {});
     this.onKey = opts.onKey || (() => {});
+    this.onType = opts.onType || (() => {});
     this.cols = []; this.parts = []; this.typed = [];
     this.active = true;
     this.buildKeybar();
@@ -46,6 +47,7 @@ export class Editor {
     const ch = e && e.data ? graphemes(e.data).pop() : v.slice(Math.max(0, pos - 1), pos);
     const [x, y] = this.caretXY();
     this.burst(x, y, ch);
+    this.onType(ch || '', (e && e.inputType) || 'insertText');
     if (ch && ch.trim()) {
       this.typed.push(ch); if (this.typed.length > 60) this.typed.shift();
       // drop the typed char into a rain column

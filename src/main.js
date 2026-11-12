@@ -3,6 +3,7 @@ import { Editor } from './ui/editor.js';
 import { Player } from './ui/player.js';
 import { store, DEMOS, pawMash } from './ui/storage.js';
 import { lex } from './lang/lexer.js';
+import { keyInfo } from './lang/keys.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -16,6 +17,8 @@ function fitViewport() {
   document.documentElement.style.setProperty('--vh', h + 'px');
   document.documentElement.style.setProperty('--vt', top + 'px');
   if (window.scrollY) window.scrollTo(0, 0);
+  // on-screen keyboard open? squeeze the header a bit
+  app.classList.toggle('kb', h < window.innerHeight * 0.78 && document.activeElement && document.activeElement.id === 'code');
 }
 if (window.visualViewport) {
   visualViewport.addEventListener('resize', fitViewport);
@@ -37,18 +40,45 @@ function status(src) {
   $('st-glyphs').textContent = L.gs.length;
 }
 
-let saveTimer = 0;
+let saveTimer = 0, swapTimer = 0;
+const state = { playing: false };
 const editor = new Editor({
-  onChange: (v) => { status(v); clearTimeout(saveTimer); saveTimer = setTimeout(() => store.setDraft(v), 400); },
-  onKey: (ch, key) => {
-    // every keystroke previews its note, pitched by where the key sits
-    if (!audio.ctx || audio.muted) return;
-    const sc = [0, 3, 5, 7, 10];
-    const d = key.deg; const midi = 57 + sc[((d % 5) + 5) % 5] + 12 * Math.floor(d / 5);
-    audio.play({ type: 'note', inst: 'chip', midi, dur: 1, vel: 0.25, pan: (key.x - 0.5) * 1.4 }, audio.now, 0.1);
+  onChange: (v) => {
+    status(v); clearTimeout(saveTimer); saveTimer = setTimeout(() => store.setDraft(v), 400);
+    // live coding: in split view, edits go straight into the running program
+    if (state.playing && isSplit()) { clearTimeout(swapTimer); swapTimer = setTimeout(() => player.hotSwap(editor.value), 650); }
+  },
+  onType: (ch, inputType) => {
+    // laid-back sounds while typing, pitched by where the key sits
+    if (!audio.ctx) return;
+    const quiet = state.playing; // don't fight the running program
+    let kind = 'letter';
+    if (inputType.startsWith('delete')) kind = 'delete';
+    else if (ch === '\n' || inputType === 'insertLineBreak' || inputType === 'insertParagraph') kind = 'enter';
+    else if (ch === ' ') kind = 'space';
+    else if (/\p{Extended_Pictographic}/u.test(ch)) kind = 'emoji';
+    else if (/\p{Nd}/u.test(ch)) kind = 'digit';
+    else if (!/\p{L}/u.test(ch)) kind = 'symbol';
+    const key = keyInfo(ch || 'a');
+    audio.typing(kind, key.deg, (key.x - 0.5) * 1.4, quiet);
   },
 });
 const player = new Player(audio);
+
+function isSplit() { return app.classList.contains('split'); }
+function layout() {
+  const split = window.innerWidth >= 820 && window.innerWidth > window.innerHeight * 1.05;
+  app.classList.toggle('split', split);
+  app.classList.toggle('playing', state.playing);
+  if (split) { $('edit').hidden = false; $('play').hidden = false; }
+  else { $('edit').hidden = state.playing; $('play').hidden = !state.playing; }
+  editor.active = !$('edit').hidden;
+  const rb = $('btn-run');
+  rb.querySelector('i').textContent = split && state.playing ? '■' : '▶';
+  rb.querySelector('span').textContent = split && state.playing ? 'STOP' : 'RUN';
+  requestAnimationFrame(() => { editor.resize(); player.fit(); });
+}
+window.addEventListener('resize', layout);
 
 const draft = store.draft();
 editor.value = draft !== null ? draft : DEMOS[0].src;
@@ -57,29 +87,35 @@ editor.value = draft !== null ? draft : DEMOS[0].src;
 function glitchSwitch() { app.classList.remove('switching'); void app.offsetWidth; app.classList.add('switching'); }
 
 function run() {
+  if (state.playing && isSplit()) { edit(); return; }
   let src = editor.value;
   if (!src.trim()) { src = pawMash(70); editor.value = src; toast('EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾'); }
-  editor.ta.blur();
+  audio.padStop();
+  if (!isSplit()) editor.ta.blur();
   glitchSwitch();
-  $('edit').hidden = true; $('play').hidden = false;
-  editor.active = false;
+  state.playing = true;
+  layout();
   requestAnimationFrame(() => player.start(src));
 }
 function edit() {
   player.stop();
-  glitchSwitch();
-  $('play').hidden = true; $('edit').hidden = false;
-  editor.active = true;
-  editor.resize();
+  if (!isSplit()) glitchSwitch();
+  state.playing = false;
+  layout();
 }
 
 $('btn-run').addEventListener('click', run);
+$('btn-idle-run').addEventListener('click', run);
 $('btn-stop').addEventListener('click', edit);
 $('btn-restart').addEventListener('click', () => player.restart());
-$('btn-mute').addEventListener('click', () => {
+function toggleMute() {
+  audio.init();
   audio.setMuted(!audio.muted);
-  $('btn-mute').textContent = audio.muted ? '🔇' : '🔊';
-});
+  for (const id of ['btn-mute', 'btn-mute-edit']) $(id).textContent = audio.muted ? '🔇' : '🔊';
+}
+$('btn-mute').addEventListener('click', toggleMute);
+$('btn-mute-edit').addEventListener('click', toggleMute);
+layout();
 $('btn-mash').addEventListener('click', () => {
   audio.init();
   const add = pawMash(24 + Math.random() * 40);
@@ -153,7 +189,7 @@ function toast(text, action, fn) {
 // pause audio when the page is hidden
 document.addEventListener('visibilitychange', () => {
   if (!audio.ctx) return;
-  if (document.hidden) audio.ctx.suspend().catch(() => {}); else if (player.running) audio.ctx.resume().catch(() => {});
+  if (document.hidden) audio.ctx.suspend().catch(() => {}); else audio.ctx.resume().catch(() => {});
 });
 
-window.KEYMASH = { editor, player, audio, run, edit };
+window.KEYMASH = { editor, player, audio, run, edit, state };

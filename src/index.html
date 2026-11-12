@@ -16,7 +16,8 @@
   <section id="edit">
     <header>
       <div class="logo" data-text="KEYMASH_">KEYMASH_</div>
-      <div id="status"><b class="ok">0 ERRORS</b> · <span id="st-threads">0</span> THREADS · <span id="st-glyphs">0</span> GLYPHS</div>
+      <div id="status"><b class="ok">0 ERRORS</b> · <span id="st-threads">0</span> THREADS · <span id="st-glyphs">0</span> GLYPHS<b id="st-live"> · LIVE</b></div>
+      <button id="btn-mute-edit" class="hbtn" title="sound on/off">🔊</button>
     </header>
     <div id="editorWrap">
       <canvas id="rain"></canvas>
@@ -25,11 +26,11 @@
     </div>
     <div id="keybar" role="toolbar" aria-label="extra keys"></div>
     <nav id="controls">
-      <button id="btn-run" class="primary">▶ RUN</button>
-      <button id="btn-mash" title="let a virtual paw type">🐾 MASH</button>
-      <button id="btn-clear">✖ CLR</button>
-      <button id="btn-save">💾 SAVE</button>
-      <button id="btn-load">📂 LOAD</button>
+      <button id="btn-run" class="primary"><i>▶</i><span>RUN</span></button>
+      <button id="btn-mash" title="let a virtual paw type"><i>🐾</i><span>MASH</span></button>
+      <button id="btn-clear"><i>✖</i><span>CLEAR</span></button>
+      <button id="btn-save"><i>💾</i><span>SAVE</span></button>
+      <button id="btn-load"><i>📂</i><span>LOAD</span></button>
     </nav>
   </section>
 
@@ -40,6 +41,7 @@
       <div id="hud"></div>
       <div id="log"></div>
       <div id="boot"></div>
+      <div id="idle"><button id="btn-idle-run">▶ RUN</button><p>edit on the left — changes go live while it runs</p></div>
       <div class="playbtns">
         <button id="btn-mute" title="sound on/off">🔊</button>
         <button id="btn-restart" title="restart">⟲</button>

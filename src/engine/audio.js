@@ -43,6 +43,12 @@ export class AudioEngine {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.distCurve = new Float32Array(1024);
     for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; this.distCurve[i] = Math.tanh(x * 4); }
+    // a separate, always-on lounge bus for typing sounds: warm lowpass, lots of space
+    this.ui = ctx.createGain(); this.ui.gain.value = this.muted ? 0 : 1;
+    const warm = this.filter('lowpass', 2600, 0.5);
+    this.ui.connect(warm); warm.connect(this.master);
+    this.uiRev = ctx.createGain(); this.uiRev.gain.value = 0.9; this.ui.connect(this.uiRev); this.uiRev.connect(this.revSend);
+    this.uiDel = ctx.createGain(); this.uiDel.gain.value = 0.45; this.ui.connect(this.uiDel); this.uiDel.connect(this.delSend);
     this.newSession();
   }
 
@@ -72,7 +78,7 @@ export class AudioEngine {
   }
   setMuted(m) {
     this.muted = m;
-    if (this.ctx) for (const b of [this.bus, this.busRev, this.busDel]) if (b) b.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.03);
+    if (this.ctx) for (const b of [this.bus, this.busRev, this.busDel, this.ui]) if (b) b.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.03);
     if (m) this.speechStop();
   }
   setBpm(bpm) { if (this.delay) this.delay.delayTime.setTargetAtTime(Math.min(1.9, 60 / bpm * 0.75), this.ctx.currentTime, 0.1); }
@@ -361,6 +367,64 @@ export class AudioEngine {
       for (const f of pair) this.sweep('sine', f, f, tt, 0.06, 0.12, pan, { rev: 0.05, a: 0.003 });
     });
   }
+
+  // ---- laid-back typing sounds (edit mode) ----
+  // kind: 'letter' | 'digit' | 'symbol' | 'emoji' | 'space' | 'enter' | 'delete'
+  typing(kind, deg = 0, pan = 0, quiet = false) {
+    if (!this.ctx || this.muted || this.ctx.state !== 'running') return;
+    const ctx = this.ctx; const t = ctx.currentTime + 0.01;
+    // fast typing (or a dog) gets softer instead of louder
+    const gap = t - (this.lastType || 0);
+    if (gap < 0.035) return;
+    this.typeRate = (this.typeRate || 0) * 0.8 + (gap < 0.15 ? 0.2 : 0);
+    this.lastType = t;
+    const v = (quiet ? 0.35 : 1) * (1 - Math.min(0.6, this.typeRate));
+    const sc = [0, 3, 5, 7, 10];
+    const chord = [0, 5, 3, -2][Math.floor((this.typeCount = (this.typeCount || 0) + 1) / 24) % 4];
+    const midiOf = (d) => 57 + chord + sc[((d % 5) + 5) % 5] + 12 * Math.floor(d / 5);
+    const out = (dur) => {
+      const g = ctx.createGain(); const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      if (p) { p.pan.value = Math.max(-0.8, Math.min(0.8, pan)); g.connect(p); p.connect(this.ui); } else g.connect(this.ui);
+      setTimeout(() => { try { g.disconnect(); if (p) p.disconnect(); } catch (e) {} }, (dur + 3) * 1000);
+      return g;
+    };
+    const kalimba = (midi, at, vel) => {
+      const f = mtof(midi); const o = out(2.5);
+      const g = this.gain(0); g.connect(o);
+      this.osc('sine', f, at, at + 2.2, g);
+      const h = this.gain(0); h.connect(o); this.osc('sine', f * 4.02, at, at + 0.4, h);
+      this.env(g.gain, at, 0.004, 0.16 * vel, 1.8);
+      this.env(h.gain, at, 0.002, 0.04 * vel, 0.15);
+    };
+    switch (kind) {
+      case 'letter': kalimba(midiOf(deg), t, v); break;
+      case 'digit': kalimba(midiOf(deg) + 12, t, v * 0.7); break;
+      case 'symbol': { const o = out(2); const g = this.gain(0); g.connect(o); this.osc('sine', mtof(midiOf(deg) + 24), t, t + 1.5, g); this.env(g.gain, t, 0.002, 0.05 * v, 1.2); break; }
+      case 'emoji': kalimba(midiOf(deg) + 12, t, v * 0.8); kalimba(midiOf(deg + 2) + 12, t + 0.09, v * 0.6); kalimba(midiOf(deg + 4) + 12, t + 0.18, v * 0.4); break;
+      case 'space': { // soft brush
+        const o = out(0.5); const g = this.gain(0); const bp = this.filter('bandpass', 3500, 0.8); bp.connect(g); g.connect(o);
+        this.noise(t, 0.12, bp); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05 * v, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11); break;
+      }
+      case 'enter': [0, 2, 4, 7].forEach((d, i) => kalimba(midiOf(d) - 12 + (i ? 12 : 0), t + i * 0.045, v * 0.8)); break;
+      case 'delete': { const o = out(1); const g = this.gain(0); g.connect(o); const os = this.osc('sine', 520, t, t + 0.3, g); os.frequency.exponentialRampToValueAtTime(260, t + 0.18); this.env(g.gain, t, 0.005, 0.07 * v, 0.2); break; }
+    }
+    if (!quiet) this.padSwell(midiOf(0) - 12);
+  }
+
+  // a warm pad that breathes in while you type and fades when you stop
+  padSwell(root) {
+    const ctx = this.ctx; const t = ctx.currentTime;
+    if (!this.pad || this.pad.root !== root) {
+      if (this.pad) { const old = this.pad; old.g.gain.setTargetAtTime(0.0001, t, 0.8); setTimeout(() => { try { old.oscs.forEach((o) => o.stop()); old.g.disconnect(); } catch (e) {} }, 4000); }
+      const g = this.gain(0.0001); const lp = this.filter('lowpass', 700, 0.7); lp.connect(g); g.connect(this.ui);
+      const oscs = [0, 7, 15].map((s, i) => { const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = mtof(root + s); o.detune.value = (i - 1) * 7; o.connect(lp); o.start(t); return o; });
+      this.pad = { g, oscs, root };
+    }
+    this.pad.g.gain.setTargetAtTime(0.045, t, 0.6);
+    clearTimeout(this.padTimer);
+    this.padTimer = setTimeout(() => { if (this.pad) this.pad.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 1.2); }, 2500);
+  }
+  padStop() { if (this.pad && this.ctx) this.pad.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.3); }
 
   // ---- speech ----
   speechInit() {

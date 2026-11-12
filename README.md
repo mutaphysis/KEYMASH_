@@ -91,6 +91,16 @@ dragons, unicorns, a squirrel that gives every thread the zoomies.
 ### In play mode
 Tap the screen to play notes and bursts yourself.
 
+### Side by side & live coding
+On wide screens (iPad landscape, desktop) editor and stage sit side by side.
+While a program runs, every edit is hot-swapped into it ~0.6 s after you stop
+typing — the clock, the picture and the sound keep going.
+
+### Typing sounds
+In the editor every key plays a soft kalimba note (pitched by its position on
+the keyboard), space is a brush, Enter strums a chord, backspace sighs, and a
+warm pad breathes in while you type. Fast typing gets quieter, not louder.
+
 ## Architecture
 
 ```
