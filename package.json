@@ -1,0 +1,6 @@
+{
+  "name": "keymash",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "bun run build.js", "test": "bun test" }
+}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#000800">
+<title>KEYMASH_ — every keystroke compiles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<div id="app" class="crt">
+  <!-- ================= EDIT MODE ================= -->
+  <section id="edit">
+    <header>
+      <div class="logo" data-text="KEYMASH_">KEYMASH_</div>
+      <div id="status"><b class="ok">0 ERRORS</b> · <span id="st-threads">0</span> THREADS · <span id="st-glyphs">0</span> GLYPHS</div>
+    </header>
+    <div id="editorWrap">
+      <canvas id="rain"></canvas>
+      <canvas id="sparks"></canvas>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" placeholder="type anything.&#10;mash the keys.&#10;let the dog walk over it.&#10;&#10;there are no errors."></textarea>
+    </div>
+    <div id="keybar" role="toolbar" aria-label="extra keys"></div>
+    <nav id="controls">
+      <button id="btn-run" class="primary">▶ RUN</button>
+      <button id="btn-mash" title="let a virtual paw type">🐾 MASH</button>
+      <button id="btn-clear">✖ CLEAR</button>
+      <button id="btn-save">💾 SAVE</button>
+      <button id="btn-load">📂 LOAD</button>
+    </nav>
+  </section>
+
+  <!-- ================= PLAY MODE ================= -->
+  <section id="play" hidden>
+    <div id="stageWrap">
+      <canvas id="stage"></canvas>
+      <div id="hud"></div>
+      <div id="log"></div>
+      <div id="boot"></div>
+      <div class="playbtns">
+        <button id="btn-mute" title="sound on/off">🔊</button>
+        <button id="btn-restart" title="restart">⟲</button>
+        <button id="btn-stop" class="primary">■ EDIT</button>
+      </div>
+    </div>
+    <div id="codeview"></div>
+  </section>
+
+  <!-- ================= DRAWER ================= -->
+  <div id="drawer" hidden>
+    <div class="panel">
+      <div class="phead"><span>// PROGRAMS</span><button id="drawer-close">✖</button></div>
+      <div id="drawer-body"></div>
+    </div>
+  </div>
+  <div id="toast" hidden></div>
+</div>
+<script>/*__JS__*/</script>
+</body>
+</html>
