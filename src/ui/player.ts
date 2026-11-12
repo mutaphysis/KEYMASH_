@@ -1,8 +1,8 @@
 // Play mode: runs the VM against the audio clock, feeds the renderer and the
 // scrolling, highlighted code view.
-import { VM } from '../lang/vm.js';
-import { Renderer } from '../engine/render.js';
-import { keyInfo } from '../lang/keys.js';
+import { VM } from '../lang/vm';
+import { Renderer } from '../engine/render';
+import { keyInfo } from '../lang/keys';
 
 const SOUND = new Set(['note', 'drum', 'sfx', 'dtmf']);
 const UI = new Set(['hl', 'log', 'gen', 'die', 'say']);

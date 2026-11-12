@@ -1,6 +1,7 @@
 import { test, expect } from 'bun:test';
-import { VM, SPELLS } from '../src/lang/vm.js';
-import { lex, evalMath, fmtNum } from '../src/lang/lexer.js';
+import { VM, SPELLS } from '../src/lang/vm';
+import { lex, evalMath, fmtNum } from '../src/lang/lexer';
+import type { VMEvent } from '../src/lang/types';
 
 const POOL = [
   ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZäöüßÄÖÜ0123456789',
@@ -8,23 +9,24 @@ const POOL = [
   '🐶', '🐱', '🔥', '🌈', '💥', '❤️', '👨‍👩‍👧', '🇩🇪', '🐿️', '😵‍💫', 'é', 'ñ', '漢', '字', 'Ж', 'ي', '\u0000', '￿', '\uD800',
 ];
 
-function randomProgram(rng, len) {
+function randomProgram(rng: () => number, len: number): string {
   let s = '';
   for (let i = 0; i < len; i++) s += POOL[Math.floor(rng() * POOL.length)];
   return s;
 }
 
-function rngFrom(seed) {
+function rngFrom(seed: number): () => number {
   let a = seed;
   return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
 }
 
-function checkEvents(evs) {
+function checkEvents(evs: VMEvent[]) {
   for (const e of evs) {
+    const rec = e as unknown as Record<string, unknown>;
     for (const k of ['x', 'y', 'r', 'midi', 'size']) {
-      if (k in e) expect(Number.isFinite(e[k])).toBe(true);
+      if (k in rec) expect(Number.isFinite(rec[k])).toBe(true);
     }
-    if (e.pts) for (const [x, y] of e.pts) { expect(Number.isFinite(x)).toBe(true); expect(Number.isFinite(y)).toBe(true); }
+    if (e.type === 'stroke') for (const [x, y] of e.pts) { expect(Number.isFinite(x)).toBe(true); expect(Number.isFinite(y)).toBe(true); }
   }
 }
 
@@ -42,10 +44,10 @@ test('math', () => {
   expect(evalMath([2, 3, 2], ['^', '^'])).toBe(512);
   expect(fmtNum(1 / 0)).toBe('∞');
   const L = lex('7*6= and 3x4');
-  const m = L.lines[0].filter((t) => t.t === 'math');
+  const m = L.lines[0]!.flatMap((t) => (t.t === 'math' ? [t] : []));
   expect(m.length).toBe(2);
-  expect(m[0].value).toBe(42);
-  expect(m[1].value).toBe(12);
+  expect(m[0]!.value).toBe(42);
+  expect(m[1]!.value).toBe(12);
 });
 
 test('fuzz: 150 random programs x 300 ticks, no exceptions, finite output', () => {
@@ -76,7 +78,7 @@ test('the VM never catches its own errors on random input (no SEGFAULT logs)', (
 
 test('every spell runs', () => {
   const vm = new VM('a');
-  const th = vm.threads[0];
+  const th = vm.threads[0]!;
   for (const op of new Set(SPELLS)) {
     vm.ev = [];
     vm.keyword(th, op, 2);

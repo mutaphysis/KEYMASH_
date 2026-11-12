@@ -1,9 +1,10 @@
-import { AudioEngine } from './engine/audio.js';
-import { Editor } from './ui/editor.js';
-import { Player } from './ui/player.js';
-import { store, DEMOS, pawMash } from './ui/storage.js';
-import { lex } from './lang/lexer.js';
-import { keyInfo } from './lang/keys.js';
+import './style.css';
+import { AudioEngine } from './engine/audio';
+import { Editor } from './ui/editor';
+import { Player } from './ui/player';
+import { store, DEMOS, pawMash } from './ui/storage';
+import { lex } from './lang/lexer';
+import { keyInfo } from './lang/keys';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');

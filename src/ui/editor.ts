@@ -1,7 +1,7 @@
 // Edit mode: matrix rain behind the textarea, sparks at the caret, a key bar for
 // phones (symbols, emoji, cursor movement), and a little note for every keystroke.
-import { keyInfo } from '../lang/keys.js';
-import { graphemes } from '../lang/lexer.js';
+import { keyInfo } from '../lang/keys';
+import { graphemes } from '../lang/lexer';
 
 const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ0123456789#$%&@!?*<>{}[]~^';
 

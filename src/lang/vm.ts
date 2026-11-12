@@ -1,13 +1,29 @@
 // KEYMASH virtual machine. Pure: no DOM, no audio. tick() -> timed events.
-import { lex, fmtNum } from './lexer.js';
-import { keyInfo, adjacent, EMOJI_POWERS, stripAccents } from './keys.js';
+import { lex, fmtNum } from './lexer';
+import type { Token, WordTok, SymTok } from './lexer';
+import { keyInfo, adjacent, EMOJI_POWERS, stripAccents } from './keys';
+import type { KeyInfo } from './keys';
+import type { Color, Point, Op, Instrument, DrumKind, SfxKind, ShapeKind, ParticleKind, TextStyle, VMEvent, EvInput, EvBase } from './types';
 
-export function hash(str) {
+export type ScaleName = 'penta' | 'major' | 'minor' | 'blues' | 'spooky' | 'japan';
+
+interface NoteOpts { inst?: Instrument; oct?: number; dur?: number; vel?: number; glide?: number; vib?: number; echo?: number; free?: boolean }
+interface ShapeOpts { x?: number; y?: number; rot?: number; color?: Color; dl?: number; fill?: boolean; w?: number; life?: number; grow?: number; n?: number }
+interface ParticleOpts { x?: number; y?: number; color?: Color; ch?: string; spread?: number }
+interface TextOpts { x?: number; y?: number; size?: number; style?: TextStyle; color?: Color }
+interface CurveOpts { w?: number; dur?: number; dl?: number; move?: boolean }
+interface ThreadOpts { id?: number; pairs?: Map<number, number>; pc?: number; x?: number; y?: number; ang?: number; hue?: number; octave?: number; inst?: Instrument; pan?: number; speed?: number; child?: boolean; runs?: number }
+interface Loop { start: number; left: number; close?: number }
+
+/** One step of a letter chunk: a key, possibly held (n > 1), possibly the start of a roll. */
+export interface Step { ch: string; g0: number; g1: number; n: number; key: KeyInfo; big: boolean; roll?: { len: number; dir: number; keys: KeyInfo[] } }
+
+export function hash(str: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return h >>> 0;
 }
-export function mulberry32(a) {
+export function mulberry32(a: number): () => number {
   return function () {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -16,7 +32,7 @@ export function mulberry32(a) {
   };
 }
 
-export const SCALES = {
+export const SCALES: Record<ScaleName, number[]> = {
   penta: [0, 3, 5, 7, 10],
   major: [0, 2, 4, 7, 9],
   minor: [0, 2, 3, 5, 7, 8, 10],
@@ -25,7 +41,7 @@ export const SCALES = {
   japan: [0, 1, 5, 7, 8],
 };
 const PROGRESSION = [0, 5, 3, -2];
-const INSTRUMENTS = ['pluck', 'bass', 'bell', 'chip', 'lead', 'pad', 'organ', 'piano'];
+const INSTRUMENTS: Instrument[] = ['pluck', 'bass', 'bell', 'chip', 'lead', 'pad', 'organ', 'piano'];
 const MAX_THREADS = 12;
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
@@ -36,7 +52,7 @@ const HACK_LINES = [
   'SUDO MAKE ME A SANDWICH', 'TRACE BLOCKED', 'UPLOADING BARK.MP3', 'NEURAL LINK ESTABLISHED',
   'COMPILING… 0 ERRORS', 'KERNEL PANIC (JUST KIDDING)', 'ENHANCE!', 'SQUIRREL.DLL LOADED',
 ];
-const FORMULAS = [
+const FORMULAS: { f: (x: number, A: number, k: number) => number; s: (A: number, k: number) => string }[] = [
   { f: (x, A, k) => A * Math.sin(k * x), s: (A, k) => `y = ${A}·sin(${k}x)` },
   { f: (x, A, k) => A * Math.cos(k * x) * Math.sin(x / 90), s: (A, k) => `y = ${A}·cos(${k}x)·sin(x/90)` },
   { f: (x, A, k) => x * x / (A * 4), s: (A) => `y = x² / ${A * 4}` },
@@ -48,7 +64,7 @@ const FORMULAS = [
 ];
 
 // the effect library that mash chunks summon (output only — nothing here is typed by name)
-export const SPELLS = [
+export const SPELLS: Op[] = [
   'circle', 'square', 'tri', 'star', 'heart', 'flower', 'ring', 'spiral', 'tree', 'sun', 'moon', 'grid', 'poly', 'snowflake',
   'sin', 'cos', 'tan', 'wave', 'rose', 'zigzag', 'bounce', 'dna', 'knot', 'scribble', 'math', 'math',
   'rainbow', 'invert', 'fire', 'rain', 'snow', 'confetti', 'boom', 'fireworks', 'bubbles', 'smoke', 'sparkle', 'stars', 'money',
@@ -63,8 +79,16 @@ export const SPELLS = [
 
 let THREAD_ID = 0;
 
-class Thread {
-  constructor(vm, toks, start, end, opts = {}) {
+export class Thread {
+  id: number; vm: VM; toks: Token[]; start: number; end: number; pairs: Map<number, number>;
+  pc: number; sub: number; x: number; y: number; ang: number; hue: number; sat: number; lit: number; uiHue: number;
+  octave: number; inst: Instrument; pan: number; voicePitch: number; voiceRate: number;
+  arg: number | null; loops: Loop[]; visits: Map<number, number>;
+  gen: number; speed: number; acc: number; wait: number; alive: boolean; child: boolean; runs: number;
+  rainbow: boolean; size: number; lastFn: (() => void) | null;
+  forceDeg: number | null = null; paw: Point | null = null;
+
+  constructor(vm: VM, toks: Token[], start: number, end: number, opts: ThreadOpts = {}) {
     this.id = opts.id ?? THREAD_ID++;
     this.vm = vm; this.toks = toks; this.start = start; this.end = end;
     this.pairs = opts.pairs || new Map();
@@ -76,18 +100,23 @@ class Thread {
     this.sat = 90; this.lit = 60;
     this.uiHue = (this.id * 137.5 + 120) % 360;
     this.octave = opts.octave ?? 0;
-    this.inst = opts.inst ?? INSTRUMENTS[this.id % INSTRUMENTS.length];
+    this.inst = opts.inst ?? INSTRUMENTS[this.id % INSTRUMENTS.length]!;
     this.pan = opts.pan ?? (((this.id * 0.618) % 1) * 1.4 - 0.7);
     this.voicePitch = 0.5 + r() * 1.3; this.voiceRate = 0.85 + r() * 0.5;
     this.arg = null; this.loops = []; this.visits = new Map();
     this.gen = 0; this.speed = opts.speed ?? 1; this.acc = 0; this.wait = 0;
     this.alive = true; this.child = !!opts.child; this.runs = opts.runs ?? Infinity;
-    this.rainbow = false; this.size = 1; this.lastFn = null; this.rep = null;
+    this.rainbow = false; this.size = 1; this.lastFn = null;
   }
 }
 
 export class VM {
-  constructor(src, opts = {}) {
+  src: string; gs: string[]; lines: Token[][]; seed: number; rng: () => number;
+  hw: number; hh: number; bpm: number; tickN: number; scale: ScaleName; root: number;
+  threads: Thread[]; ev: VMEvent[]; curDt: number; done: boolean; lineThreads: number;
+  private plans = new WeakMap<WordTok, Step[]>();
+
+  constructor(src: unknown, opts: { hw?: number; hh?: number; seed?: number } = {}) {
     this.src = String(src ?? '');
     const L = lex(this.src);
     this.gs = L.gs; this.lines = L.lines;
@@ -106,12 +135,12 @@ export class VM {
   }
 
   get tickDur() { return 60 / this.bpm / 4; }
-  setBounds(hw, hh) { this.hw = Math.max(50, hw); this.hh = Math.max(50, hh); }
-  get transpose() { return PROGRESSION[Math.floor(this.tickN / 32) % PROGRESSION.length]; }
+  setBounds(hw: number, hh: number): void { this.hw = Math.max(50, hw); this.hh = Math.max(50, hh); }
+  get transpose(): number { return PROGRESSION[Math.floor(this.tickN / 32) % PROGRESSION.length]!; }
   r() { return this.rng(); }
-  pick(a) { return a[Math.floor(this.rng() * a.length)]; }
+  pick<T>(a: readonly T[]): T { return a[Math.floor(this.rng() * a.length)]!; }
 
-  tick() {
+  tick(): VMEvent[] {
     this.ev = [];
     if (this.tickN === 0) this.boot();
     const list = this.threads.slice();
@@ -133,14 +162,15 @@ export class VM {
     this.emit({ type: 'log', text: `KEYMASH v1.0 :: ${this.gs.length} glyphs :: ${this.threads.length} thread(s) :: 0 errors` });
   }
 
-  emit(e, th) {
-    e.dt = this.curDt;
-    if (th) { e.th = th.id; if (e.pan === undefined) e.pan = th.pan; }
-    this.ev.push(e);
-    return e;
+  emit<E extends EvInput>(e: E, th?: Thread): E & EvBase {
+    const ev = e as E & { dt: number; th?: number; pan?: number };
+    ev.dt = this.curDt;
+    if (th) { ev.th = th.id; if (ev.pan === undefined) ev.pan = th.pan; }
+    this.ev.push(ev as unknown as VMEvent);
+    return ev;
   }
 
-  runThread(th) {
+  runThread(th: Thread) {
     if (!th.alive) return;
     if (th.wait > 0) { th.wait--; return; }
     th.acc += th.speed;
@@ -153,15 +183,15 @@ export class VM {
     this.curDt = 0;
   }
 
-  step(th) {
+  step(th: Thread) {
     for (let guard = 0; guard < 48; guard++) {
       if (th.pc >= th.end || th.pc < th.start) { if (!this.wrap(th)) return; continue; }
-      const tok = th.toks[th.pc];
+      const tok = th.toks[th.pc]!;
       if (this.exec(th, tok)) return;
     }
   }
 
-  wrap(th) {
+  wrap(th: Thread) {
     if (th.child) {
       th.runs--;
       if (th.runs <= 0) { th.alive = false; this.emit({ type: 'die' }, th); return false; }
@@ -175,89 +205,89 @@ export class VM {
     return true;
   }
 
-  hl(th, g0, g1) { this.emit({ type: 'hl', g0, g1, hue: th.uiHue }, th); }
+  hl(th: Thread, g0: number, g1: number): void { this.emit({ type: 'hl', g0, g1, hue: th.uiHue }, th); }
 
-  takeArg(th, def, lo = -Infinity, hi = Infinity) {
-    let v = th.arg; th.arg = null;
+  takeArg(th: Thread, def: number, lo = -Infinity, hi = Infinity): number {
+    const v = th.arg; th.arg = null;
     if (v === null || !Number.isFinite(v)) return def;
     return Math.max(lo, Math.min(hi, v));
   }
 
-  col(th, dl = 0, ds = 0) {
+  col(th: Thread, dl = 0, ds = 0): Color {
     if (th.rainbow) th.hue = (th.hue + 29) % 360;
     return { h: th.hue, s: Math.max(0, Math.min(100, th.sat + ds)), l: Math.max(5, Math.min(97, th.lit + dl)) };
   }
 
   // ---- music helpers ----
-  midi(th, deg, oct = 0) {
+  midi(th: Thread, deg: number, oct = 0): number {
     const sc = SCALES[this.scale] || SCALES.penta;
     const d = Math.floor(deg);
     const o = Math.floor(d / sc.length);
     const m = ((d % sc.length) + sc.length) % sc.length;
-    return this.root + this.transpose + (th.octave + oct + o) * 12 + sc[m];
+    return this.root + this.transpose + (th.octave + oct + o) * 12 + sc[m]!;
   }
-  note(th, deg, o = {}) {
-    if (th.forceDeg != null && !o.free) deg = th.forceDeg + (o.inst === 'bass' ? 0 : 0);
+  note(th: Thread, deg: number, o: NoteOpts = {}) {
+    if (th.forceDeg != null && !o.free) deg = th.forceDeg;
     return this.emit({
       type: 'note', inst: o.inst || th.inst, midi: this.midi(th, deg, o.oct || 0),
       dur: o.dur ?? 1.5, vel: o.vel ?? 0.55, glide: o.glide || 0, vib: o.vib || 0, echo: o.echo || 0,
     }, th);
   }
-  drum(th, kind, vel = 0.8) { return this.emit({ type: 'drum', kind, vel }, th); }
-  sfx(th, kind, vel = 0.7, p = 1) { return this.emit({ type: 'sfx', kind, vel, p }, th); }
-  say(th, text) {
-    text = String(text).trim();
+  drum(th: Thread, kind: DrumKind, vel = 0.8) { return this.emit({ type: 'drum', kind, vel }, th); }
+  sfx(th: Thread, kind: SfxKind, vel = 0.7, p = 1) { return this.emit({ type: 'sfx', kind, vel, p }, th); }
+  say(th: Thread, raw: string): void {
+    const text = String(raw).trim();
     if (!text) return;
     this.emit({ type: 'say', text: text.slice(0, 160), pitch: th.voicePitch, rate: th.voiceRate }, th);
-    this.emit({ type: 'text', s: text.slice(0, 60), style: 'sub', x: 0, y: this.hh * 0.72, color: this.col(th, 15) }, th);
+    this.emit({ type: 'text', s: text.slice(0, 60), style: 'sub', size: 40, x: 0, y: this.hh * 0.72, color: this.col(th, 15) }, th);
   }
 
   // ---- turtle helpers ----
-  wrapPos(th) {
+  wrapPos(th: Thread) {
     const W = this.hw * 1.05, H = this.hh * 1.05;
     if (th.x > W) th.x -= 2 * W; if (th.x < -W) th.x += 2 * W;
     if (th.y > H) th.y -= 2 * H; if (th.y < -H) th.y += 2 * H;
   }
-  fwd(th, d, draw = true, w = 3, dur = 0.15, dl = 0) {
+  fwd(th: Thread, d: number, draw = true, w = 3, dur = 0.15, dl = 0): void {
     const a = th.ang * Math.PI / 180;
     const x0 = th.x, y0 = th.y;
     th.x += Math.cos(a) * d; th.y += Math.sin(a) * d;
     if (draw) this.stroke(th, [[x0, y0], [th.x, th.y]], w, dur, dl);
     this.wrapPos(th);
   }
-  stroke(th, pts, w = 3, dur = 0.3, dl = 0, extra = {}) {
+  stroke(th: Thread, pts: Point[], w = 3, dur = 0.3, dl = 0, extra: { delay?: number; paw?: boolean } = {}): void {
     if (pts.length < 2) return;
     this.emit({ type: 'stroke', pts, w: w * th.size, dur, color: this.col(th, dl), ...extra }, th);
   }
   // points along a curve f(t) -> [along, across] relative to turtle heading, moves turtle to end
-  curve(th, n, fn, opts = {}) {
+  curve(th: Thread, n: number, fn: (t: number) => Point, opts: CurveOpts = {}): Point[] {
     const a = th.ang * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
-    const pts = [];
+    const pts: Point[] = [];
     for (let i = 0; i <= n; i++) {
       const [u, v] = fn(i / n);
       pts.push([th.x + u * ca - v * sa, th.y + u * sa + v * ca]);
     }
     this.stroke(th, pts, opts.w ?? 3, opts.dur ?? 0.5, opts.dl ?? 0);
-    if (opts.move !== false) { th.x = pts[n][0]; th.y = pts[n][1]; this.wrapPos(th); }
+    if (opts.move !== false) { th.x = pts[n]![0]; th.y = pts[n]![1]; this.wrapPos(th); }
     return pts;
   }
-  shape(th, kind, r, o = {}) {
+  shape(th: Thread, kind: ShapeKind, r: number, o: ShapeOpts = {}) {
     return this.emit({
       type: 'shape', kind, x: o.x ?? th.x, y: o.y ?? th.y, r: r * th.size, rot: o.rot ?? th.ang,
       color: o.color || this.col(th, o.dl || 0), fill: !!o.fill, w: o.w ?? 3, life: o.life ?? 1.2, grow: o.grow || 0, n: o.n,
     }, th);
   }
-  particles(th, kind, n, o = {}) {
+  particles(th: Thread, kind: ParticleKind, n: number, o: ParticleOpts = {}) {
     return this.emit({ type: 'particles', kind, n: Math.min(400, Math.round(n)), x: o.x ?? th.x, y: o.y ?? th.y, color: o.color || this.col(th), ch: o.ch, spread: o.spread ?? 1 }, th);
   }
-  text(th, s, o = {}) {
+  text(th: Thread, s: string, o: TextOpts = {}) {
     return this.emit({ type: 'text', s: String(s), x: o.x ?? th.x, y: o.y ?? th.y, size: o.size ?? 40, style: o.style || 'float', color: o.color || this.col(th, 10) }, th);
   }
 
   // ---- execution ----
-  doOp(th, fn) { th.lastFn = fn; fn(); }
+  doOp(th: Thread, fn: () => void): void { th.lastFn = fn; fn(); }
 
-  exec(th, tok) {
+  exec(th: Thread, tok: Token): boolean {
     switch (tok.t) {
       case 'space':
         if (tok.n >= 3) { this.hl(th, tok.g0, tok.g1); th.pc++; return true; }
@@ -305,9 +335,10 @@ export class VM {
 
   // A chunk of letters is split into steps: a held key (jjjj) is one step with a
   // ratchet, and runs over neighbouring keys (asdf) are marked as rolls.
-  plan(tok) {
-    if (tok._plan) return tok._plan;
-    const Ls = tok.letters; const steps = [];
+  plan(tok: WordTok): Step[] {
+    const cached = this.plans.get(tok);
+    if (cached) return cached;
+    const Ls = tok.letters; const steps: Step[] = [];
     let i = 0;
     while (i < Ls.length) {
       const c = Ls[i].ch.toLowerCase(); let j = i + 1;
@@ -327,19 +358,19 @@ export class VM {
       }
       if (e - s >= 3) { steps[s].roll = { len: e - s, dir, keys: steps.slice(s, e).map((x) => x.key) }; s = e; } else s++;
     }
-    tok._plan = steps;
+    this.plans.set(tok, steps);
     return steps;
   }
 
   // keyboard -> screen. Each thread gets its own rotated keyboard, and it turns a bit each generation.
-  keyPos(th, key) {
+  keyPos(th: Thread, key: KeyInfo): Point {
     const u = (key.x - 0.5) * 1.75 * this.hw, v = (key.y - 0.5) * 1.35 * this.hh;
     const a = (th.id * 47 + th.gen * 9) * Math.PI / 180, sc = 1 - (th.id % 3) * 0.12;
     const ca = Math.cos(a), sa = Math.sin(a);
     return [(u * ca - v * sa) * sc, (u * sa + v * ca) * sc];
   }
 
-  execWord(th, tok) {
+  execWord(th: Thread, tok: WordTok): boolean {
     const steps = this.plan(tok);
     const st = steps[th.sub];
     if (!st) { th.pc++; th.sub = 0; return false; }
@@ -359,7 +390,7 @@ export class VM {
     return true;
   }
 
-  keyStep(th, st) {
+  keyStep(th: Thread, st: Step): void {
     const [px, py] = this.keyPos(th, st.key);
     // the paw path: glowing line from the previous key in this chunk
     if (th.paw) this.emit({ type: 'stroke', pts: [th.paw, [px, py]], w: 1.5, dur: 0.12, color: this.col(th, -10), paw: true }, th);
@@ -370,7 +401,7 @@ export class VM {
     if (st.roll) {
       // glissando sweep through the rolled keys
       const pts = st.roll.keys.map((k) => this.keyPos(th, k));
-      const sm = [];
+      const sm: Point[] = [];
       for (let i = 0; i < pts.length - 1; i++) for (let t = 0; t < 1; t += 0.1) {
         const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
         sm.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t - Math.sin(t * Math.PI) * 40]);
@@ -400,7 +431,7 @@ export class VM {
   }
 
   // end of a chunk: longer mashes cast a spell from the effect library (deterministic per chunk)
-  chunkEnd(th, tok) {
+  chunkEnd(th: Thread, tok: WordTok): void {
     const len = tok.letters.length;
     const h = hash(tok.lower);
     if (len >= 5 || (len >= 3 && h % 3 === 0)) {
@@ -412,7 +443,7 @@ export class VM {
     }
   }
 
-  execSym(th, tok) {
+  execSym(th: Thread, tok: SymTok): boolean {
     const ch = tok.ch;
     const n = tok.n;
     const lineOf = th.pairs;
@@ -438,7 +469,7 @@ export class VM {
     }
     if (ch === '[') {
       this.hl(th, tok.g0, tok.g1);
-      const close = lineOf.has(th.pc) ? lineOf.get(th.pc) : th.end;
+      const close = lineOf.get(th.pc) ?? th.end;
       const runs = Math.round(this.takeArg(th, 1, 1, 16));
       if (this.threads.length < MAX_THREADS && close > th.pc + 1) {
         const c = new Thread(this, th.toks, th.pc + 1, close, {
@@ -462,7 +493,7 @@ export class VM {
     return !(ch === ',' && n === 1 && false);
   }
 
-  fork(th) {
+  fork(th: Thread) {
     if (this.threads.length >= MAX_THREADS) { this.note(th, 0); this.note(th, 2); this.note(th, 4); return; }
     const c = new Thread(this, th.toks, th.start, th.end, {
       pairs: th.pairs, child: true, runs: 2, pc: Math.min(th.pc + 1, th.end), x: -th.x, y: -th.y, ang: th.ang + 180,
@@ -474,7 +505,7 @@ export class VM {
   }
 
   // =================== LETTERS ===================
-  letter(th, ch, big) {
+  letter(th: Thread, ch: string, big: boolean): void {
     let base = stripAccents(ch.toLowerCase())[0] || 'a';
     if (!LETTERS.includes(base)) base = LETTERS[(ch.codePointAt(0) || 0) % 26];
     const k = big ? 2 : 1;
@@ -559,7 +590,7 @@ export class VM {
       }
       case 'w': {
         const y0 = th.y, A = 40 * k, f = 1 + (this.r() * 3 | 0);
-        const pts = [];
+        const pts: Point[] = [];
         for (let i = 0; i <= 80; i++) { const x = -this.hw + i / 80 * 2 * this.hw; pts.push([x, y0 + Math.sin(i / 80 * Math.PI * 2 * f) * A]); }
         this.stroke(th, pts, 2 * k, 0.6, 10);
         this.sfx(th, 'whoosh', vel); break;
@@ -572,7 +603,7 @@ export class VM {
         this.particles(th, 'confetti', 20 * k);
         this.sfx(th, 'chirp', vel); break;
       case 'z': {
-        const L = 160 * k; const jit = [];
+        const L = 160 * k; const jit: number[] = [];
         for (let i = 0; i <= 8; i++) jit.push((this.r() - 0.5) * 50);
         this.curve(th, 8, (t) => [t * L, jit[Math.round(t * 8)] * (t > 0 && t < 1 ? 1 : 0)], { dur: 0.08, w: 3, dl: 30 });
         this.sfx(th, 'zap', vel); return;
@@ -584,7 +615,7 @@ export class VM {
   }
 
   // =================== SYMBOLS ===================
-  symbol(th, ch, n) {
+  symbol(th: Thread, ch: string, n: number): void {
     const k = Math.min(4, n);
     switch (ch) {
       case '!':
@@ -639,7 +670,7 @@ export class VM {
   }
 
   // =================== EMOJI ===================
-  emoji(th, ch, n) {
+  emoji(th: Thread, ch: string, n: number): void {
     const power = EMOJI_POWERS[ch] || EMOJI_POWERS[ch.replace(/️/g, '')];
     this.emit({ type: 'emoji', ch, x: th.x, y: th.y, size: 60 + 18 * Math.min(n, 5), life: 2.5 }, th);
     if (power) { this.keyword(th, power, Math.min(3, n)); }
@@ -651,19 +682,19 @@ export class VM {
   }
 
   // =================== KEYWORDS ===================
-  nextTok(th, from = th.pc + 1) {
+  nextTok(th: Thread, from = th.pc + 1): number {
     let i = from;
     while (i < th.end && th.toks[i].t === 'space') i++;
     return i < th.end ? i : -1;
   }
 
-  creature(th, ch, sound, word, o = {}) {
+  creature(th: Thread, ch: string, sound: SfxKind | null, word: string | null, o: { kind?: 'run' | 'pop' | 'fly' | 'swim' | 'stomp' | 'float' | 'ufo' | 'drive'; size?: number; p?: number } = {}): void {
     this.emit({ type: 'actor', kind: o.kind || 'run', ch, x: th.x, y: th.y, ang: th.ang, size: o.size || 70 }, th);
     if (sound) this.sfx(th, sound, 0.8, o.p ?? (0.8 + this.r() * 0.4));
     if (word) this.text(th, word, { style: 'big', size: 56 });
   }
 
-  keyword(th, op, boost = 1, tok = null) {
+  keyword(th: Thread, op: Op, boost = 1, tok: WordTok | null = null): void {
     const b = Math.max(1, Math.min(3, boost));
     const R = () => this.r();
     switch (op) {
@@ -681,14 +712,14 @@ export class VM {
       case 'ring': this.shape(th, 'ring', 30 * b, { grow: 5, life: 1.6, w: 5 }); this.sfx(th, 'ooh', 0.6); break;
       case 'spiral': {
         const turns = this.takeArg(th, 4, 1, 30); const R0 = 140 * b;
-        const cx = th.x, cy = th.y; const pts = [];
+        const cx = th.x, cy = th.y; const pts: Point[] = [];
         for (let i = 0; i <= 200; i++) { const t = i / 200; const a = t * turns * Math.PI * 2; pts.push([cx + Math.cos(a) * t * R0, cy + Math.sin(a) * t * R0]); }
         this.stroke(th, pts, 3, 1.2); this.sfx(th, 'sweep', 0.6, 2); this.emit({ type: 'view', spin: 6 }, th); break;
       }
       case 'tree': {
         const depth = Math.round(this.takeArg(th, 7, 2, 9));
-        const segs = [];
-        const grow = (x, y, a, len, d) => {
+        const segs: [Point, Point, number][] = [];
+        const grow = (x: number, y: number, a: number, len: number, d: number): void => {
           if (d === 0 || segs.length > 600) return;
           const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
           segs.push([[x, y], [x2, y2], d]);
@@ -726,8 +757,8 @@ export class VM {
       // ---------- curves ----------
       case 'sin': case 'cos': case 'tan': {
         const A = Math.round(this.takeArg(th, 60, 5, 400) * b); const kf = 0.02;
-        const f = op === 'sin' ? Math.sin : op === 'cos' ? Math.cos : (x) => Math.max(-4, Math.min(4, Math.tan(x)));
-        const pts = []; const y0 = th.y;
+        const f = op === 'sin' ? Math.sin : op === 'cos' ? Math.cos : (x: number) => Math.max(-4, Math.min(4, Math.tan(x)));
+        const pts: Point[] = []; const y0 = th.y;
         for (let i = 0; i <= 160; i++) { const x = -this.hw + i / 160 * 2 * this.hw; pts.push([x, y0 - A * f(x * kf)]); }
         this.stroke(th, [[-this.hw, y0], [this.hw, y0]], 1, 0.3, -30);
         this.stroke(th, pts, 3, 1.0);
@@ -737,7 +768,7 @@ export class VM {
       case 'wave': {
         const A = 50 * b;
         for (let j = 0; j < 3; j++) {
-          const pts = []; const y0 = th.y + (j - 1) * 40; const ph = R() * 6;
+          const pts: Point[] = []; const y0 = th.y + (j - 1) * 40; const ph = R() * 6;
           for (let i = 0; i <= 100; i++) { const x = -this.hw + i / 100 * 2 * this.hw; pts.push([x, y0 + Math.sin(i / 100 * Math.PI * 4 + ph) * A]); }
           this.emit({ type: 'stroke', pts, w: 3, dur: 0.8, delay: j * 0.12, color: { h: (190 + j * 20) % 360, s: 90, l: 60 } }, th);
         }
@@ -745,14 +776,14 @@ export class VM {
       }
       case 'rose': {
         const kk = Math.round(this.takeArg(th, 2 + (R() * 6 | 0), 1, 13)); const Rr = 120 * b;
-        const pts = [];
+        const pts: Point[] = [];
         for (let i = 0; i <= 300; i++) { const a = i / 300 * Math.PI * 2; const r = Rr * Math.cos(kk * a); pts.push([th.x + r * Math.cos(a), th.y + r * Math.sin(a)]); }
         this.stroke(th, pts, 2.5, 1.4);
         this.emit({ type: 'math', s: `r = cos(${kk}θ)`, x: th.x, y: th.y - Rr - 20, color: this.col(th, 20) }, th);
         this.note(th, 0, { inst: 'bell' }); this.note(th, kk, { inst: 'bell' }); break;
       }
       case 'zigzag': {
-        const L = 300 * b; const jit = []; for (let i = 0; i <= 12; i++) jit.push((R() - 0.5) * 90);
+        const L = 300 * b; const jit: number[] = []; for (let i = 0; i <= 12; i++) jit.push((R() - 0.5) * 90);
         this.curve(th, 12, (t) => [t * L, jit[Math.round(t * 12)]], { w: 4, dur: 0.1, dl: 30 });
         this.emit({ type: 'flash', color: { h: 200, s: 60, l: 90 }, a: 0.35 }, th);
         this.sfx(th, 'zap', 0.9); this.drum(th, 'crash', 0.5); break;
@@ -764,7 +795,7 @@ export class VM {
       }
       case 'dna': {
         const L = 400 * b; const A = 40;
-        const p1 = [], p2 = [];
+        const p1: Point[] = [], p2: Point[] = [];
         const a = th.ang * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
         for (let i = 0; i <= 80; i++) {
           const t = i / 80; const u = t * L; const v1 = Math.sin(t * 12) * A, v2 = -v1;
@@ -776,21 +807,21 @@ export class VM {
         this.note(th, 0); this.note(th, 3, { dur: 2 }); break;
       }
       case 'knot': {
-        const a = 1 + (R() * 4 | 0), bb = a + 1 + (R() * 3 | 0); const S = 150 * b; const pts = [];
+        const a = 1 + (R() * 4 | 0), bb = a + 1 + (R() * 3 | 0); const S = 150 * b; const pts: Point[] = [];
         for (let i = 0; i <= 300; i++) { const t = i / 300 * Math.PI * 2; pts.push([th.x + Math.sin(a * t + Math.PI / 2) * S, th.y + Math.sin(bb * t) * S * 0.8]); }
         this.stroke(th, pts, 2.5, 1.5);
         this.emit({ type: 'math', s: `x=sin(${a}t+π/2)  y=sin(${bb}t)`, x: th.x, y: th.y - S, color: this.col(th, 20) }, th);
         this.note(th, a); this.note(th, bb); break;
       }
       case 'scribble': {
-        const pts = [[th.x, th.y]]; let x = th.x, y = th.y, a = R() * 6;
+        const pts: Point[] = [[th.x, th.y]]; let x = th.x, y = th.y, a = R() * 6;
         for (let i = 0; i < 60; i++) { a += (R() - 0.5) * 1.8; x += Math.cos(a) * 14 * b; y += Math.sin(a) * 14 * b; pts.push([x, y]); }
         this.stroke(th, pts, 2, 0.7); th.x = x; th.y = y; this.wrapPos(th);
         this.sfx(th, 'data', 0.5); break;
       }
       case 'math': {
         const F = this.pick(FORMULAS); const A = 40 + (R() * 80 | 0); const kk = Number((0.005 + R() * 0.03).toFixed(3));
-        const pts = [];
+        const pts: Point[] = [];
         for (let i = 0; i <= 200; i++) { const x = -this.hw + i / 200 * 2 * this.hw; const yv = F.f(x, A, kk); pts.push([x, -(Number.isFinite(yv) ? yv : 0)]); }
         this.stroke(th, [[-this.hw, 0], [this.hw, 0]], 1, 0.3, -30); this.stroke(th, [[0, -this.hh], [0, this.hh]], 1, 0.3, -30);
         this.stroke(th, pts, 3, 1.2);
@@ -880,7 +911,7 @@ export class VM {
       }
       // ---------- instruments ----------
       case 'i_piano': case 'i_organ': case 'i_bell': case 'i_bass': case 'i_chip': case 'i_pad': case 'i_robot': case 'i_pluck': case 'i_lead': {
-        th.inst = op.slice(2);
+        th.inst = op.slice(2) as Instrument;
         this.note(th, 0, { dur: 1 }); this.note(th, 4, { dur: 1 }).at = this.tickDur * 0.5;
         this.text(th, `♪ ${th.inst}`, { size: 26 });
         if (op === 'i_robot') { this.creature(th, '🤖', 'robot', 'BEEP BOOP', { kind: 'pop' }); th.voicePitch = 0.1; }
@@ -954,7 +985,7 @@ export class VM {
       // ---------- control ----------
       case 'fork': this.fork(th); break;
       case 'random': {
-        const ops = ['circle', 'star', 'heart', 'spiral', 'rose', 'sin', 'fire', 'confetti', 'boom', 'glitch', 'spin', 'dog', 'cat', 'bubbles', 'zigzag', 'tree', 'knot', 'math', 'sparkle', 'laser', 'arp', 'flower', 'kaleido', 'tunnel'];
+        const ops: Op[] = ['circle', 'star', 'heart', 'spiral', 'rose', 'sin', 'fire', 'confetti', 'boom', 'glitch', 'spin', 'dog', 'cat', 'bubbles', 'zigzag', 'tree', 'knot', 'math', 'sparkle', 'laser', 'arp', 'flower', 'kaleido', 'tunnel'];
         this.keyword(th, this.pick(ops), 1); break;
       }
       case 'chaos':
@@ -966,14 +997,14 @@ export class VM {
   }
 }
 
-export function matchBrackets(toks) {
-  const pairs = new Map();
-  const st = { '(': [], '[': [] };
+export function matchBrackets(toks: Token[]): Map<number, number> {
+  const pairs = new Map<number, number>();
+  const st: Record<'(' | '[', number[]> = { '(': [], '[': [] };
   toks.forEach((t, i) => {
     if (t.t !== 'sym') return;
     if (t.ch === '(' || t.ch === '[') st[t.ch].push(i);
-    else if (t.ch === ')' && st['('].length) { const o = st['('].pop(); pairs.set(o, i); pairs.set(i, o); }
-    else if (t.ch === ']' && st['['].length) { const o = st['['].pop(); pairs.set(o, i); pairs.set(i, o); }
+    else if (t.ch === ')' && st['('].length) { const o = st['('].pop()!; pairs.set(o, i); pairs.set(i, o); }
+    else if (t.ch === ']' && st['['].length) { const o = st['['].pop()!; pairs.set(o, i); pairs.set(i, o); }
   });
   return pairs;
 }
