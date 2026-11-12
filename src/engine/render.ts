@@ -1,29 +1,65 @@
 // KEYMASH renderer: canvas 2D, persistent "paint" layer with trails + feedback,
 // sprites/particles on top, view transforms and glitch post-processing.
 
+import type { Color, Point, VMEvent, EventOf, ParticleSpec, ShapeKind, TextStyle, ActorKind } from '../lang/types';
+
+type Ctx = CanvasRenderingContext2D;
+type PartKind = ParticleSpec['kind'] | 'star' | 'rect' | 'char' | 'bubble';
+
+interface Stroke { pts: Point[]; w: number; color: Color; dur: number; delay: number; t: number; idx: number; paw?: boolean; done?: boolean }
+interface ShapeSprite { kind: 'shape'; shape: ShapeKind; x: number; y: number; r: number; rot: number; color: Color; fill: boolean; w: number; grow: number; n?: number; age: number; life: number }
+interface EmojiSprite { kind: 'emoji'; ch: string; x: number; y: number; size: number; rot: number; age: number; life: number }
+interface TextSprite { kind: 'text'; s: string; x: number; y: number; size: number; style: TextStyle; color: Color; vy: number; age: number; life: number; tw?: number }
+interface MathSprite { kind: 'math'; s: string; x: number; y: number; color: Color; big?: boolean; age: number; life: number; w?: number }
+type Sprite = ShapeSprite | EmojiSprite | TextSprite | MathSprite;
+interface Particle { x: number; y: number; vx: number; vy: number; age: number; life: number; size: number; c: Color; kind: PartKind; g: number; drag: number; rot: number; vr: number; ch?: string; sway?: number }
+interface Actor { kind: ActorKind; ch: string; x: number; y: number; size: number; color: Color; age: number; life: number; dir: number; vx: number; vy: number; y0: number; ty: number; step: number }
+interface Banner { text: string; progress?: boolean; age: number; life: number }
+interface Flash { c: Color; a: number; t: number }
+interface View { rot: number; rotT: number; spin: number; zoom: number; zoomT: number; kick: number; shake: number; flip: number; flipT: number; wobble: number }
+
 const TAU = Math.PI * 2;
-const hsl = (c, a = 1) => `hsla(${c.h | 0},${c.s | 0}%,${c.l | 0}%,${a})`;
-const rand = (a, b) => a + Math.random() * (b - a);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const easeOutBack = (t) => { const c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+const hsl = (c: Color, a = 1): string => `hsla(${c.h | 0},${c.s | 0}%,${c.l | 0}%,${a})`;
+const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v));
+const easeOutBack = (t: number): number => { const c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 const SCRAMBLE = '01#$%&@<>/\\|{}[]*+=?!ABCDEFXYZ';
 
+function ctx2d(c: HTMLCanvasElement): Ctx {
+  const x = c.getContext('2d');
+  if (!x) throw new Error('canvas 2d not available');
+  return x;
+}
+
 export class Renderer {
-  constructor(canvas) {
+  cv: HTMLCanvasElement; ctx: Ctx;
+  paint: HTMLCanvasElement; pctx: Ctx; tmp: HTMLCanvasElement; tctx: Ctx;
+  glyphs = new Map<string, HTMLCanvasElement>();
+  time = 0;
+  font = '"Share Tech Mono", ui-monospace, monospace';
+  // size: canvas pixels, world scale (px per world unit), world half-extent
+  W = 0; H = 0; dpr = 1; s = 1; hw = 500; hh = 500;
+  strokes: Stroke[] = []; sprites: Sprite[] = []; parts: Particle[] = []; actors: Actor[] = [];
+  banner: Banner | null = null; flashes: Flash[] = [];
+  view!: View; fb = { amt: 0, zoom: 1, rot: 0, until: 0 };
+  mirror = false; kaleido = 0;
+  glitchAmt = 0; glitchUntil = 0; invertUntil = 0; sirenUntil = 0;
+  bg = { h: 150, l: 4, hT: 150, lT: 4 };
+  fade = 0.07; fadeT = 0.07; copyK = 1;
+  heads: { x: number; y: number; c: Color }[] = [];
+
+  constructor(canvas: HTMLCanvasElement) {
     this.cv = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.ctx = ctx2d(canvas);
     this.paint = document.createElement('canvas');
-    this.pctx = this.paint.getContext('2d');
+    this.pctx = ctx2d(this.paint);
     this.tmp = document.createElement('canvas');
-    this.tctx = this.tmp.getContext('2d');
-    this.glyphs = new Map();
-    this.time = 0;
-    this.font = '"Share Tech Mono", ui-monospace, monospace';
+    this.tctx = ctx2d(this.tmp);
     this.reset();
   }
 
-  reset() {
+  reset(): void {
     this.strokes = []; this.sprites = []; this.parts = []; this.actors = [];
     this.banner = null; this.flashes = [];
     this.view = { rot: 0, rotT: 0, spin: 0, zoom: 1, zoomT: 1, kick: 0, shake: 0, flip: 1, flipT: 1, wobble: 0 };
@@ -35,7 +71,7 @@ export class Renderer {
     if (this.W) { this.pctx.setTransform(1, 0, 0, 1, 0, 0); this.pctx.clearRect(0, 0, this.W, this.H); }
   }
 
-  resize(cssW, cssH) {
+  resize(cssW: number, cssH: number): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const W = Math.max(2, Math.round(cssW * dpr)), H = Math.max(2, Math.round(cssH * dpr));
     if (W === this.W && H === this.H) return;
@@ -51,14 +87,14 @@ export class Renderer {
   }
 
   // ---------- glyph cache (emoji are slow to draw) ----------
-  glyph(ch, px, color) {
+  glyph(ch: string, px: number, color?: string): HTMLCanvasElement {
     const b = px <= 24 ? 24 : px <= 48 ? 48 : px <= 96 ? 96 : 160;
     const key = ch + '|' + b + '|' + (color || '');
     let g = this.glyphs.get(key);
     if (!g) {
       if (this.glyphs.size > 300) this.glyphs.clear();
       g = document.createElement('canvas'); g.width = g.height = Math.ceil(b * 1.3);
-      const c = g.getContext('2d');
+      const c = ctx2d(g);
       c.font = color ? `${b}px ${this.font}` : `${b}px ${EMOJI_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
       if (color) { c.fillStyle = color; c.shadowColor = color; c.shadowBlur = b * 0.25; }
       c.fillText(ch, g.width / 2, g.height / 2 + b * 0.06);
@@ -66,7 +102,7 @@ export class Renderer {
     }
     return g;
   }
-  drawGlyph(c, ch, x, y, px, rot = 0, alpha = 1, flipX = false, color) {
+  drawGlyph(c: Ctx, ch: string, x: number, y: number, px: number, rot = 0, alpha = 1, flipX = false, color?: string): void {
     const g = this.glyph(ch, px, color);
     const sz = px * 1.3;
     c.save(); c.globalAlpha = alpha; c.translate(x, y); if (rot) c.rotate(rot); if (flipX) c.scale(-1, 1);
@@ -74,7 +110,7 @@ export class Renderer {
   }
 
   // symmetry helper: draws fn under mirror/kaleidoscope transforms (world coords, origin centre)
-  sym(c, fn) {
+  sym(c: Ctx, fn: (c: Ctx) => void): void {
     const n = this.kaleido || 1;
     for (let i = 0; i < n; i++) {
       c.save(); if (i) c.rotate(i * TAU / n); fn(c); c.restore();
@@ -83,7 +119,7 @@ export class Renderer {
   }
 
   // ---------- events ----------
-  handle(e) {
+  handle(e: VMEvent): void {
     const v = this.view;
     switch (e.type) {
       case 'stroke':
@@ -93,13 +129,14 @@ export class Renderer {
       case 'shape':
         this.addSprite({ ...e, kind: 'shape', shape: e.kind, age: 0, life: e.life || 1.2 }); break;
       case 'particles': this.spawn(e); break;
-      case 'text': this.addSprite({ kind: 'text', ...e, age: 0, life: e.style === 'big' ? 1.6 : e.style === 'sub' ? 3 : 1.8, vy: e.style === 'sub' ? 0 : -40 }); break;
+      case 'text': this.addSprite({ ...e, kind: 'text', age: 0, life: e.style === 'big' ? 1.6 : e.style === 'sub' ? 3 : 1.8, vy: e.style === 'sub' ? 0 : -40 }); break;
       case 'math': {
         const ms = this.sprites.filter((x) => x.kind === 'math');
-        if (ms.length >= 3) ms[0].age = Math.max(ms[0].age, ms[0].life - 0.2);
+        const oldest = ms[0];
+        if (ms.length >= 3 && oldest) oldest.age = Math.max(oldest.age, oldest.life - 0.2);
         this.addSprite({ ...e, kind: 'math', age: 0, life: 3.2 }); break;
       }
-      case 'emoji': this.addSprite({ kind: 'emoji', ...e, age: 0, rot: rand(-0.3, 0.3) }); break;
+      case 'emoji': this.addSprite({ ...e, kind: 'emoji', age: 0, rot: rand(-0.3, 0.3) }); break;
       case 'actor': this.addActor(e); break;
       case 'glitch': this.glitchAmt = Math.max(this.glitchAmt, e.amt || 0.4); this.glitchUntil = Math.max(this.glitchUntil, this.time + (e.dur || 0.3)); break;
       case 'view':
@@ -126,7 +163,7 @@ export class Renderer {
         this.fb.until = 0; this.bg.hT = 150; this.bg.lT = 4; break;
       case 'rainbow': {
         for (let i = 0; i < 7; i++) {
-          const R = 300 - i * 18; const pts = [];
+          const R = 300 - i * 18; const pts: Point[] = [];
           for (let k = 0; k <= 50; k++) { const a = Math.PI + k / 50 * Math.PI; pts.push([Math.cos(a) * R, this.hh * 0.6 + Math.sin(a) * R]); }
           this.strokes.push({ pts, w: 9, color: { h: i * 45, s: 95, l: 58 }, dur: 0.8, delay: i * 0.05, t: 0, idx: 0 });
         }
@@ -136,10 +173,13 @@ export class Renderer {
     }
   }
 
-  addSprite(s) { if (this.sprites.length > 260) this.sprites.shift(); this.sprites.push(s); }
+  addSprite(s: Sprite): void { if (this.sprites.length > 260) this.sprites.shift(); this.sprites.push(s); }
 
-  addActor(e) {
-    const a = { ...e, age: -(e.delay || 0), life: 3, size: e.size || 70 };
+  addActor(e: EventOf<'actor'>): void {
+    const a: Actor = {
+      kind: e.kind, ch: e.ch ?? '', x: e.x, y: e.y, size: e.size || 70, color: e.color ?? { h: 0, s: 0, l: 100 },
+      age: -(e.delay || 0), life: 3, dir: 1, vx: 0, vy: 0, y0: e.y, ty: 0, step: -1,
+    };
     const W = this.hw, H = this.hh;
     switch (e.kind) {
       case 'run': case 'drive': { const dir = Math.random() < 0.5 ? 1 : -1; a.dir = dir; a.x = -dir * (W + 80); a.y = clamp(e.y, -H * 0.7, H * 0.7); if (e.kind === 'drive') { a.y = H * 0.75; a.life = 2; } a.vx = dir * (2 * W + 160) / a.life; break; }
@@ -156,14 +196,15 @@ export class Renderer {
     this.actors.push(a);
   }
 
-  spawn(e) {
+  spawn(e: ParticleSpec): void {
     const n = Math.min(e.n || 10, 300);
     const c = e.color || { h: 120, s: 90, l: 60 };
     const W = this.hw, H = this.hh;
-    const chars = e.ch ? Array.from(e.ch) : null;
-    const emojis = e.ch && /\p{Extended_Pictographic}/u.test(e.ch) ? (() => { try { return Array.from(new Intl.Segmenter().segment(e.ch), (x) => x.segment); } catch (er) { return [e.ch]; } })() : null;
+    const ech = e.ch;
+    const chars = ech ? Array.from(ech) : null;
+    const emojis = ech && /\p{Extended_Pictographic}/u.test(ech) ? (() => { try { return Array.from(new Intl.Segmenter().segment(ech), (x) => x.segment); } catch (er) { return [ech]; } })() : null;
     for (let i = 0; i < n; i++) {
-      const p = { x: e.x, y: e.y, vx: 0, vy: 0, age: 0, life: 1, size: 4, c, kind: e.kind, g: 0, drag: 0.98, rot: 0, vr: 0 };
+      const p: Particle = { x: e.x, y: e.y, vx: 0, vy: 0, age: 0, life: 1, size: 4, c, kind: e.kind, g: 0, drag: 0.98, rot: 0, vr: 0 };
       const a = Math.random() * TAU; const sp = rand(80, 420) * (e.spread || 1);
       switch (e.kind) {
         case 'burst': p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp; p.life = rand(0.5, 1.2); p.size = rand(2, 6); p.drag = 0.93; p.c = { h: c.h + rand(-30, 30), s: c.s, l: c.l + 10 }; break;
@@ -177,7 +218,7 @@ export class Renderer {
         case 'fire': p.x += rand(-60, 60); p.y += rand(-10, 30); p.vx = rand(-40, 40); p.vy = -rand(150, 420); p.life = rand(0.5, 1.2); p.size = rand(8, 22); p.kind = 'fire'; p.drag = 0.97; break;
         case 'rain': p.x = rand(-W, W); p.y = -H - rand(0, H); p.vx = -60; p.vy = rand(900, 1300); p.life = 2; p.kind = 'rain'; p.size = rand(14, 30); p.drag = 1; break;
         case 'snow': p.x = rand(-W, W); p.y = -H - rand(0, H * 0.6); p.vx = rand(-30, 30); p.vy = rand(60, 150); p.life = rand(4, 7); p.kind = 'char'; p.ch = '❄'; p.size = rand(14, 28); p.c = { h: 200, s: 60, l: 92 }; p.drag = 1; p.sway = rand(0.5, 2); break;
-        case 'smoke': p.x += rand(-20, 20); p.vx = rand(-60, 60); p.vy = -rand(30, 120); p.life = rand(1.5, 3); p.size = rand(20, 50); p.kind = 'smoke'; p.c = e.color && e.color.h !== undefined && e.color.s < 50 ? e.color : { h: 0, s: 0, l: 55 }; p.drag = 0.98; break;
+        case 'smoke': p.x += rand(-20, 20); p.vx = rand(-60, 60); p.vy = -rand(30, 120); p.life = rand(1.5, 3); p.size = rand(20, 50); p.kind = 'smoke'; p.c = e.color && e.color.s < 50 ? e.color : { h: 0, s: 0, l: 55 }; p.drag = 0.98; break;
         case 'bubbles': p.x += rand(-80, 80); p.vx = rand(-20, 20); p.vy = -rand(60, 200); p.life = rand(2, 3.5); p.size = rand(6, 22); p.kind = 'bubble'; p.sway = rand(1, 3); p.drag = 1; p.c = { h: rand(170, 300), s: 80, l: 75 }; break;
         case 'money': p.x = rand(-W, W); p.y = -H - rand(0, H); p.vy = rand(150, 400); p.vx = rand(-40, 40); p.life = 4; p.kind = 'emoji'; p.ch = emojis ? emojis[i % emojis.length] : '💸'; p.size = rand(24, 40); p.vr = rand(-3, 3); p.drag = 1; break;
         case 'matrix': p.x = Math.round(rand(-W, W) / 24) * 24; p.y = -H - rand(0, H * 1.5); p.vy = rand(300, 700); p.life = 3; p.kind = 'matrix'; p.ch = SCRAMBLE[(Math.random() * SCRAMBLE.length) | 0]; p.size = rand(16, 26); p.drag = 1; break;
@@ -190,7 +231,7 @@ export class Renderer {
   }
 
   // ---------- per frame ----------
-  frame(dt, level = 0, bass = 0) {
+  frame(dt: number, level = 0, bass = 0): void {
     dt = Math.min(dt, 0.05);
     this.time += dt;
     const { W, H, s } = this;
@@ -304,7 +345,7 @@ export class Renderer {
     this.post(c, dt);
   }
 
-  shapePath(c, sp, r) {
+  shapePath(c: Ctx, sp: ShapeSprite, r: number): void {
     c.beginPath();
     switch (sp.shape) {
       case 'circle': case 'ring': case 'dot': c.arc(0, 0, r, 0, TAU); break;
@@ -321,8 +362,8 @@ export class Renderer {
     }
   }
 
-  drawSprites(c, dt) {
-    const keep = [];
+  drawSprites(c: Ctx, dt: number): void {
+    const keep: Sprite[] = [];
     for (const sp of this.sprites) {
       sp.age += dt;
       if (sp.age > sp.life) {
@@ -410,7 +451,7 @@ export class Renderer {
     this.sprites = keep;
   }
 
-  stampShape(sp) {
+  stampShape(sp: ShapeSprite): void {
     // a dying shape leaves a faint imprint in the paint layer
     const pc = this.pctx;
     pc.setTransform(this.s, 0, 0, this.s, this.W / 2, this.H / 2);
@@ -423,8 +464,8 @@ export class Renderer {
     pc.globalCompositeOperation = 'source-over';
   }
 
-  drawParticles(c, dt) {
-    const keep = [];
+  drawParticles(c: Ctx, dt: number): void {
+    const keep: Particle[] = [];
     const T = this.time;
     for (const p of this.parts) {
       p.age += dt;
@@ -437,11 +478,11 @@ export class Renderer {
       if (p.sway) p.x += Math.sin(T * p.sway + p.size) * 30 * dt;
       const t = p.age / p.life; const a = 1 - t;
       switch (p.kind) {
-        case 'emoji': this.drawGlyph(c, p.ch, p.x, p.y, p.size, p.rot, Math.min(1, a * 2)); break;
+        case 'emoji': this.drawGlyph(c, p.ch ?? '✨', p.x, p.y, p.size, p.rot, Math.min(1, a * 2)); break;
         case 'char': case 'matrix': {
           if (p.kind === 'matrix' && Math.random() < 0.1) p.ch = SCRAMBLE[(Math.random() * SCRAMBLE.length) | 0];
           const col = p.kind === 'matrix' ? '#78ff8c' : `hsl(${(Math.round(p.c.h / 30) * 30) % 360},${p.c.s | 0}%,80%)`;
-          this.drawGlyph(c, p.ch, p.x, p.y, p.size, 0, a, false, col); break;
+          this.drawGlyph(c, p.ch ?? '*', p.x, p.y, p.size, 0, a, false, col); break;
         }
         case 'rect':
           c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.scale(1, Math.cos(p.rot * 2));
@@ -481,8 +522,8 @@ export class Renderer {
     this.parts = keep;
   }
 
-  drawActors(c, dt) {
-    const keep = [];
+  drawActors(c: Ctx, dt: number): void {
+    const keep: Actor[] = [];
     for (const a of this.actors) {
       a.age += dt;
       if (a.age < 0) { keep.push(a); continue; }
@@ -560,7 +601,7 @@ export class Renderer {
     this.actors = keep;
   }
 
-  drawBanner(c, dt) {
+  drawBanner(c: Ctx, dt: number): void {
     const b = this.banner; if (!b) return;
     b.age += dt;
     if (b.age > b.life) { this.banner = null; return; }
@@ -589,7 +630,7 @@ export class Renderer {
     c.restore();
   }
 
-  post(c, dt) {
+  post(c: Ctx, dt: number): void {
     const { W, H } = this; const T = this.time;
     // flashes
     for (const f of this.flashes) { f.t += dt; const a = f.a * Math.max(0, 1 - f.t / 0.25); if (a > 0.003) { c.fillStyle = hsl(f.c, a); c.fillRect(0, 0, W, H); } }
@@ -616,7 +657,7 @@ export class Renderer {
   }
 
   // tap-to-world helper for the UI
-  toWorld(cssX, cssY) {
+  toWorld(cssX: number, cssY: number): Point {
     const x = cssX * this.dpr, y = cssY * this.dpr;
     return [(x - this.W / 2) / this.s, (y - this.H / 2) / this.s];
   }

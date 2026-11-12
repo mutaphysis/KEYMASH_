@@ -2,38 +2,51 @@
 // scrolling, highlighted code view.
 import { VM } from '../lang/vm';
 import { Renderer } from '../engine/render';
-import { keyInfo } from '../lang/keys';
+import type { AudioEngine } from '../engine/audio';
+import { isSound } from '../lang/types';
+import type { VMEvent, EventOf } from '../lang/types';
+import { $ } from './dom';
 
-const SOUND = new Set(['note', 'drum', 'sfx', 'dtmf']);
-const UI = new Set(['hl', 'log', 'gen', 'die', 'say']);
+type UIEvent = EventOf<'hl' | 'log' | 'gen' | 'die' | 'say'>;
+const isUI = (e: VMEvent): e is UIEvent => e.type === 'hl' || e.type === 'log' || e.type === 'gen' || e.type === 'die' || e.type === 'say';
 const LOOKAHEAD = 0.12;
 
 export class Player {
-  constructor(audio) {
+  audio: AudioEngine;
+  stage = $<HTMLCanvasElement>('stage');
+  wrap = $('stageWrap');
+  codeview = $('codeview');
+  hud = $('hud');
+  logEl = $('log');
+  boot = $('boot');
+  r: Renderer;
+  vm: VM | null = null;
+  src: string | undefined;
+  running = false;
+  queue: { when: number; e: VMEvent }[] = [];
+  logs: string[] = [];
+  spans: HTMLSpanElement[] = [];
+  hlPrev = new Map<number, [number, number]>();
+  hlLast: HTMLSpanElement | null = null;
+  activity = new Map<number, number>();
+  raf = 0; nextTick = 0; lastFrame = 0; restartAt = 0; hudTick = 0;
+
+  constructor(audio: AudioEngine) {
     this.audio = audio;
-    this.stage = document.getElementById('stage');
-    this.wrap = document.getElementById('stageWrap');
-    this.codeview = document.getElementById('codeview');
-    this.hud = document.getElementById('hud');
-    this.logEl = document.getElementById('log');
-    this.boot = document.getElementById('boot');
     this.r = new Renderer(this.stage);
-    this.running = false;
-    this.queue = []; this.logs = [];
-    this.hlPrev = new Map(); this.hlLast = null;
     new ResizeObserver(() => this.fit()).observe(this.wrap);
     this.stage.addEventListener('pointerdown', (e) => this.tap(e));
     this.loop = this.loop.bind(this);
   }
 
-  fit() {
+  fit(): void {
     const r = this.wrap.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
     this.r.resize(r.width, r.height);
     if (this.vm) this.vm.setBounds(this.r.hw, this.r.hh);
   }
 
-  buildCode(gs, keepScroll = false) {
+  buildCode(gs: string[], keepScroll = false): void {
     const cv = this.codeview; const top = cv.scrollTop; cv.textContent = '';
     const frag = document.createDocumentFragment();
     this.spans = gs.map((g) => {
@@ -46,7 +59,7 @@ export class Player {
   }
 
   // live coding: swap in a new program without stopping the clock, the picture or the sound
-  hotSwap(src) {
+  hotSwap(src: string): void {
     if (!this.running || src === this.src) return;
     this.src = src;
     const old = this.vm;
@@ -56,10 +69,10 @@ export class Player {
     this.queue = this.queue.filter((q) => q.e.type !== 'hl');
     this.hlPrev.clear(); this.hlLast = null; this.restartAt = 0;
     this.log(`HOT-SWAP :: ${this.vm.gs.length} glyphs :: ${this.vm.threads.length} thread(s) :: 0 errors`);
-    this.r.handle({ type: 'glitch', amt: 0.25, dur: 0.12 });
+    this.r.handle({ type: 'glitch', dt: 0, amt: 0.25, dur: 0.12 });
   }
 
-  async start(src) {
+  async start(src: string): Promise<void> {
     this.stop(true);
     this.src = src;
     this.audio.init(); this.audio.speechInit();
@@ -78,50 +91,51 @@ export class Player {
     this.raf = requestAnimationFrame(this.loop);
   }
 
-  bootSequence() {
+  bootSequence(): Promise<void> {
+    const vm = this.vm!;
     const lines = [
       '> keymash --run program.mash',
-      `> lexing ${this.vm.gs.length} glyphs ......... ok`,
-      `> spawning ${this.vm.threads.length || 0} thread(s) ....... ok`,
+      `> lexing ${vm.gs.length} glyphs ......... ok`,
+      `> spawning ${vm.threads.length || 0} thread(s) ....... ok`,
       '> syntax errors: 0 (there are never errors)',
       '> ACCESS GRANTED',
     ];
     this.boot.classList.add('on'); this.boot.textContent = '';
-    return new Promise((res) => {
+    return new Promise<void>((res) => {
       let i = 0;
       const step = () => {
         if (i >= lines.length) { setTimeout(() => { this.boot.classList.remove('on'); res(); }, 140); return; }
         this.boot.textContent += lines[i++] + '\n';
-        try { this.audio.play({ type: 'sfx', kind: 'data', vel: 0.3, p: 1, pan: 0 }, this.audio.now, 0.125); } catch (e) {}
+        try { this.audio.play({ type: 'sfx', dt: 0, kind: 'data', vel: 0.3, p: 1, pan: 0 }, this.audio.now, 0.125); } catch (e) {}
         setTimeout(step, 110);
       };
       step();
     });
   }
 
-  stop(silent) {
+  stop(silent = false): void {
     this.running = false;
     cancelAnimationFrame(this.raf);
     if (!silent) this.audio.stop();
     else this.audio.speechStop();
   }
 
-  restart() { if (this.src !== undefined) this.start(this.src); }
+  restart(): void { if (this.src !== undefined) this.start(this.src); }
 
-  tap(e) {
+  tap(e: PointerEvent): void {
     if (!this.running) return;
     const rect = this.stage.getBoundingClientRect();
     const [x, y] = this.r.toWorld(e.clientX - rect.left, e.clientY - rect.top);
     const hue = (x / this.r.hw * 120 + 200) % 360;
-    this.r.handle({ type: 'particles', kind: 'burst', n: 30, x, y, color: { h: hue, s: 100, l: 65 } });
-    this.r.handle({ type: 'shape', kind: 'ring', x, y, r: 16, grow: 4, life: 0.7, color: { h: hue, s: 100, l: 65 }, w: 3 });
+    this.r.handle({ type: 'particles', dt: 0, kind: 'burst', n: 30, x, y, color: { h: hue, s: 100, l: 65 } });
+    this.r.handle({ type: 'shape', dt: 0, kind: 'ring', x, y, r: 16, rot: 0, fill: false, grow: 4, life: 0.7, color: { h: hue, s: 100, l: 65 }, w: 3 });
     const deg = Math.round((x / this.r.hw + 1) * 5);
     const midi = 57 + [0, 3, 5, 7, 10][((deg % 5) + 5) % 5] + 12 * Math.floor(deg / 5) - (y > 0 ? 12 : 0);
-    this.audio.play({ type: 'note', inst: 'bell', midi, dur: 2, vel: 0.6, pan: x / this.r.hw }, this.audio.now, 0.125);
+    this.audio.play({ type: 'note', dt: 0, inst: 'bell', midi, dur: 2, vel: 0.6, glide: 0, vib: 0, echo: 0, pan: x / this.r.hw }, this.audio.now, 0.125);
   }
 
-  loop(t) {
-    if (!this.running) return;
+  loop(t: number): void {
+    if (!this.running || !this.vm) return;
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, (t - this.lastFrame) / 1000); this.lastFrame = t;
     const now = this.audio.now;
@@ -135,7 +149,7 @@ export class Player {
       const evs = vm.tick();
       for (const e of evs) {
         const when = this.nextTick + (e.dt || 0) * tickDur + (e.at || 0);
-        if (SOUND.has(e.type)) this.audio.play(e, when, tickDur);
+        if (isSound(e)) this.audio.play(e, when, tickDur);
         else this.queue.push({ when, e });
       }
       if (vm.bpm !== bpmBefore) this.audio.setBpm(vm.bpm);
@@ -146,7 +160,7 @@ export class Player {
 
     // replay visual + ui events on time
     if (this.queue.length) {
-      const keep = [];
+      const keep: { when: number; e: VMEvent }[] = [];
       for (const q of this.queue) {
         if (q.when <= now) this.apply(q.e); else keep.push(q);
       }
@@ -160,8 +174,8 @@ export class Player {
     if (this.hudTick > 0.1) { this.hudTick = 0; this.drawHud(level); }
   }
 
-  apply(e) {
-    if (!UI.has(e.type)) { this.r.handle(e); return; }
+  apply(e: VMEvent): void {
+    if (!isUI(e)) { this.r.handle(e); return; }
     switch (e.type) {
       case 'hl': this.highlight(e); break;
       case 'log': this.log(e.text); break;
@@ -171,21 +185,22 @@ export class Player {
     }
   }
 
-  highlight(e) {
+  highlight(e: EventOf<'hl'>): void {
     if (!this.spans) return;
-    const prev = this.hlPrev.get(e.th);
+    const th = e.th ?? -1;
+    const prev = this.hlPrev.get(th);
     if (prev) for (let i = prev[0]; i < prev[1]; i++) { const s = this.spans[i]; if (s) s.classList.remove('on'); }
     const col = `hsl(${e.hue | 0} 100% 60%)`;
     for (let i = e.g0; i < e.g1; i++) {
       const s = this.spans[i]; if (!s) continue;
       s.style.setProperty('--c', col); s.classList.add('on', 'seen');
     }
-    this.hlPrev.set(e.th, [e.g0, e.g1]);
-    this.hlLast = this.spans[e.g0];
-    this.activity = this.activity || new Map(); this.activity.set(e.th, performance.now());
+    this.hlPrev.set(th, [e.g0, e.g1]);
+    this.hlLast = this.spans[e.g0] ?? null;
+    this.activity.set(e.th ?? -1, performance.now());
   }
 
-  follow(dt) {
+  follow(dt: number): void {
     const s = this.hlLast; if (!s) return;
     const cv = this.codeview;
     const target = s.offsetTop - cv.clientHeight * 0.35;
@@ -194,17 +209,17 @@ export class Player {
     if (Math.abs(next - cur) > 0.5) cv.scrollTop = next;
   }
 
-  log(text) {
+  log(text: string): void {
     this.logs.push(text); if (this.logs.length > 4) this.logs.shift();
     this.logEl.innerHTML = '';
     for (const l of this.logs) { const d = document.createElement('div'); d.textContent = l; this.logEl.appendChild(d); }
   }
 
-  drawHud(level) {
+  drawHud(level: number): void {
     const vm = this.vm; if (!vm) return;
     const nowMs = performance.now();
     const dots = vm.threads.map((th) => {
-      const act = this.activity && this.activity.get(th.id);
+      const act = this.activity.get(th.id);
       const hot = act && nowMs - act < 160;
       return `<span class="dot" style="background:hsl(${th.uiHue | 0} 100% 60%);opacity:${th.alive ? (hot ? 1 : 0.35) : 0.1};transform:scale(${hot ? 1.35 : 1})"></span>`;
     }).join('');
@@ -213,4 +228,3 @@ export class Player {
   }
 }
 
-export { keyInfo };

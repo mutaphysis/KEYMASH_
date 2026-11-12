@@ -1,4 +1,4 @@
-# Build KEYMASH with bun, run the fuzz tests, publish dist/ to GitHub Pages.
+# Typecheck + build KEYMASH with Vite, run the fuzz tests, publish dist/ to GitHub Pages.
 name: Deploy to GitHub Pages
 
 on:
@@ -21,10 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
       - name: Test (the interpreter must never throw)
         run: bun test
-      - name: Build single-file page
-        run: bun run build.js
+      - name: Typecheck + build single-file page
+        run: bun run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

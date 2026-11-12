@@ -1,50 +1,67 @@
 // Edit mode: matrix rain behind the textarea, sparks at the caret, a key bar for
 // phones (symbols, emoji, cursor movement), and a little note for every keystroke.
 import { keyInfo } from '../lang/keys';
+import type { KeyInfo } from '../lang/keys';
+import { $, ctx2d } from './dom';
 import { graphemes } from '../lang/lexer';
 
 const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ0123456789#$%&@!?*<>{}[]~^';
 
+interface RainCol { y: number; v: number; step?: number; inject?: string | null }
+interface Spark { x: number; y: number; vx: number; vy: number; life: number; age: number; hue: number }
+type InputLike = { data?: string | null; inputType?: string };
+export interface EditorOpts {
+  onChange?: (v: string) => void;
+  onKey?: (ch: string, key: KeyInfo) => void;
+  onType?: (ch: string, inputType: string) => void;
+}
+type KeyDef = string | [label: string, action: string];
+
 export class Editor {
-  constructor(opts) {
-    this.ta = document.getElementById('code');
-    this.wrap = document.getElementById('editorWrap');
-    this.rain = document.getElementById('rain');
-    this.sparks = document.getElementById('sparks');
-    this.rc = this.rain.getContext('2d');
-    this.sc = this.sparks.getContext('2d');
+  ta = $<HTMLTextAreaElement>('code');
+  wrap = $('editorWrap');
+  rain = $<HTMLCanvasElement>('rain');
+  sparks = $<HTMLCanvasElement>('sparks');
+  rc = ctx2d(this.rain);
+  sc = ctx2d(this.sparks);
+  onChange: (v: string) => void;
+  onKey: (ch: string, key: KeyInfo) => void;
+  onType: (ch: string, inputType: string) => void;
+  cols: RainCol[] = []; parts: Spark[] = []; typed: string[] = [];
+  active = true; last = 0; dpr = 1; w = 0; h = 0;
+  mirror: HTMLDivElement | null = null;
+
+  constructor(opts: EditorOpts) {
     this.onChange = opts.onChange || (() => {});
     this.onKey = opts.onKey || (() => {});
     this.onType = opts.onType || (() => {});
-    this.cols = []; this.parts = []; this.typed = [];
-    this.active = true;
     this.buildKeybar();
-    this.ta.addEventListener('input', (e) => this.input(e));
+    this.ta.addEventListener('input', (e) => this.input(e as InputEvent));
     window.addEventListener('resize', () => this.resize());
     this.resize();
     this.last = performance.now();
-    const loop = (t) => { const dt = Math.min(0.05, (t - this.last) / 1000); this.last = t; if (this.active) this.draw(dt); requestAnimationFrame(loop); };
+    const loop = (t: number) => { const dt = Math.min(0.05, (t - this.last) / 1000); this.last = t; if (this.active) this.draw(dt); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
 
-  get value() { return this.ta.value; }
-  set value(v) { this.ta.value = v; this.onChange(v); }
+  get value(): string { return this.ta.value; }
+  set value(v: string) { this.ta.value = v; this.onChange(v); }
 
-  resize() {
+  resize(): void {
     const r = this.wrap.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     for (const c of [this.rain, this.sparks]) { c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr); }
     this.dpr = dpr; this.w = r.width; this.h = r.height;
     const fs = 16; const n = Math.ceil(r.width / fs);
-    while (this.cols.length < n) this.cols.push({ y: Math.random() * r.height, v: 40 + Math.random() * 90, ch: [] });
+    while (this.cols.length < n) this.cols.push({ y: Math.random() * r.height, v: 40 + Math.random() * 90 });
     this.cols.length = n;
   }
 
-  input(e) {
+  input(e?: InputLike): void {
     const v = this.ta.value;
     this.onChange(v);
     const pos = this.ta.selectionStart;
-    const ch = e && e.data ? graphemes(e.data).pop() : v.slice(Math.max(0, pos - 1), pos);
+    const ch = e && e.data ? graphemes(e.data).pop() ?? '' : v.slice(Math.max(0, pos - 1), pos);
     const [x, y] = this.caretXY();
     this.burst(x, y, ch);
     this.onType(ch || '', (e && e.inputType) || 'insertText');
@@ -58,7 +75,7 @@ export class Editor {
     this.wrap.classList.remove('pulse'); void this.wrap.offsetWidth; this.wrap.classList.add('pulse');
   }
 
-  burst(x, y, ch) {
+  burst(x: number, y: number, ch: string): void {
     const k = keyInfo(ch || 'a');
     const hue = 100 + k.col * 18;
     for (let i = 0; i < 14; i++) {
@@ -69,7 +86,7 @@ export class Editor {
   }
 
   // caret pixel position via a mirror div
-  caretXY() {
+  caretXY(): [number, number] {
     const ta = this.ta;
     if (!this.mirror) {
       this.mirror = document.createElement('div');
@@ -77,16 +94,17 @@ export class Editor {
       document.body.appendChild(this.mirror);
     }
     const m = this.mirror; const cs = getComputedStyle(ta);
-    for (const p of ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom', 'whiteSpace', 'wordBreak', 'overflowWrap', 'boxSizing', 'borderWidth']) m.style[p] = cs[p];
+    const props = ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom', 'whiteSpace', 'wordBreak', 'overflowWrap', 'boxSizing', 'borderWidth'] as const;
+    for (const p of props) m.style[p] = cs[p];
     m.style.width = ta.clientWidth + 'px';
     const pos = ta.selectionStart || 0;
     m.textContent = ta.value.slice(0, pos);
     const span = document.createElement('span'); span.textContent = ta.value.slice(pos, pos + 1) || '.'; m.appendChild(span);
-    const x = span.offsetLeft; const y = span.offsetTop - ta.scrollTop + parseFloat(cs.lineHeight || 24) * 0.55;
+    const x = span.offsetLeft; const y = span.offsetTop - ta.scrollTop + (parseFloat(cs.lineHeight) || 28) * 0.55;
     return [Math.min(this.w - 4, Math.max(4, x)), Math.min(this.h - 4, Math.max(4, y))];
   }
 
-  draw(dt) {
+  draw(dt: number): void {
     const c = this.rc; const d = this.dpr;
     c.setTransform(d, 0, 0, d, 0, 0);
     c.fillStyle = 'rgba(0,10,3,0.16)'; c.fillRect(0, 0, this.w, this.h);
@@ -97,7 +115,7 @@ export class Editor {
       const step = Math.floor(col.y / 18);
       if (step !== col.step) {
         col.step = step;
-        let g = col.inject || (this.typed.length && Math.random() < 0.3 ? this.typed[(Math.random() * this.typed.length) | 0] : GLYPHS[(Math.random() * GLYPHS.length) | 0]);
+        const g = col.inject || (this.typed.length && Math.random() < 0.3 ? this.typed[(Math.random() * this.typed.length) | 0] : GLYPHS[(Math.random() * GLYPHS.length) | 0]);
         const injected = !!col.inject; col.inject = null;
         c.fillStyle = injected ? '#ffffff' : 'rgba(57,255,122,0.85)';
         c.fillText(g, i * 16 + 8, step * 18);
@@ -116,9 +134,9 @@ export class Editor {
   }
 
   // ---------- key bar ----------
-  buildKeybar() {
-    const bar = document.getElementById('keybar');
-    const keys = [
+  buildKeybar(): void {
+    const bar = $('keybar');
+    const keys: KeyDef[] = [
       ['◀', 'left'], ['▶', 'right'], ['▲', 'up'], ['▼', 'down'], ['⏎', '\n'],
       '!', '?', '~', '(', ')', '[', ']', '{', '}', '#', '*', '@', '&', '%', '$', '^', ':', '.', '"', '<', '>', '|', '/', '-', '+', '=',
       '🐶', '🐾', '💥', '🔥', '🌈', '❤️', '⭐', '✨', '🚀', '👻', '🦄', '🦖', '🎵', '🌀', '💻', '🐿️', '🎾', '🦴', '💩', '🍕',
@@ -136,7 +154,7 @@ export class Editor {
     }
   }
 
-  key(val) {
+  key(val: string): void {
     const ta = this.ta;
     if (val === 'left' || val === 'right') {
       const p = ta.selectionStart + (val === 'left' ? -1 : 1);
@@ -145,7 +163,7 @@ export class Editor {
     } else if (val === 'up' || val === 'down') {
       const v = ta.value; const p = ta.selectionStart;
       const ls = v.lastIndexOf('\n', p - 1) + 1; const col = p - ls;
-      let q;
+      let q: number;
       if (val === 'up') { if (ls === 0) q = 0; else { const ps = v.lastIndexOf('\n', ls - 2) + 1; q = Math.min(ps + col, ls - 1); } }
       else { const le = v.indexOf('\n', p); if (le < 0) q = v.length; else { const ne = v.indexOf('\n', le + 1); q = Math.min(le + 1 + col, ne < 0 ? v.length : ne); } }
       ta.setSelectionRange(q, q);
@@ -157,7 +175,7 @@ export class Editor {
     const [x, y] = this.caretXY(); this.burst(x, y, 'a');
   }
 
-  insert(text) {
+  insert(text: string): void {
     const ta = this.ta;
     const s = ta.selectionStart, e = ta.selectionEnd;
     ta.setRangeText(text, s, e, 'end');

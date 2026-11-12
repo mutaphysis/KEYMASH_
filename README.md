@@ -10,12 +10,18 @@ speech.
 
 ## Running
 
+TypeScript (strict) + Vite, with bun as package manager and test runner.
+
 ```sh
-bun run build.js        # -> dist/index.html (single self-contained page)
-bun test                # fuzz + unit tests for the interpreter
+bun install
+bun run dev        # Vite dev server with hot reload
+bun run build      # tsc typecheck + vite build -> dist/index.html (one self-contained file)
+bun run preview    # serve the production build
+bun test           # fuzz + unit tests for the interpreter
 ```
 
-Open `dist/index.html` in a browser. Type. Press **RUN**.
+The build is a single HTML file with everything inlined (vite-plugin-singlefile),
+so it also works opened straight from disk or as a Claude artifact.
 
 Every push to `main` runs the tests, builds the page and deploys it to GitHub
 Pages (`.github/workflows/pages.yml`).
@@ -107,16 +113,20 @@ warm pad breathes in while you type. Fast typing gets quieter, not louder.
 ## Architecture
 
 ```
-src/lang/lexer.js    total tokenizer (graphemes -> tokens), math evaluator
-src/lang/keys.js     QWERTZ geometry (position, pitch, adjacency), emoji powers
-src/lang/vm.js       the interpreter: threads, loops, forks, emits events
-src/engine/audio.js  WebAudio synth, drums, sfx, reverb/delay, speech
-src/engine/render.js canvas renderer: trails, feedback, sprites, glitch
-src/ui/*.js          matrix editor, key bar, play mode, storage
+src/lang/types.ts    the event protocol (discriminated union) + op / sound / shape kinds
+src/lang/lexer.ts    total tokenizer (graphemes -> tokens), math evaluator
+src/lang/keys.ts     QWERTZ geometry (position, pitch, adjacency), emoji powers
+src/lang/vm.ts       the interpreter: threads, loops, forks, emits events
+src/engine/audio.ts  WebAudio synth, drums, sfx, reverb/delay, typing lounge, speech
+src/engine/render.ts canvas renderer: trails, feedback, sprites, glitch
+src/ui/*.ts          matrix editor, key bar, play mode, storage
+src/main.ts          wiring, layout (phone / split view), live hot-swap
 ```
 
-The VM is pure (no DOM): `vm.tick()` returns a list of timed events that the
-audio engine schedules and the renderer replays at the right moment.
+The VM is pure (no DOM): `vm.tick()` returns a list of timed `VMEvent`s that the
+audio engine schedules and the renderer replays at the right moment. Adding an
+effect means adding a variant to `VMEvent` — the compiler then points at every
+place that has to handle it.
 
 ## License
 

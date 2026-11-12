@@ -1,12 +1,13 @@
 import './style.css';
 import { AudioEngine } from './engine/audio';
+import type { TypingKind } from './engine/audio';
+import { $ } from './ui/dom';
 import { Editor } from './ui/editor';
 import { Player } from './ui/player';
 import { store, DEMOS, pawMash } from './ui/storage';
 import { lex } from './lang/lexer';
 import { keyInfo } from './lang/keys';
 
-const $ = (id) => document.getElementById(id);
 const app = $('app');
 const audio = new AudioEngine();
 
@@ -19,12 +20,10 @@ function fitViewport() {
   document.documentElement.style.setProperty('--vt', top + 'px');
   if (window.scrollY) window.scrollTo(0, 0);
   // on-screen keyboard open? squeeze the header a bit
-  app.classList.toggle('kb', h < window.innerHeight * 0.78 && document.activeElement && document.activeElement.id === 'code');
+  app.classList.toggle('kb', h < window.innerHeight * 0.78 && document.activeElement?.id === 'code');
 }
-if (window.visualViewport) {
-  visualViewport.addEventListener('resize', fitViewport);
-  visualViewport.addEventListener('scroll', fitViewport);
-}
+window.visualViewport?.addEventListener('resize', fitViewport);
+window.visualViewport?.addEventListener('scroll', fitViewport);
 window.addEventListener('resize', fitViewport);
 fitViewport();
 
@@ -34,14 +33,14 @@ window.addEventListener('pointerdown', unlock, { once: true, capture: true });
 window.addEventListener('keydown', unlock, { once: true, capture: true });
 
 // ---- status line ----
-function status(src) {
+function status(src: string): void {
   const L = lex(src);
   const threads = L.lines.filter((t) => t.some((x) => x.t !== 'space')).length;
-  $('st-threads').textContent = threads;
-  $('st-glyphs').textContent = L.gs.length;
+  $('st-threads').textContent = String(threads);
+  $('st-glyphs').textContent = String(L.gs.length);
 }
 
-let saveTimer = 0, swapTimer = 0;
+let saveTimer: ReturnType<typeof setTimeout> | undefined, swapTimer: ReturnType<typeof setTimeout> | undefined;
 const state = { playing: false };
 const editor = new Editor({
   onChange: (v) => {
@@ -53,7 +52,7 @@ const editor = new Editor({
     // laid-back sounds while typing, pitched by where the key sits
     if (!audio.ctx) return;
     const quiet = state.playing; // don't fight the running program
-    let kind = 'letter';
+    let kind: TypingKind = 'letter';
     if (inputType.startsWith('delete')) kind = 'delete';
     else if (ch === '\n' || inputType === 'insertLineBreak' || inputType === 'insertParagraph') kind = 'enter';
     else if (ch === ' ') kind = 'space';
@@ -66,8 +65,8 @@ const editor = new Editor({
 });
 const player = new Player(audio);
 
-function isSplit() { return app.classList.contains('split'); }
-function layout() {
+function isSplit(): boolean { return app.classList.contains('split'); }
+function layout(): void {
   const split = window.innerWidth >= 820 && window.innerWidth > window.innerHeight * 1.05;
   app.classList.toggle('split', split);
   app.classList.toggle('playing', state.playing);
@@ -75,8 +74,8 @@ function layout() {
   else { $('edit').hidden = state.playing; $('play').hidden = !state.playing; }
   editor.active = !$('edit').hidden;
   const rb = $('btn-run');
-  rb.querySelector('i').textContent = split && state.playing ? '■' : '▶';
-  rb.querySelector('span').textContent = split && state.playing ? 'STOP' : 'RUN';
+  rb.querySelector('i')!.textContent = split && state.playing ? '■' : '▶';
+  rb.querySelector('span')!.textContent = split && state.playing ? 'STOP' : 'RUN';
   requestAnimationFrame(() => { editor.resize(); player.fit(); });
 }
 window.addEventListener('resize', layout);
@@ -85,9 +84,9 @@ const draft = store.draft();
 editor.value = draft !== null ? draft : DEMOS[0].src;
 
 // ---- mode switching ----
-function glitchSwitch() { app.classList.remove('switching'); void app.offsetWidth; app.classList.add('switching'); }
+function glitchSwitch(): void { app.classList.remove('switching'); void app.offsetWidth; app.classList.add('switching'); }
 
-function run() {
+function run(): void {
   if (state.playing && isSplit()) { edit(); return; }
   let src = editor.value;
   if (!src.trim()) { src = pawMash(70); editor.value = src; toast('EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾'); }
@@ -98,7 +97,7 @@ function run() {
   layout();
   requestAnimationFrame(() => player.start(src));
 }
-function edit() {
+function edit(): void {
   player.stop();
   if (!isSplit()) glitchSwitch();
   state.playing = false;
@@ -109,7 +108,7 @@ $('btn-run').addEventListener('click', run);
 $('btn-idle-run').addEventListener('click', run);
 $('btn-stop').addEventListener('click', edit);
 $('btn-restart').addEventListener('click', () => player.restart());
-function toggleMute() {
+function toggleMute(): void {
   audio.init();
   audio.setMuted(!audio.muted);
   for (const id of ['btn-mute', 'btn-mute-edit']) $(id).textContent = audio.muted ? '🔇' : '🔊';
@@ -138,7 +137,7 @@ $('btn-mash').addEventListener('click', () => {
   tick();
 });
 
-let undo = null;
+let undo = '';
 $('btn-clear').addEventListener('click', () => {
   undo = editor.value;
   editor.value = '';
@@ -152,7 +151,7 @@ $('btn-load').addEventListener('click', openDrawer);
 $('drawer-close').addEventListener('click', () => { $('drawer').hidden = true; });
 $('drawer').addEventListener('click', (e) => { if (e.target === $('drawer')) $('drawer').hidden = true; });
 
-function item(name, sub, onLoad, onDel) {
+function item(name: string, sub: string, onLoad: () => void, onDel?: () => void): HTMLDivElement {
   const row = document.createElement('div'); row.className = 'item';
   const b = document.createElement('button'); b.className = 'name';
   b.textContent = name;
@@ -162,9 +161,9 @@ function item(name, sub, onLoad, onDel) {
   return row;
 }
 
-function openDrawer() {
+function openDrawer(): void {
   const body = $('drawer-body'); body.innerHTML = '';
-  const load = (src) => () => { editor.value = src; $('drawer').hidden = true; toast('LOADED'); };
+  const load = (src: string) => () => { editor.value = src; $('drawer').hidden = true; toast('LOADED'); };
   const h1 = document.createElement('h4'); h1.textContent = 'DEMOS'; body.appendChild(h1);
   for (const d of DEMOS) body.appendChild(item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src)));
   const h2 = document.createElement('h4'); h2.textContent = 'SAVED ON THIS DEVICE'; body.appendChild(h2);
@@ -178,11 +177,11 @@ function openDrawer() {
   $('drawer').hidden = false;
 }
 
-let toastTimer = 0;
-function toast(text, action, fn) {
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function toast(text: string, action?: string, fn?: () => void): void {
   const t = $('toast'); t.innerHTML = '';
   const s = document.createElement('span'); s.textContent = text; t.appendChild(s);
-  if (action) { const b = document.createElement('button'); b.textContent = action; b.addEventListener('click', () => { fn(); t.hidden = true; }); t.appendChild(b); }
+  if (action) { const b = document.createElement('button'); b.textContent = action; b.addEventListener('click', () => { fn?.(); t.hidden = true; }); t.appendChild(b); }
   t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, action ? 4000 : 1800);
 }
@@ -193,4 +192,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) audio.ctx.suspend().catch(() => {}); else audio.ctx.resume().catch(() => {});
 });
 
-window.KEYMASH = { editor, player, audio, run, edit, state };
+// handle for debugging and the browser tests
+const KEYMASH = { editor, player, audio, run, edit, state };
+declare global { interface Window { KEYMASH: typeof KEYMASH } }
+window.KEYMASH = KEYMASH;
