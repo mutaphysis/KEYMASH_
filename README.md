@@ -201,8 +201,15 @@ piano, rod marimba, coccus pluck, spirillum FM glass, diatom bell, ciliate vibra
 flagellate kalimba, volvox breath; predators an octave lower), so a culture's species
 are its orchestra. Within a run the starting chord varies, a soft bass marks each
 chord, the key may move by a fourth after each cycle, the pad brightens as the dish
-fills, and every fifth generation plays a little motif. Death is a low wooden tone,
-engulfing a gloop, a new cell a water drop. Typing in the editor drips water.
+fills, and every fifth generation plays a little motif. Engulfing is a gloop, a new
+cell a water drop. Processes are sounded as they happen: a division swells softly as
+the cell rounds up, stretches with a breathy glide at the furrow, and splits with a
+bubble pop and one note per daughter, each on its side; a dying cell gives a low wooden
+tone, then a fizz sinking for two seconds with a few faint crackles while the membrane
+dissolves. Cells bumping into each other tap a soft felt mallet (the same species hums
+a fifth), a cell that notices a predator and turns away rises quietly. Frequent things
+are thinned out (a bump at most every 1.1 s), at most three divisions or dissolves sound
+at once. Typing in the editor drips water.
 
 ## Architecture
 

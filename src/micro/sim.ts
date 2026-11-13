@@ -34,6 +34,7 @@ export interface Cell {
   /** how many cells it touched last step (local crowding) */ touching: number;
   /** the second daughter's seed, chosen when division starts so the renderer can already draw her */ childSeed: number;
   /** colour as drawn: eases toward hue, so a mutation doesn't pop */ shownHue: number;
+  /** seconds until this cell may make another bump or flee sound */ touchCool: number; fleeCool: number;
 }
 export interface Spore { x: number; y: number; sp: Species; hatch: number; hue: number }
 export type ZoneKind = 'light' | 'current' | 'toxin' | 'garden';
@@ -44,7 +45,10 @@ export type SimEvent =
   | { type: 'food'; x: number; y: number; n: number; kind: FoodKind }
   | { type: 'eat'; x: number; y: number; sp: Species; size: number; kind: FoodKind }
   | { type: 'engulf'; x: number; y: number; pred: Species; prey: Species; size: number }
+  | { type: 'divideStart'; x: number; y: number; sp: Species; size: number; axis: number }
   | { type: 'divide'; x: number; y: number; sp: Species; gen: number; size: number; axis: number }
+  | { type: 'touch'; x: number; y: number; a: Species; b: Species; speed: number; size: number }
+  | { type: 'flee'; x: number; y: number; sp: Species; size: number }
   | { type: 'die'; x: number; y: number; sp: Species; size: number; cause: 'starved' | 'old' | 'toxin' | 'eaten' }
   | { type: 'hatch'; x: number; y: number; sp: Species }
   | { type: 'bond'; ax: number; ay: number; bx: number; by: number; a: Species; b: Species }
@@ -90,8 +94,12 @@ export class World {
   divideNeed(sp: Species): number { return sp.divideAt * (1 + Math.max(0, this.crowd - 0.4)); }
 
   /** soft bodies: overlapping cells push each other apart (bigger cells push harder) */
+  /** pairs that touched in the last step: only a new contact is a bump */
+  private contacts = new Set<number>();
+
   private separate(): void {
     const C = this.cells;
+    const now = new Set<number>();
     for (const c of C) c.touching = 0;
     for (let i = 0; i < C.length; i++) {
       const a = C[i]!; if (a.gone || a.state === 'eaten') continue;
@@ -103,12 +111,22 @@ export class World {
         const d = Math.hypot(dx, dy);
         if (d >= min) continue;
         a.touching++; b.touching++;
+        const key = a.id < b.id ? a.id * 1048576 + b.id : b.id * 1048576 + a.id;
+        now.add(key);
+        if (!this.contacts.has(key) && a.state === 'live' && b.state === 'live' && a.touchCool <= 0 && b.touchCool <= 0) {
+          const speed = Math.hypot(a.vx - b.vx, a.vy - b.vy);
+          if (speed > 3) {
+            a.touchCool = b.touchCool = 1.5;
+            this.emit({ type: 'touch', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, a: a.sp, b: b.sp, speed, size: (a.size + b.size) / 2 });
+          }
+        }
         const nx = d > 1e-6 ? dx / d : 1, ny = d > 1e-6 ? dy / d : 0, push = (min - d) * 0.5;
         const wa = b.r * b.r / (a.r * a.r + b.r * b.r), wb = 1 - wa;
         a.x -= nx * push * wa * 2; a.y -= ny * push * wa * 2;
         b.x += nx * push * wb * 2; b.y += ny * push * wb * 2;
       }
     }
+    this.contacts = now;
   }
 
   spawnCell(sp: Species, x: number, y: number, o: { energy?: number; gen?: number; hue?: number; size?: number; speed?: number } = {}): Cell | null {
@@ -120,7 +138,7 @@ export class World {
       size, r: size * 0.4, energy: o.energy ?? sp.divideAt * (0.45 + this.r() * 0.15), age: 0, life: sp.life * (0.8 + this.r() * 0.4), gen: o.gen ?? 1,
       state: 'live', t: 0, hue: o.hue ?? sp.hue, speed: o.speed ?? sp.speed,
       phase: this.r() * TAU, wander: this.r() * TAU, think: this.r() * 0.3, tumble: 0, lastFood: 0,
-      food: null, prey: null, threat: null, partner: null, eatenBy: null, sick: 0, bondT: 0, seed: (this.r() * 1e9) | 0, gone: false, axis: 0, touching: 0, childSeed: 0, shownHue: o.hue ?? sp.hue,
+      food: null, prey: null, threat: null, partner: null, eatenBy: null, sick: 0, bondT: 0, seed: (this.r() * 1e9) | 0, gone: false, axis: 0, touching: 0, childSeed: 0, shownHue: o.hue ?? sp.hue, touchCool: 0, fleeCool: 0,
     };
     this.cells.push(c);
     this.counts.set(sp, (this.counts.get(sp) ?? 0) + 1);
@@ -245,6 +263,8 @@ export class World {
     c.shownHue += wrapAngle((c.hue - c.shownHue) * Math.PI / 180) * 180 / Math.PI * Math.min(1, dt * 0.8);
     c.sick = Math.max(0, c.sick - dt);
     c.bondT = Math.max(0, c.bondT - dt);
+    c.touchCool = Math.max(0, c.touchCool - dt); c.fleeCool = Math.max(0, c.fleeCool - dt);
+    const hadThreat = c.threat !== null;
     const fl = this.field(c.x, c.y);
 
     // --- think (a few times per second): what is around me?
@@ -273,6 +293,7 @@ export class World {
         }
       }
     }
+    if (c.threat && !hadThreat && c.fleeCool <= 0) { c.fleeCool = 5; this.emit({ type: 'flee', x: c.x, y: c.y, sp, size: c.size }); }
     if (c.food?.gone) c.food = null;
     if (c.prey && (c.prey.gone || c.prey.state === 'eaten')) c.prey = null;
     if (c.threat?.gone) c.threat = null;
@@ -410,6 +431,7 @@ export class World {
 
     if (c.energy >= this.divideNeed(sp) && c.age > 10 && this.cells.length < MAX_CELLS && (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES) {
       c.state = 'dividing'; c.t = 0; c.axis = c.heading + (TRANSVERSE.has(sp.body) ? 0 : Math.PI / 2); c.childSeed = (this.r() * 1e9) | 0;
+      this.emit({ type: 'divideStart', x: c.x, y: c.y, sp, size: c.size, axis: c.axis });
     } else if (c.energy <= 0 || c.age > c.life) {
       c.state = 'dying'; c.t = 0;
       this.emit({ type: 'die', x: c.x, y: c.y, sp, size: c.size, cause: c.energy <= 0 ? (fl.toxin > 0 ? 'toxin' : 'starved') : 'old' });

@@ -3,7 +3,7 @@
 // grid and rate limited, so a busy dish sounds like a music box, never like an alarm.
 import type { AudioEngine } from '../engine/audio';
 import type { SimEvent } from './sim';
-import { DISH_R } from './sim';
+import { DISH_R, DIVIDE_TIME } from './sim';
 import type { Species, Body } from './genome';
 import { mulberry32 } from '../lang/vm';
 
@@ -48,8 +48,8 @@ export const PALETTES: Palette[] = [
 type Timbre = 'felt' | 'marimba' | 'pluck' | 'fm' | 'bell' | 'vibe' | 'kalimba' | 'breath';
 const TIMBRE: Record<Body, Timbre> = { amoeba: 'felt', bacillus: 'marimba', coccus: 'pluck', spirillum: 'fm', diatom: 'bell', ciliate: 'vibe', flagellate: 'kalimba', volvox: 'breath' };
 
-type Voice = 'eat' | 'divide' | 'die' | 'engulf' | 'spawn' | 'bloom' | 'bond' | 'toxic' | 'hatch' | 'extinct';
-const VOICE_CAP: Partial<Record<Voice, number>> = { eat: 1, bond: 1, spawn: 1 };
+type Voice = 'eat' | 'divide' | 'divideStart' | 'die' | 'engulf' | 'spawn' | 'bloom' | 'bond' | 'toxic' | 'hatch' | 'extinct' | 'touch' | 'flee';
+const VOICE_CAP: Partial<Record<Voice, number>> = { eat: 1, bond: 1, spawn: 1, touch: 1, flee: 1 };
 
 export class Ambient {
   e: AudioEngine;
@@ -148,6 +148,21 @@ export class Ambient {
     p.setValueAtTime(0, t); p.linearRampToValueAtTime(peak, t + a); p.setTargetAtTime(0, t + a, d / 4);
   }
 
+  /** long process sounds (division, dissolving) that are sounding right now: at most 3 of each */
+  private busy: Record<string, number[]> = {};
+  /** minimum seconds between two sounds of the same kind, so frequent things stay sparse */
+  private lastAt: Record<string, number> = {};
+  private gap(kind: string, now: number, min: number): boolean {
+    if (now - (this.lastAt[kind] ?? -1e9) < min) return false;
+    this.lastAt[kind] = now; return true;
+  }
+
+  private room(kind: string, now: number, dur: number, max = 3): boolean {
+    const list = (this.busy[kind] = (this.busy[kind] ?? []).filter((end) => end > now));
+    if (list.length >= max) return false;
+    list.push(now + dur); return true;
+  }
+
   /** first free grid slot for this voice, at most 3 voices per slot */
   private slot(v: Voice, now: number): number | null {
     const GRID = this.grid;
@@ -206,6 +221,78 @@ export class Ambient {
     this.env(g.gain, t, 0.002, 0.11 * vel, 0.1);
     this.kalimba(midi + 12, t + 0.02, vel * 0.35, pan, 0.6);
   }
+  /** a cell rounds up and stretches: a slow swell (root + fifth) and, at the furrow, a soft stretching glide */
+  divisionSound(m: number, t: number, pan: number): void {
+    const ctx = this.e.ctx!;
+    const D = DIVIDE_TIME;
+    for (const [k, mm] of [[0, m], [1, m + 7]] as const) {
+      const o = this.out(t, pan, 0.75, 0.15, D + 2);
+      const g = ctx.createGain(); g.gain.value = 0; g.connect(o);
+      const osc = this.sine(mtof(mm), t, t + D + 1.5, g, 'triangle');
+      osc.detune.setValueAtTime(0, t); osc.detune.linearRampToValueAtTime(18, t + D * 0.6); // stretches a little sharp …
+      osc.detune.linearRampToValueAtTime(0, t + D);                                          // … and relaxes at the split
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime((k ? 0.022 : 0.035), t + D * 0.45); g.gain.setTargetAtTime(0, t + D * 0.75, 0.35);
+    }
+    // the cleavage furrow pinching in: a breathy filtered-noise glide
+    const tp = t + D * 0.55;
+    const o = this.out(tp, pan, 0.6, 0, 2);
+    const n = ctx.createBufferSource(); n.buffer = this.e.noiseBuf; n.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 6; bp.frequency.setValueAtTime(260, tp); bp.frequency.exponentialRampToValueAtTime(820, tp + D * 0.4);
+    const ng = ctx.createGain(); ng.gain.value = 0; n.connect(bp); bp.connect(ng); ng.connect(o);
+    n.start(tp); n.stop(tp + D * 0.5);
+    ng.gain.setValueAtTime(0, tp); ng.gain.linearRampToValueAtTime(0.05, tp + D * 0.25); ng.gain.linearRampToValueAtTime(0, tp + D * 0.45);
+  }
+
+  /** the split: a small bubble pop, then one note per daughter, each on its own side */
+  splitSound(m: number, sp: Species, t: number, pan: number, axis: number): void {
+    const spread = Math.cos(axis) * 0.35;
+    const o = this.out(t, pan, 0.4, 0, 1);
+    const g = this.e.ctx!.createGain(); g.gain.value = 0; g.connect(o);
+    const s = this.sine(240, t, t + 0.15, g); s.frequency.exponentialRampToValueAtTime(620, t + 0.05);
+    this.env(g.gain, t, 0.003, 0.07, 0.06);
+    this.glass(m, t + 0.02, 0.45, pan + spread);
+    this.play(sp, m + 7, t + 0.02 + this.grid, 0.45, pan - spread);
+  }
+
+  /** a membrane dissolving: a low wooden tone, a soft fizz sinking for two seconds, a few faint crackles */
+  dissolveSound(m: number, t: number, pan: number): void {
+    const ctx = this.e.ctx!;
+    this.wood(m, t, 0.75, pan);
+    const tf = t + 0.4, D = 2.2;
+    const o = this.out(tf, pan, 0.7, 0.1, D + 1);
+    const n = ctx.createBufferSource(); n.buffer = this.e.noiseBuf; n.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.6; bp.frequency.setValueAtTime(2000, tf); bp.frequency.exponentialRampToValueAtTime(260, tf + D);
+    const ng = ctx.createGain(); ng.gain.value = 0; n.connect(bp); bp.connect(ng); ng.connect(o);
+    n.start(tf); n.stop(tf + D + 0.2);
+    ng.gain.setValueAtTime(0, tf); ng.gain.linearRampToValueAtTime(0.03, tf + 0.6); ng.gain.linearRampToValueAtTime(0, tf + D);
+    for (let i = 0; i < 6; i++) {
+      const tc = tf + 0.2 + Math.random() * (D - 0.5);
+      const oc = this.out(tc, pan + (Math.random() - 0.5) * 0.3, 0.5, 0, 0.5);
+      const gc = ctx.createGain(); gc.gain.value = 0; gc.connect(oc);
+      this.sine(1800 + Math.random() * 1600, tc, tc + 0.03, gc); this.env(gc.gain, tc, 0.001, 0.012, 0.012);
+    }
+  }
+
+  /** two cells bump: a soft felt-mallet tap; the same species touching also hums a fifth */
+  touchSound(m: number, t: number, vel: number, pan: number, kin: boolean): void {
+    const ctx = this.e.ctx!;
+    const o = this.out(t, pan, 0.45, 0.1, 1.5);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.connect(o);
+    const g = ctx.createGain(); g.gain.value = 0; g.connect(lp);
+    this.sine(mtof(m), t, t + 0.6, g); this.env(g.gain, t, 0.004, 0.09 * vel, 0.35);
+    const h = ctx.createGain(); h.gain.value = 0; h.connect(lp);
+    this.sine(mtof(m) * 2.5, t, t + 0.2, h); this.env(h.gain, t, 0.002, 0.02 * vel, 0.08);
+    if (kin) { const k = ctx.createGain(); k.gain.value = 0; k.connect(lp); this.sine(mtof(m + 7), t + 0.06, t + 1.2, k); this.env(k.gain, t + 0.06, 0.05, 0.035 * vel, 0.8); }
+  }
+
+  /** a cell senses a predator and turns away: a quiet rising glide */
+  fleeSound(m: number, t: number, pan: number): void {
+    const o = this.out(t, pan, 0.6, 0.2, 1.5);
+    const g = this.e.ctx!.createGain(); g.gain.value = 0; g.connect(o);
+    const s = this.sine(mtof(m), t, t + 0.9, g); s.frequency.exponentialRampToValueAtTime(mtof(m + 5), t + 0.5);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.03, t + 0.15); g.gain.setTargetAtTime(0, t + 0.3, 0.15);
+  }
+
   /** gentle two-note swell: two cells sharing */
   swell(m1: number, m2: number, t: number, vel: number, pan: number): void {
     for (const [m, k] of [[m1, 0], [m2, 0.18]] as const) {
@@ -339,12 +426,17 @@ export class Ambient {
     const play = (v: Voice, f: (t: number) => void) => { const t = this.slot(v, now); if (t !== null) { f(t); this.activity = Math.min(1, this.activity + 0.15); } };
     switch (ev.type) {
       case 'eat': play('eat', (t) => this.play(ev.sp, this.tone(ev.x, ev.size), t, 0.55 + Math.random() * 0.25, pan)); break;
-      case 'divide': play('divide', (t) => {
-        const m = this.tone(ev.x, ev.size, 2);
-        this.glass(m, t, 0.6, pan); this.play(ev.sp, m + 7, t + this.grid, 0.5, -pan);
+      case 'divideStart': { if (!this.room('divide', now, DIVIDE_TIME)) break; const t = now + 0.02; this.divisionSound(this.tone(ev.x, ev.size) - 12, t, pan); this.activity = Math.min(1, this.activity + 0.1); break; } // follows the picture, not the grid
+      case 'divide': {
+        // the split itself is sounded right away, so the pop lands with the picture
+        if (this.room('split', now, 0.6)) this.splitSound(this.tone(ev.x, ev.size, 2), ev.sp, now + 0.02, pan, ev.axis);
+        play('divide', (t) => {
         if (ev.gen % 5 === 0) [0, 2, 4].forEach((k, i) => this.play(ev.sp, this.tone(ev.x, ev.size, k), t + this.grid * (2 + i), 0.45, pan)); // a little motif for a milestone
       }); break;
-      case 'die': if (ev.cause !== 'eaten') play('die', (t) => this.wood(this.root + this.chordNow.pad[0]! + 12, t, 0.8, pan)); break;
+      }
+      case 'touch': if (this.gap('touch', now, 1.1)) play('touch', (t) => this.touchSound(this.tone(ev.x, ev.size) - 12, t, Math.min(1, 0.35 + ev.speed / 60), pan, ev.a === ev.b)); break;
+      case 'flee': if (this.gap('flee', now, 2)) play('flee', (t) => this.fleeSound(this.tone(ev.x, ev.size), t, pan)); break;
+      case 'die': if (ev.cause !== 'eaten' && this.room('dissolve', now, 2.6)) { const t = now + 0.02; this.dissolveSound(this.root + this.chordNow.pad[0]! + 12, t, pan); this.activity = Math.min(1, this.activity + 0.1); } break; // follows the picture
       case 'engulf': play('engulf', (t) => { this.gloop(t, 0.8, pan); this.play(ev.pred, this.tone(ev.x, ev.size) - 12, t + 0.15, 0.45, pan); }); break;
       case 'spawn': case 'hatch': play('spawn', (t) => { this.drop(t, 0.5, pan, this.tone(ev.x, 12)); this.play(ev.sp, this.tone(ev.x, ev.sp.size), t + this.grid, 0.35, pan); }); break;
       case 'bloom': play('bloom', (t) => { for (let i = 0; i < 5; i++) this.kalimba(this.tone(ev.x, 8, i - 2), t + i * this.grid * 0.5, 0.35, pan + (i - 2) * 0.15, 0.7); }); break;
