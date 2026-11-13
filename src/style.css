@@ -18,7 +18,9 @@ button { font-family: var(--mono); }
 #edit, #play { --pl: var(--sal); --pr: var(--sar); }
 #app.split #edit { --pr: 0px; }
 #app.split #play { --pl: 0px; }
-button, header, #hud, #log, #keybar, #controls, #toast, #drawer { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* nothing is selectable except the program text */
+* { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#code { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 section { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 section[hidden] { display: none; }
 
@@ -92,7 +94,17 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 @keyframes wrapPulse { 0% { box-shadow: 0 0 40px rgba(57,255,122,.5) inset, 0 0 30px rgba(57,255,122,.5); } }
 
 /* ---------- key bar ---------- */
-#keybar { display: flex; gap: 8px; padding: 8px calc(10px + var(--pr)) 8px calc(10px + var(--pl)); overflow-x: auto; scrollbar-width: none; flex: 0 0 auto; }
+#keybar { display: flex; gap: 8px; padding: 8px calc(10px + var(--pr)) 8px calc(10px + var(--pl)); overflow-x: auto; scrollbar-width: none; flex: 0 0 auto;
+  /* soft edges hint that there is more to scroll */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%); }
+@media (hover: hover) and (pointer: fine) {
+  #keybar { cursor: grab; scrollbar-width: thin; scrollbar-color: rgba(57,255,122,.35) transparent; padding-bottom: 6px; }
+  #keybar::-webkit-scrollbar { display: block; height: 6px; }
+  #keybar::-webkit-scrollbar-thumb { background: rgba(57,255,122,.35); border-radius: 3px; }
+  #keybar.dragging, #keybar.dragging button { cursor: grabbing; }
+  #app.petri #keybar { scrollbar-color: rgba(143,245,220,.35) transparent; }
+}
 #keybar::-webkit-scrollbar { display: none; }
 #keybar button {
   flex: 0 0 auto; min-width: 56px; height: 56px; padding: 0 12px; border-radius: 10px; font-size: 26px;
@@ -237,3 +249,16 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 #app.focusing { animation: focusPull 1.1s ease-out; }
 @keyframes focusPull { 0% { filter: blur(14px) brightness(.6) saturate(.6); } 60% { filter: blur(2px) brightness(1.05); } 100% { filter: none; } }
 #app.petri .hbtn { border-radius: 16px; background: rgba(2,22,26,.7); border-color: rgba(143,245,220,.3); color: #bff8ea; }
+
+/* CLEAR -> UNDO: the fill drains from right to left until the offer vanishes */
+#controls > #btn-clear { position: relative; overflow: hidden; }
+#controls > #btn-clear i, #controls > #btn-clear span { position: relative; z-index: 1; }
+#controls > #btn-clear.undo { border-color: var(--pink); color: #fff; box-shadow: 0 0 16px rgba(255,46,136,.35); }
+#controls > #btn-clear.undo::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 0; transform-origin: left center;
+  background: linear-gradient(90deg, rgba(255,46,136,.55), rgba(255,46,136,.25));
+  animation: undoDrain var(--undo-ms, 6s) linear forwards;
+}
+#app.petri #controls > #btn-clear.undo { border-color: var(--pink); box-shadow: 0 0 16px rgba(255,168,207,.35); }
+#app.petri #controls > #btn-clear.undo::before { background: linear-gradient(90deg, rgba(255,168,207,.5), rgba(255,168,207,.2)); }
+@keyframes undoDrain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
