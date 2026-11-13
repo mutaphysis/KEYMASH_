@@ -85,6 +85,7 @@ export class MicroRenderer {
       case 'spawn': case 'hatch': this.ripple(ev.x, ev.y, 4, 46, 1.6, ev.sp.hue, 0.5); break;
       case 'food': if (ev.n >= 3) this.ripple(ev.x, ev.y, 4, 24 + ev.n * 3, 1.4, ev.kind === 'debris' ? 30 : 95, 0.25); break;
       case 'eat': this.ripple(ev.x, ev.y, ev.size * 0.4, ev.size * 0.9, 0.6, 95, 0.35); break;
+      case 'touch': this.ripple(ev.x, ev.y, 2, ev.size * 0.7, 0.7, ev.a.hue, 0.22); break;
       case 'engulf': this.ripple(ev.x, ev.y, ev.size * 0.6, ev.size * 1.6, 0.9, ev.pred.hue, 0.6); this.burst(ev.x, ev.y, ev.prey.hue, 6, true); break;
       case 'divide': this.ripple(ev.x, ev.y, ev.size * 0.5, ev.size * 2.2, 1.3, ev.sp.hue, 0.45); break;
       case 'die': if (ev.cause !== 'eaten') this.burst(ev.x, ev.y, ev.sp.hue, 3, false); break; // most of it is the slow dissolve
