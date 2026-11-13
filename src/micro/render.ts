@@ -372,7 +372,7 @@ export class MicroRenderer {
     }
     // cytoplasm and organelles: half go to each side
     const part = smooth(0.25, 0.9, p);
-    for (const s of [-1, 1]) { c.save(); c.translate(s * end * part, 0); c.scale(0.8, 0.8); this.organelles(c, sp, R, t * 0.5 + s, 0.45); c.restore(); }
+    if (!bact) for (const s of [-1, 1]) { c.save(); c.translate(s * end * part, 0); c.scale(0.8, 0.8); this.organelles(c, sp, R, t * 0.5 + s, 0.45); c.restore(); }
     if (bact) {
       // binary fission: the nucleoid doubles and separates, a septum grows inward
       const sep = smooth(0.1, 0.6, p);
@@ -477,9 +477,9 @@ export class MicroRenderer {
   }
 
   private flagellum(c: Ctx, x0: number, len: number, amp: number, t: number, hue: number, px: number, dir = -1): void {
-    c.strokeStyle = `hsla(${hue},60%,80%,0.6)`; c.lineWidth = 1 * px; c.lineCap = 'round';
+    c.strokeStyle = `hsla(${hue},60%,80%,${0.6 * (1 - this.dis)})`; c.lineWidth = 1 * px; c.lineCap = 'round';
     c.beginPath();
-    for (let i = 0; i <= 16; i++) { const s = i / 16; const x = x0 + dir * s * len, y = Math.sin(t * 12 - s * 9) * amp * s; i ? c.lineTo(x, y) : c.moveTo(x, y); }
+    for (let i = 0; i <= 16; i++) { const s = i / 16; const x = x0 + dir * s * len, y = Math.sin(t * 12 * (1 - this.dis) - s * 9) * amp * s; i ? c.lineTo(x, y) : c.moveTo(x, y); }
     c.stroke();
   }
 
@@ -540,13 +540,13 @@ export class MicroRenderer {
       case 'ciliate': {
         const a = R * 1.45, b = R * 0.85;
         c.beginPath(); c.ellipse(0, 0, a, b, 0, 0, TAU); this.skin(c, hue, sat, px);
-        // cilia beating in a wave around the body
-        c.strokeStyle = `hsla(${hue},55%,82%,0.55)`; c.lineWidth = 0.8 * px;
+        // cilia beating in a wave around the body (they stop and fade when the cell dies)
+        c.strokeStyle = `hsla(${hue},55%,82%,${0.55 * (1 - this.dis)})`; c.lineWidth = 0.8 * px;
         const n = 34;
         for (let i = 0; i < n; i++) {
           const th = i / n * TAU, x = Math.cos(th) * a, y = Math.sin(th) * b;
           const nx = Math.cos(th) * b, ny = Math.sin(th) * a, nl = Math.hypot(nx, ny);
-          const beat = Math.sin(t * 9 - i * 0.55) * 0.6, ux = nx / nl, uy = ny / nl;
+          const beat = Math.sin(t * 9 * (1 - this.dis) - i * 0.55) * 0.6, ux = nx / nl, uy = ny / nl;
           const L = R * 0.28;
           c.beginPath(); c.moveTo(x, y); c.lineTo(x + (ux * Math.cos(beat) - uy * Math.sin(beat)) * L, y + (ux * Math.sin(beat) + uy * Math.cos(beat)) * L); c.stroke();
         }
