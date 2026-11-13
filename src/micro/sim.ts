@@ -14,6 +14,11 @@ export const SEED_POP = 4;
 /** Swimmers turn first, then swim along their body axis (flagella and cilia push along it). */
 /** how far each body reaches beyond its radius as drawn (ciliates and rods are long), for collisions */
 const EXTENT: Record<string, number> = { amoeba: 1.22, bacillus: 1.2, coccus: 1.0, spirillum: 1.35, diatom: 1.3, ciliate: 1.3, flagellate: 1.25, volvox: 1.02 };
+/** how long a division takes (seconds) and the distance between the two daughters at the end (in radii) */
+export const DIVIDE_TIME = 2.6;
+export const DIVIDE_GAP = 0.82;
+/** ciliates and bacteria split across the body (front/back daughters), the rest side by side */
+const TRANSVERSE = new Set(['ciliate', 'bacillus', 'spirillum']);
 const SWIM_TURN: Partial<Record<string, number>> = { flagellate: 3.2, ciliate: 2.4, spirillum: 3.6, bacillus: 0, diatom: 1.1 };
 
 export interface Food { id: number; x: number; y: number; vx: number; vy: number; e: number; e0: number; kind: FoodKind; age: number; life: number; gone: boolean; spin: number }
@@ -401,7 +406,7 @@ export class World {
     c.r += (target - c.r) * Math.min(1, dt * 1.5);
 
     if (c.energy >= this.divideNeed(sp) && c.age > 10 && this.cells.length < MAX_CELLS && (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES) {
-      c.state = 'dividing'; c.t = 0; c.axis = c.heading + Math.PI / 2;
+      c.state = 'dividing'; c.t = 0; c.axis = c.heading + (TRANSVERSE.has(sp.body) ? 0 : Math.PI / 2);
     } else if (c.energy <= 0 || c.age > c.life) {
       c.state = 'dying'; c.t = 0;
       this.emit({ type: 'die', x: c.x, y: c.y, sp, size: c.size, cause: c.energy <= 0 ? (fl.toxin > 0 ? 'toxin' : 'starved') : 'old' });
@@ -411,19 +416,19 @@ export class World {
   private divide(c: Cell, dt: number, born: Cell[]): void {
     c.t += dt;
     c.vx *= 0.9; c.vy *= 0.9;
-    if (c.t < 1.6) return;
+    if (c.t < DIVIDE_TIME) return;
     const sp = c.sp, m = sp.mutation;
     const mut = (v: number, k: number) => v * (1 + (this.r() - 0.5) * 2 * m * k);
-    const off = c.r * 0.6;
+    const off = c.r * DIVIDE_GAP; // matches where the renderer has drawn the two halves
     const ax = Math.cos(c.axis) * off, ay = Math.sin(c.axis) * off;
     const e = c.energy * 0.48;
     // daughter A replaces the mother, B is new
-    c.state = 'live'; c.t = 0; c.energy = e; c.gen++; c.age = 0; c.x += ax; c.y += ay; c.r *= 0.75;
+    c.state = 'live'; c.t = 0; c.energy = e; c.gen++; c.age = 0; c.x += ax; c.y += ay; c.r *= 0.78;
     c.hue = (c.hue + (this.r() - 0.5) * m * 70 + 360) % 360;
     c.size = Math.max(5, Math.min(40, mut(c.size, 0.5)));
     c.speed = Math.max(3, mut(c.speed, 0.6));
     const b: Cell = {
-      ...c, id: this.nextId++, x: c.x - 2 * ax, y: c.y - 2 * ay, vx: -c.vx, vy: -c.vy, heading: c.heading + Math.PI,
+      ...c, id: this.nextId++, x: c.x - 2 * ax, y: c.y - 2 * ay, vx: -c.vx, vy: -c.vy, heading: TRANSVERSE.has(sp.body) ? c.heading : c.heading + Math.PI,
       hue: (c.hue + (this.r() - 0.5) * m * 70 + 360) % 360, size: Math.max(5, Math.min(40, mut(c.size, 0.5))), speed: Math.max(3, mut(c.speed, 0.6)),
       phase: this.r() * TAU, seed: (this.r() * 1e9) | 0, food: null, prey: null, threat: null, partner: null, life: sp.life * (0.8 + this.r() * 0.4),
     };
