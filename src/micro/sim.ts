@@ -5,13 +5,15 @@ import { mulberry32 } from '../lang/vm';
 export const DISH_R = 420;
 export const MAX_CELLS = 70;
 export const MAX_PER_SPECIES = 22;
-export const MAX_FOOD = 150;
+export const MAX_FOOD = 110;
 /** The dish is comfortable up to about this many cells. Above it, life gets harder:
  *  cells burn energy faster, age faster and need more energy to divide (density dependence). */
 export const CAPACITY = 34;
 /** The code only inoculates: it adds cells of a species while there are fewer than this. */
 export const SEED_POP = 4;
 /** Swimmers turn first, then swim along their body axis (flagella and cilia push along it). */
+/** how far each body reaches beyond its radius as drawn (ciliates and rods are long), for collisions */
+const EXTENT: Record<string, number> = { amoeba: 1.22, bacillus: 1.2, coccus: 1.0, spirillum: 1.35, diatom: 1.3, ciliate: 1.3, flagellate: 1.25, volvox: 1.02 };
 const SWIM_TURN: Partial<Record<string, number>> = { flagellate: 3.2, ciliate: 2.4, spirillum: 3.6, bacillus: 0, diatom: 1.1 };
 
 export interface Food { id: number; x: number; y: number; vx: number; vy: number; e: number; e0: number; kind: FoodKind; age: number; life: number; gone: boolean; spin: number }
@@ -88,7 +90,8 @@ export class World {
       const a = C[i]!; if (a.gone || a.state === 'eaten') continue;
       for (let j = i + 1; j < C.length; j++) {
         const b = C[j]!; if (b.gone || b.state === 'eaten') continue;
-        const dx = b.x - a.x, dy = b.y - a.y, min = (a.r + b.r) * (a.state === 'dividing' || b.state === 'dividing' ? 1.25 : 1.02);
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const min = (a.r * (EXTENT[a.sp.body] ?? 1) + b.r * (EXTENT[b.sp.body] ?? 1)) * (a.state === 'dividing' || b.state === 'dividing' ? 1.2 : 1.03);
         if (Math.abs(dx) > min || Math.abs(dy) > min) continue;
         const d = Math.hypot(dx, dy);
         if (d >= min) continue;
@@ -330,8 +333,15 @@ export class World {
       tx = dx / dl * speed; ty = dy / dl * speed;
     }
     const ag = Math.min(1, dt * sp.agility);
-    c.vx += (tx - c.vx) * ag + (this.r() - 0.5) * 4 * dt * (sp.body === 'coccus' ? 4 : 1); // a little Brownian jiggle
-    c.vy += (ty - c.vy) * ag + (this.r() - 0.5) * 4 * dt * (sp.body === 'coccus' ? 4 : 1);
+    if (turnRate !== undefined) {
+      // swimmers: velocity always points along the body axis, only the speed eases in and out
+      const cur = Math.hypot(c.vx, c.vy), want = Math.hypot(tx, ty);
+      const v = cur + (want - cur) * ag;
+      c.vx = Math.cos(c.heading) * v; c.vy = Math.sin(c.heading) * v;
+    } else {
+      c.vx += (tx - c.vx) * ag + (this.r() - 0.5) * 4 * dt * (sp.body === 'coccus' ? 4 : 1); // a little Brownian jiggle
+      c.vy += (ty - c.vy) * ag + (this.r() - 0.5) * 4 * dt * (sp.body === 'coccus' ? 4 : 1);
+    }
     c.x += (c.vx + fl.fx) * dt * T; c.y += (c.vy + fl.fy) * dt * T;
 
     // dish wall
@@ -350,7 +360,7 @@ export class World {
     // --- eat
     if (c.food && !c.food.gone) {
       const f = c.food;
-      if (Math.hypot(f.x - c.x, f.y - c.y) < c.r + 3) {
+      if (Math.hypot(f.x - c.x, f.y - c.y) < c.r * (EXTENT[sp.body] ?? 1) + 3) {
         const bite = Math.min(f.e, dt * (6 + c.size * 0.9));
         f.e -= bite; c.energy += bite;
         if (f.e <= 0.2) { f.gone = true; c.food = null; this.emit({ type: 'eat', x: c.x, y: c.y, sp, size: c.size, kind: f.kind }); }
@@ -360,7 +370,7 @@ export class World {
     else if (sp.diet === 'omni') c.energy += dt * fl.light * 0.4;
 
     // --- hunt
-    if (c.prey && !c.prey.gone && c.prey.state !== 'eaten' && Math.hypot(c.prey.x - c.x, c.prey.y - c.y) < c.r + c.prey.r + 3) {
+    if (c.prey && !c.prey.gone && c.prey.state !== 'eaten' && Math.hypot(c.prey.x - c.x, c.prey.y - c.y) < c.r * (EXTENT[sp.body] ?? 1) + c.prey.r * (EXTENT[c.prey.sp.body] ?? 1) + 4) {
       const p = c.prey;
       if (p.state === 'live' || p.state === 'dividing' || p.state === 'dying') {
         p.state = 'eaten'; p.eatenBy = c; p.t = 0;
@@ -375,7 +385,7 @@ export class World {
     }
 
     // --- symbiosis: touching partners even out their energy and both get a small gift
-    if (c.partner && c.bondT <= 0 && Math.hypot(c.partner.x - c.x, c.partner.y - c.y) < c.r + c.partner.r + 6) {
+    if (c.partner && c.bondT <= 0 && Math.hypot(c.partner.x - c.x, c.partner.y - c.y) < (c.r + c.partner.r) * 1.35 + 6) {
       const p = c.partner, avg = (c.energy + p.energy) / 2;
       c.energy = avg + 2; p.energy = avg + 2;
       c.bondT = p.bondT = 14;

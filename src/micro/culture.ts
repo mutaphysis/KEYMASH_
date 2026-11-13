@@ -83,7 +83,7 @@ export class Petri {
         out.push({ type: 'bloom', x, y });
         break;
       }
-      case 'garden': { const [x, y] = at(act.u, act.v); W.addZone('garden', x, y, { r: 75, dur: 26 }); break; }
+      case 'garden': { const [x, y] = at(act.u, act.v); W.addZone('garden', x, y, { r: 75, dur: 14 }); break; }
       case 'toxin': { const [x, y] = at(act.u, act.v); W.addZone('toxin', x, y, { r: 95, dur: 12 }); break; }
       case 'spores': {
         const [x, y] = at(act.u, act.v);

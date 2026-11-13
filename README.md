@@ -180,12 +180,24 @@ even out their energy when they touch. Cells divide with small mutations, age an
 die; their debris feeds the next generation and spores hatch later. Field notes
 record the firsts: first division, first engulfing, extinctions.
 
+### Balance
+The code only inoculates (up to 4 cells per species); growth after that is up to the
+culture. Above a comfortable 34 cells the dish pushes back: metabolism rises, cells
+age faster and need more energy to divide. All food rots. Cells are soft bodies and
+never overlap; swimmers turn first and then swim along their body axis. Over five
+minutes the demos settle at 20–45 cells with births about equal to deaths.
+
 ### Sound
-A slow pad walks Dmaj9 – Bm9 – Gmaj9♯11 – A6/9 over a quiet water bed with stray
-bubbles. Interactions play on a slow eighth-note grid at 72 BPM, at most three notes
-at a time: eating a kalimba note, division a glass bell and its fifth, death a low
-wooden tone, engulfing a gloop, a new cell a water drop, symbiosis a soft swell,
-toxic prey a slightly sour shimmer. Typing in the editor drips water.
+Every culture has its own music, picked from the hash of its text: one of five moods
+(Lydian, Dorian, Aeolian, open suspended, Hirajoshi), each with its own four-chord
+progression and pad sound, in any of 12 keys, at 60–84 BPM, straight or in triplets,
+with 2, 4 or 8 bars per chord. Every body type plays its own instrument (amoeba felt
+piano, rod marimba, coccus pluck, spirillum FM glass, diatom bell, ciliate vibraphone,
+flagellate kalimba, volvox breath; predators an octave lower), so a culture's species
+are its orchestra. Within a run the starting chord varies, a soft bass marks each
+chord, the key may move by a fourth after each cycle, the pad brightens as the dish
+fills, and every fifth generation plays a little motif. Death is a low wooden tone,
+engulfing a gloop, a new cell a water drop. Typing in the editor drips water.
 
 ## Architecture
 

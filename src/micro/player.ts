@@ -8,6 +8,7 @@ import type { AudioEngine } from '../engine/audio';
 import type { SimEvent } from './sim';
 import { $ } from '../ui/dom';
 import { VERSION_LABEL } from '../version';
+import { hash } from '../lang/vm';
 
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -65,6 +66,7 @@ export class MicroPlayer {
     this.r.reset();
     this.hlPrev.clear(); this.hlLast = null; this.logs = []; this.logEl.textContent = '';
     this.firsts.clear(); this.records = { gen: 1 }; this.lastNote = 0;
+    this.amb.configure(hash(src.trim() || 'empty'));
     await this.bootSequence();
     this.amb.start();
     this.running = true;
@@ -81,6 +83,7 @@ export class MicroPlayer {
       'preparing culture medium …… ok',
       `reading ${p.culture.lines.length} line${p.culture.lines.length === 1 ? '' : 's'} of genome …… ok`,
       sp ? `inoculating ${sp} species` : 'no species — just weather and food',
+      `tuning to ${this.amb.describe()}`,
       'focusing',
     ];
     this.boot.classList.add('on'); this.boot.textContent = '';
@@ -128,7 +131,7 @@ export class MicroPlayer {
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.1, (t - this.lastFrame) / 1000); this.lastFrame = t;
     for (const ev of this.petri.tick(dt)) this.apply(ev);
-    this.amb.update(dt);
+    this.amb.update(dt, this.petri.world.crowd);
     this.audio.readLevel();
     this.r.frame(dt, this.petri.world, this.amb.activity);
     this.follow(dt);

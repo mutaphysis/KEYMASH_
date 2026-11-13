@@ -4,20 +4,49 @@
 import type { AudioEngine } from '../engine/audio';
 import type { SimEvent } from './sim';
 import { DISH_R } from './sim';
+import type { Species, Body } from './genome';
+import { mulberry32 } from '../lang/vm';
 
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
-const BPM = 72;
-const GRID = 60 / BPM / 2; // eighth notes
-const BAR = 60 / BPM * 4;
 
-interface Chord { name: string; pad: number[]; tones: number[] }
-/** Dmaj9 – Bm9 – Gmaj9(#11) – A6/9: open, warm, never resolves too hard */
-export const CHORDS: Chord[] = [
-  { name: 'Dmaj9', pad: [50, 57, 61, 64], tones: [62, 64, 66, 69, 73, 74, 76, 78, 81, 85] },
-  { name: 'Bm9', pad: [47, 54, 57, 61], tones: [59, 61, 62, 66, 69, 71, 73, 74, 78, 81] },
-  { name: 'Gmaj9#11', pad: [43, 50, 54, 61], tones: [59, 61, 62, 66, 67, 69, 71, 73, 74, 79] },
-  { name: 'A6/9', pad: [45, 52, 54, 59], tones: [57, 59, 61, 64, 66, 69, 71, 73, 76, 78] },
+interface Chord { pad: number[]; tones: number[] }
+interface Palette { name: string; wave: OscillatorType; cutoff: number; detune: number; chords: Chord[] }
+/**
+ * Five moods, all intervals relative to the culture's root. Which one a culture gets, its key,
+ * tempo, feel and chord length all come from the hash of its text: the same culture always
+ * sounds the same, different cultures sound different.
+ */
+export const PALETTES: Palette[] = [
+  { name: 'lydian', wave: 'triangle', cutoff: 700, detune: 6, chords: [ // Imaj9 – vi9 – IVmaj9#11 – V6/9
+    { pad: [0, 7, 11, 14], tones: [12, 14, 16, 19, 23, 24, 26, 28, 31, 35] },
+    { pad: [-3, 4, 7, 11], tones: [9, 11, 12, 16, 19, 21, 23, 24, 28, 31] },
+    { pad: [-7, 0, 4, 11], tones: [9, 11, 12, 16, 17, 19, 21, 23, 24, 29] },
+    { pad: [-5, 2, 4, 9], tones: [7, 9, 11, 14, 16, 19, 21, 23, 26, 28] }] },
+  { name: 'dorian', wave: 'sine', cutoff: 900, detune: 9, chords: [ // i9 – IV9 – bVII6/9 – i(sus)
+    { pad: [0, 7, 10, 14], tones: [12, 14, 15, 19, 22, 24, 26, 27, 31, 34] },
+    { pad: [-7, -3, 3, 7], tones: [12, 14, 15, 17, 19, 21, 24, 26, 27, 29] },
+    { pad: [-2, 5, 7, 12], tones: [10, 12, 14, 17, 19, 22, 24, 26, 29, 31] },
+    { pad: [0, 7, 12, 17], tones: [12, 14, 17, 19, 22, 24, 26, 29, 31, 34] }] },
+  { name: 'aeolian', wave: 'triangle', cutoff: 480, detune: 5, chords: [ // i(add9) – bVImaj7 – bIIImaj7 – bVII
+    { pad: [0, 7, 14, 15], tones: [12, 14, 15, 17, 19, 22, 24, 26, 27, 29] },
+    { pad: [-4, 3, 5, 10], tones: [12, 14, 15, 17, 19, 20, 22, 24, 26, 27] },
+    { pad: [3, 10, 14, 19], tones: [12, 14, 15, 17, 19, 22, 24, 26, 27, 29] },
+    { pad: [-2, 5, 7, 12], tones: [10, 12, 14, 17, 19, 22, 24, 26, 29, 31] }] },
+  { name: 'open', wave: 'sine', cutoff: 1100, detune: 4, chords: [ // suspended pentatonic: Isus2 – bVIIsus2 – IVsus2 – Vsus4
+    { pad: [0, 7, 14, 19], tones: [12, 14, 19, 21, 24, 26, 31, 33, 36, 38] },
+    { pad: [-2, 5, 12, 17], tones: [10, 12, 17, 19, 22, 24, 29, 31, 34, 36] },
+    { pad: [-7, 0, 7, 12], tones: [7, 12, 14, 19, 21, 24, 26, 31, 33, 36] },
+    { pad: [-5, 2, 7, 12], tones: [9, 12, 14, 19, 21, 24, 26, 31, 33, 36] }] },
+  { name: 'hirajoshi', wave: 'triangle', cutoff: 620, detune: 11, chords: [ // i – bVI – v(sus) – i
+    { pad: [0, 7, 14, 15], tones: [12, 14, 15, 19, 20, 24, 26, 27, 31, 32] },
+    { pad: [-4, 3, 8, 15], tones: [12, 14, 15, 19, 20, 24, 26, 27, 31, 32] },
+    { pad: [-5, 2, 7, 14], tones: [12, 14, 19, 20, 24, 26, 31, 32, 36, 38] },
+    { pad: [0, 7, 12, 19], tones: [12, 14, 15, 19, 20, 24, 26, 27, 31, 32] }] },
 ];
+
+/** every body type has its own instrument, so a culture's species are its orchestra */
+type Timbre = 'felt' | 'marimba' | 'pluck' | 'fm' | 'bell' | 'vibe' | 'kalimba' | 'breath';
+const TIMBRE: Record<Body, Timbre> = { amoeba: 'felt', bacillus: 'marimba', coccus: 'pluck', spirillum: 'fm', diatom: 'bell', ciliate: 'vibe', flagellate: 'kalimba', volvox: 'breath' };
 
 type Voice = 'eat' | 'divide' | 'die' | 'engulf' | 'spawn' | 'bloom' | 'bond' | 'toxic' | 'hatch' | 'extinct';
 const VOICE_CAP: Partial<Record<Voice, number>> = { eat: 1, bond: 1, spawn: 1 };
@@ -29,6 +58,10 @@ export class Ambient {
   private padV: { g: GainNode; oscs: OscillatorNode[]; lfo: OscillatorNode } | null = null;
   private bed: { g: GainNode; src: AudioBufferSourceNode; lfo: OscillatorNode } | null = null;
   chord = 0; private nextChord = 0; private nextBubble = 0;
+  /** musical identity of the current culture (see configure) */
+  palette: Palette = PALETTES[0]!; root = 50; bpm = 72; grid = 60 / 72 / 2; bars = 4;
+  private cycles = 0; private delayNode: DelayNode | null = null; private rng = mulberry32(1);
+  private crowd = 0;
   private slots = new Map<number, Voice[]>();
   running = false;
   /** 0..1, how lively the dish sounds right now (renderer uses it for a gentle pulse) */
@@ -48,7 +81,7 @@ export class Ambient {
     const revLp = ctx.createBiquadFilter(); revLp.type = 'lowpass'; revLp.frequency.value = 2600;
     this.rev = ctx.createGain(); this.rev.connect(conv); conv.connect(revLp); revLp.connect(bus);
     // dotted-eighth echo, darker on every repeat
-    const d = ctx.createDelay(2); d.delayTime.value = GRID * 1.5;
+    const d = ctx.createDelay(2); d.delayTime.value = this.grid * 1.5; this.delayNode = d;
     const fb = ctx.createGain(); fb.gain.value = 0.38;
     const dlp = ctx.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 1700;
     this.del = ctx.createGain(); this.del.connect(d); d.connect(dlp); dlp.connect(fb); fb.connect(d); dlp.connect(bus);
@@ -57,13 +90,30 @@ export class Ambient {
     return true;
   }
 
+  /** pick key, mode, tempo, feel and chord length from the culture's hash */
+  configure(seed: number): void {
+    const s = seed >>> 0;
+    this.palette = PALETTES[s % PALETTES.length]!;
+    this.root = 43 + ((s >>> 4) % 12);
+    this.bpm = 60 + ((s >>> 8) % 25);
+    const triplets = (s >>> 13) % 3 === 0;
+    this.grid = 60 / this.bpm / (triplets ? 3 : 2);
+    this.bars = [2, 4, 4, 8][(s >>> 15) % 4]!;
+    this.rng = mulberry32(s ^ (Date.now() & 0xffff)); // each run unfolds a little differently
+    if (this.delayNode && this.e.ctx) this.delayNode.delayTime.setTargetAtTime(this.grid * (triplets ? 2 : 1.5), this.e.ctx.currentTime, 0.2);
+  }
+  private get bar(): number { return 60 / this.bpm * 4; }
+  private get chordNow(): Chord { return this.palette.chords[this.chord % this.palette.chords.length]!; }
+  describe(): string { const names = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B']; return `${names[this.root % 12]} ${this.palette.name} · ${this.bpm} bpm`; }
+
   start(): void {
     if (!this.build() || !this.e.ctx || !this.bus) return;
     const t = this.e.ctx.currentTime;
     this.running = true;
     this.bus.gain.cancelScheduledValues(t);
     this.bus.gain.setTargetAtTime(this.e.muted ? 0 : 1, t, 0.6);
-    this.chord = 0; this.nextChord = t + BAR * 4; this.nextBubble = t + 3;
+    this.chord = Math.floor(this.rng() * 4); this.cycles = 0;
+    this.nextChord = t + this.bar * this.bars; this.nextBubble = t + 3;
     this.slots.clear();
     this.startBed(); this.padTo(0);
   }
@@ -100,6 +150,7 @@ export class Ambient {
 
   /** first free grid slot for this voice, at most 3 voices per slot */
   private slot(v: Voice, now: number): number | null {
+    const GRID = this.grid;
     const first = Math.ceil((now + 0.05) / GRID);
     for (let k = 0; k < 3; k++) {
       const s = first + k; const used = this.slots.get(s) ?? [];
@@ -173,27 +224,68 @@ export class Ambient {
     }
   }
 
+  /** the voice of one species: its body picks the instrument, its size the register */
+  play(sp: Species | null, midi: number, t: number, vel: number, pan: number): void {
+    const tb: Timbre = sp ? TIMBRE[sp.body] : 'kalimba';
+    if (sp?.diet === 'hunter') midi -= 12;
+    const ctx = this.e.ctx!; const f = mtof(midi);
+    const voice = (type: OscillatorType, ratio: number, peak: number, a: number, d: number, dest: AudioNode, end = d * 1.4 + a) => {
+      const g = ctx.createGain(); g.gain.value = 0; g.connect(dest);
+      this.sine(f * ratio, t, t + end, g, type); this.env(g.gain, t, a, peak * vel, d);
+      return g;
+    };
+    const dark = sp?.diet === 'hunter';
+    switch (tb) {
+      case 'kalimba': this.kalimba(midi, t, vel, pan); break;
+      case 'bell': this.glass(midi, t, vel * 0.9, pan); break;
+      case 'felt': { const o = this.out(t, pan, 0.55, 0.15, 3); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = dark ? 500 : 950; lp.connect(o); voice('triangle', 1, 0.2, 0.01, 1.7, lp); voice('sine', 2, 0.05, 0.01, 0.8, lp); break; }
+      case 'marimba': { const o = this.out(t, pan, 0.4, 0.2, 2); voice('sine', 1, 0.2, 0.003, 0.55, o); voice('sine', 3.93, 0.05, 0.002, 0.12, o); voice('sine', 9.8, 0.015, 0.001, 0.04, o); break; }
+      case 'pluck': { const o = this.out(t, pan, 0.5, 0.35, 1.5); voice('sine', 2, 0.12, 0.002, 0.35, o); voice('triangle', 4, 0.03, 0.001, 0.12, o); break; }
+      case 'fm': {
+        const o = this.out(t, pan, 0.65, 0.3, 3);
+        const g = ctx.createGain(); g.gain.value = 0; g.connect(o);
+        const car = this.sine(f, t, t + 2.6, g);
+        const mod = ctx.createOscillator(); mod.frequency.value = f * 2.0; const mg = ctx.createGain(); mg.gain.setValueAtTime(f * 1.6, t); mg.gain.setTargetAtTime(f * 0.05, t, 0.25);
+        mod.connect(mg); mg.connect(car.frequency); mod.start(t); mod.stop(t + 2.6);
+        this.env(g.gain, t, 0.004, 0.11 * vel, 1.8); break;
+      }
+      case 'vibe': {
+        const o = this.out(t, pan, 0.6, 0.25, 3.5);
+        const trem = ctx.createGain(); trem.gain.value = 0.75; trem.connect(o);
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 5.2; const lg = ctx.createGain(); lg.gain.value = 0.25; lfo.connect(lg); lg.connect(trem.gain); lfo.start(t); lfo.stop(t + 3);
+        voice('sine', 1, 0.17, 0.004, 2.2, trem); voice('sine', 4, 0.02, 0.002, 0.2, trem); break;
+      }
+      case 'breath': { const o = this.out(t, pan, 0.8, 0.2, 4); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200; lp.connect(o); voice('triangle', 1, 0.09, 0.22, 2.4, lp); voice('sine', 0.5, 0.05, 0.3, 2.4, lp); break; }
+    }
+  }
+
   private padTo(i: number): void {
     const ctx = this.e.ctx; if (!ctx || !this.bus) return;
-    const t = ctx.currentTime; const ch = CHORDS[i % CHORDS.length]!;
+    const t = ctx.currentTime; const ch = this.chordNow; void i;
+    const P = this.palette;
     if (this.padV) {
       const old = this.padV; old.g.gain.setTargetAtTime(0, t, 1.8);
       setTimeout(() => { try { old.oscs.forEach((o) => o.stop()); old.lfo.stop(); old.g.disconnect(); } catch (e) { /* gone */ } }, 9000);
     }
     const g = ctx.createGain(); g.gain.value = 0;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 640; lp.Q.value = 0.6;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = P.cutoff * (0.8 + this.crowd * 0.6); lp.Q.value = 0.6;
     const lfo = ctx.createOscillator(); lfo.frequency.value = 0.06; const lg = ctx.createGain(); lg.gain.value = 220; lfo.connect(lg); lg.connect(lp.frequency); lfo.start(t);
     lp.connect(g); g.connect(this.bus);
     const r = ctx.createGain(); r.gain.value = 0.55; g.connect(r); r.connect(this.rev);
     const oscs: OscillatorNode[] = [];
-    ch.pad.forEach((m, k) => {
-      for (const det of [-6, 6]) {
-        const o = ctx.createOscillator(); o.type = k === 0 ? 'sine' : 'triangle'; o.frequency.value = mtof(m); o.detune.value = det + (k - 1.5) * 2;
+    ch.pad.forEach((rel, k) => {
+      const m = this.root + rel;
+      for (const det of [-P.detune, P.detune]) {
+        const o = ctx.createOscillator(); o.type = k === 0 ? 'sine' : P.wave; o.frequency.value = mtof(m); o.detune.value = det + (k - 1.5) * 2;
         const og = ctx.createGain(); og.gain.value = k === 0 ? 0.6 : 0.32; o.connect(og); og.connect(lp); o.start(t); oscs.push(o);
       }
     });
     g.gain.setTargetAtTime(0.06, t, 2.4);
     this.padV = { g, oscs, lfo };
+    // a soft low root under every chord change
+    const bo = this.out(t, 0, 0.3, 0, 8); const bg = ctx.createGain(); bg.gain.value = 0; bg.connect(bo);
+    this.sine(mtof(this.root + ch.pad[0]! - 12), t, t + 8, bg);
+    bg.gain.setValueAtTime(0, t); bg.gain.linearRampToValueAtTime(0.07, t + 1.2); bg.gain.setTargetAtTime(0, t + 2.5, 1.6);
   }
 
   private startBed(): void {
@@ -209,11 +301,20 @@ export class Ambient {
   }
 
   /** call every frame: chord changes, stray bubbles, decay of activity */
-  update(dt: number): void {
+  update(dt: number, crowd = 0): void {
+    this.crowd += (crowd - this.crowd) * Math.min(1, dt * 0.5);
     this.activity *= Math.pow(0.5, dt);
     const ctx = this.e.ctx; if (!ctx || !this.running || this.e.muted || ctx.state !== 'running') return;
     const t = ctx.currentTime;
-    if (t >= this.nextChord) { this.chord = (this.chord + 1) % CHORDS.length; this.nextChord = t + BAR * 4; this.padTo(this.chord); }
+    if (t >= this.nextChord) {
+      this.chord = (this.chord + 1) % this.palette.chords.length;
+      if (this.chord === 0) {
+        // after a full cycle the music may move to a neighbouring key
+        this.cycles++;
+        if (this.rng() < 0.35) { this.root += this.root > 50 ? -7 : 5; }
+      }
+      this.nextChord = t + this.bar * this.bars; this.padTo(this.chord);
+    }
     if (t >= this.nextBubble) {
       this.nextBubble = t + 2.5 + Math.random() * 5;
       const o = this.out(t, (Math.random() - 0.5) * 1.4, 0.5, 0.2, 1);
@@ -221,13 +322,13 @@ export class Ambient {
       const s = this.sine(280 + Math.random() * 140, t, t + 0.12, g); s.frequency.exponentialRampToValueAtTime(900 + Math.random() * 500, t + 0.05);
       this.env(g.gain, t, 0.003, 0.035, 0.05);
     }
-    for (const k of this.slots.keys()) if (k * GRID < t - 1) this.slots.delete(k);
+    for (const k of this.slots.keys()) if (k * this.grid < t - 1) this.slots.delete(k);
   }
 
   private tone(x: number, size: number, shift = 0): number {
-    const tones = CHORDS[this.chord]!.tones;
+    const tones = this.chordNow.tones;
     const i = Math.max(0, Math.min(tones.length - 1, Math.floor((x / DISH_R + 1) / 2 * tones.length) + shift));
-    return tones[i]! + (size < 10 ? 12 : size > 24 ? -12 : 0);
+    return this.root + tones[i]! + (size < 10 ? 12 : size > 24 ? -12 : 0);
   }
 
   /** every simulation event may become one note */
@@ -237,15 +338,19 @@ export class Ambient {
     const pan = 'x' in ev ? ev.x / DISH_R : 'ax' in ev ? ev.ax / DISH_R : 0;
     const play = (v: Voice, f: (t: number) => void) => { const t = this.slot(v, now); if (t !== null) { f(t); this.activity = Math.min(1, this.activity + 0.15); } };
     switch (ev.type) {
-      case 'eat': play('eat', (t) => this.kalimba(this.tone(ev.x, ev.size), t, 0.55 + Math.random() * 0.25, pan)); break;
-      case 'divide': play('divide', (t) => { const m = this.tone(ev.x, ev.size, 2); this.glass(m, t, 0.8, pan); this.glass(m + 7, t + GRID, 0.5, -pan); }); break;
-      case 'die': if (ev.cause !== 'eaten') play('die', (t) => this.wood(CHORDS[this.chord]!.pad[0]! + 12, t, 0.8, pan)); break;
-      case 'engulf': play('engulf', (t) => { this.gloop(t, 0.8, pan); this.kalimba(this.tone(ev.x, ev.size) - 12, t + 0.15, 0.4, pan); }); break;
-      case 'spawn': case 'hatch': play('spawn', (t) => this.drop(t, 0.6, pan, this.tone(ev.x, 12))); break;
-      case 'bloom': play('bloom', (t) => { for (let i = 0; i < 5; i++) this.kalimba(this.tone(ev.x, 8, i - 2), t + i * GRID * 0.5, 0.35, pan + (i - 2) * 0.15, 0.7); }); break;
+      case 'eat': play('eat', (t) => this.play(ev.sp, this.tone(ev.x, ev.size), t, 0.55 + Math.random() * 0.25, pan)); break;
+      case 'divide': play('divide', (t) => {
+        const m = this.tone(ev.x, ev.size, 2);
+        this.glass(m, t, 0.6, pan); this.play(ev.sp, m + 7, t + this.grid, 0.5, -pan);
+        if (ev.gen % 5 === 0) [0, 2, 4].forEach((k, i) => this.play(ev.sp, this.tone(ev.x, ev.size, k), t + this.grid * (2 + i), 0.45, pan)); // a little motif for a milestone
+      }); break;
+      case 'die': if (ev.cause !== 'eaten') play('die', (t) => this.wood(this.root + this.chordNow.pad[0]! + 12, t, 0.8, pan)); break;
+      case 'engulf': play('engulf', (t) => { this.gloop(t, 0.8, pan); this.play(ev.pred, this.tone(ev.x, ev.size) - 12, t + 0.15, 0.45, pan); }); break;
+      case 'spawn': case 'hatch': play('spawn', (t) => { this.drop(t, 0.5, pan, this.tone(ev.x, 12)); this.play(ev.sp, this.tone(ev.x, ev.sp.size), t + this.grid, 0.35, pan); }); break;
+      case 'bloom': play('bloom', (t) => { for (let i = 0; i < 5; i++) this.kalimba(this.tone(ev.x, 8, i - 2), t + i * this.grid * 0.5, 0.35, pan + (i - 2) * 0.15, 0.7); }); break;
       case 'bond': play('bond', (t) => { const m = this.tone(ev.ax, 14); this.swell(m, m + 4, t, 0.7, pan); }); break;
       case 'toxic': play('toxic', (t) => this.sour(this.tone(ev.x, 8), t, 0.7, pan)); break;
-      case 'extinct': play('extinct', (t) => { this.wood(CHORDS[this.chord]!.pad[0]!, t, 1, 0); this.glass(CHORDS[this.chord]!.tones[0]!, t + GRID * 2, 0.4, 0); }); break;
+      case 'extinct': play('extinct', (t) => { this.wood(this.root + this.chordNow.pad[0]!, t, 1, 0); this.glass(this.root + this.chordNow.tones[0]!, t + this.grid * 2, 0.4, 0); }); break;
       default: break;
     }
   }
