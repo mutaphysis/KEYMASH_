@@ -5,7 +5,10 @@ import type { TypingKind, VoiceMode } from './engine/audio';
 import { $ } from './ui/dom';
 import { Editor } from './ui/editor';
 import { Player } from './ui/player';
-import { store, DEMOS, pawMash } from './ui/storage';
+import { store, DEMOS, PETRI_DEMOS, pawMash } from './ui/storage';
+import type { Mode } from './ui/storage';
+import { MicroPlayer } from './micro/player';
+import { readCulture } from './micro/genome';
 import { lex } from './lang/lexer';
 import { keyInfo } from './lang/keys';
 import { VERSION_LABEL, BUILD_TIME } from './version';
@@ -64,11 +67,24 @@ try {
 
 // ---- status line ----
 function status(src: string): void {
+  if (mode === 'petri') {
+    const c = readCulture(src);
+    $('st-ok').textContent = 'ALIVE';
+    $('st-threads').textContent = String(c.species.length);
+    $('st-unit').textContent = c.species.length === 1 ? 'SPECIES' : 'SPECIES';
+    $('st-glyphs').textContent = String(c.gs.length);
+    return;
+  }
   const L = lex(src);
   const threads = L.lines.filter((t) => t.some((x) => x.t !== 'space')).length;
+  $('st-ok').textContent = '0 ERRORS';
   $('st-threads').textContent = String(threads);
+  $('st-unit').textContent = 'THREADS';
   $('st-glyphs').textContent = String(L.gs.length);
 }
+
+// ---- two modes, two players on the same stage ----
+let mode: Mode = store.mode;
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined, swapTimer: ReturnType<typeof setTimeout> | undefined;
 const state = { playing: false };
@@ -76,7 +92,7 @@ const editor = new Editor({
   onChange: (v) => {
     status(v); clearTimeout(saveTimer); saveTimer = setTimeout(() => store.setDraft(v), 400);
     // live coding: in split view, edits go straight into the running program
-    if (state.playing && isSplit()) { clearTimeout(swapTimer); swapTimer = setTimeout(() => player.hotSwap(editor.value), 650); }
+    if (state.playing && isSplit()) { clearTimeout(swapTimer); swapTimer = setTimeout(() => P().hotSwap(editor.value), 650); }
   },
   onType: (ch, inputType) => {
     // laid-back sounds while typing, pitched by where the key sits
@@ -93,7 +109,8 @@ const editor = new Editor({
     audio.typing(kind, key.deg, (key.x - 0.5) * 1.4, quiet);
   },
 });
-const player = new Player(audio);
+const players = { keymash: new Player(audio), petri: new MicroPlayer(audio) };
+const P = (): Player | MicroPlayer => players[mode];
 
 function isSplit(): boolean { return app.classList.contains('split'); }
 function layout(): void {
@@ -107,30 +124,63 @@ function layout(): void {
   const rb = $('btn-run');
   rb.querySelector('i')!.textContent = split && state.playing ? '■' : '▶';
   rb.querySelector('span')!.textContent = split && state.playing ? 'STOP' : 'RUN';
-  requestAnimationFrame(() => { editor.resize(); player.fit(); });
+  requestAnimationFrame(() => { editor.resize(); P().fit(); });
 }
 window.addEventListener('resize', layout);
 
-const draft = store.draft();
-editor.value = draft !== null ? draft : DEMOS[0].src;
+const demos = () => (mode === 'petri' ? PETRI_DEMOS : DEMOS);
+function applyMode(m: Mode): void {
+  mode = m; store.setMode(m);
+  app.classList.toggle('petri', m === 'petri');
+  const logo = document.querySelector<HTMLElement>('header .logo')!;
+  logo.textContent = m === 'petri' ? 'PETRI_' : 'KEYMASH_'; logo.dataset.text = logo.textContent;
+  document.title = m === 'petri' ? 'PETRI_ — a quiet culture of cells' : 'KEYMASH_ — every keystroke compiles';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m === 'petri' ? '#010a0d' : '#000800');
+  editor.setMode(m);
+  audio.typingStyle = m === 'petri' ? 'water' : 'lounge';
+  const draft = store.draft();
+  editor.value = draft !== null ? draft : demos()[0]!.src;
+}
+/** double-tap the icon (or the logo) in the header */
+function switchMode(): void {
+  store.setDraft(editor.value);
+  if (state.playing) edit();
+  audio.padStop();
+  applyMode(mode === 'petri' ? 'keymash' : 'petri');
+  if (mode === 'petri') { app.classList.remove('focusing'); void app.offsetWidth; app.classList.add('focusing'); }
+  else glitchSwitch();
+  toast(mode === 'petri' ? 'PETRI_ · a quiet culture of cells' : 'KEYMASH_ · every keystroke compiles');
+}
+let lastTap = 0;
+for (const el of [$('mode-icon'), document.querySelector<HTMLElement>('header .logo')!]) {
+  el.addEventListener('pointerup', (e) => {
+    const t = e.timeStamp;
+    if (t - lastTap < 450) { lastTap = 0; switchMode(); } else lastTap = t;
+  });
+  el.addEventListener('dblclick', (e) => e.preventDefault());
+}
+applyMode(mode);
 
 // ---- mode switching ----
-function glitchSwitch(): void { app.classList.remove('switching'); void app.offsetWidth; app.classList.add('switching'); }
+function glitchSwitch(): void {
+  const cls = mode === 'petri' ? 'focusing' : 'switching';
+  app.classList.remove(cls); void app.offsetWidth; app.classList.add(cls);
+}
 
 function run(): void {
   if (state.playing && isSplit()) { edit(); return; }
   let src = editor.value;
-  if (!src.trim()) { src = pawMash(70); editor.value = src; toast('EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾'); }
+  if (!src.trim()) { src = pawMash(70); editor.value = src; toast(mode === 'petri' ? 'EMPTY DISH? A PAW SEEDED IT 🐾' : 'EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾'); }
   audio.padStop();
   if (!isSplit()) editor.ta.blur();
   glitchSwitch();
   state.playing = true;
   void keepAwake(true);
   layout();
-  requestAnimationFrame(() => player.start(src));
+  requestAnimationFrame(() => void P().start(src));
 }
 function edit(): void {
-  player.stop();
+  P().stop();
   if (!isSplit()) glitchSwitch();
   state.playing = false;
   void keepAwake(false);
@@ -140,7 +190,7 @@ function edit(): void {
 $('btn-run').addEventListener('click', run);
 $('btn-idle-run').addEventListener('click', run);
 $('btn-stop').addEventListener('click', edit);
-$('btn-restart').addEventListener('click', () => player.restart());
+$('btn-restart').addEventListener('click', () => P().restart());
 function toggleMute(): void {
   audio.init();
   audio.setMuted(!audio.muted);
@@ -198,19 +248,21 @@ function openDrawer(): void {
   const body = $('drawer-body'); body.innerHTML = '';
   const load = (src: string) => () => { editor.value = src; $('drawer').hidden = true; toast('LOADED'); };
   const h1 = document.createElement('h4'); h1.textContent = 'DEMOS'; body.appendChild(h1);
-  for (const d of DEMOS) body.appendChild(item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src)));
+  for (const d of demos()) body.appendChild(item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src)));
   const h2 = document.createElement('h4'); h2.textContent = 'SAVED ON THIS DEVICE'; body.appendChild(h2);
   const slots = store.slots();
   if (!slots.length) { const p = document.createElement('div'); p.style.cssText = 'opacity:.5;font-size:13px;padding:6px 2px'; p.textContent = 'nothing yet. press 💾 SAVE.'; body.appendChild(p); }
   slots.forEach((s, i) => body.appendChild(item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => { store.remove(i); openDrawer(); })));
-  const hv = document.createElement('h4'); hv.textContent = 'VOICE'; body.appendChild(hv);
+  const hm = document.createElement('h4'); hm.textContent = 'MODE'; body.appendChild(hm);
+  body.appendChild(item(mode === 'petri' ? '⇄ switch to KEYMASH_' : '⇄ switch to PETRI_', 'or double-tap the icon in the header', () => { $('drawer').hidden = true; switchMode(); }));
+  const hv = document.createElement('h4'); hv.textContent = 'VOICE'; if (mode === 'keymash') body.appendChild(hv);
   const voices: [VoiceMode, string, string][] = [
     ['system', '🗣 system speech', 'real words from your device — Firefox on macOS may click'],
     ['babble', '🤖 keymash babble', 'made right here, sounds the same everywhere, never clicks'],
   ];
-  for (const [mode, name, sub] of voices) {
-    body.appendChild(item((audio.voice === mode ? '✓ ' : '') + name, sub, () => {
-      audio.setVoice(mode); audio.init();
+  if (mode === 'keymash') for (const [vm, name, sub] of voices) {
+    body.appendChild(item((audio.voice === vm ? '✓ ' : '') + name, sub, () => {
+      audio.setVoice(vm); audio.init();
       setTimeout(() => audio.speak('hello, i am keymash!', 1, 1), 150);
       openDrawer();
     }));
@@ -227,7 +279,7 @@ function openDrawer(): void {
 /** Reload, for the home-screen app that has no reload button. The text survives as the draft. */
 function reloadApp(): void {
   store.setDraft(editor.value);
-  player.stop();
+  P().stop();
   // a fresh query string makes the installed app fetch the page again instead of reusing its copy
   const framed = window.top !== window;
   if (!framed && /^https?:$/.test(location.protocol)) location.replace(location.pathname + '?r=' + Date.now().toString(36));
@@ -251,7 +303,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // handle for debugging and the browser tests
-const KEYMASH = { editor, player, audio, run, edit, state };
+const KEYMASH = { editor, players, audio, run, edit, state, switchMode, get player() { return P(); }, get mode() { return mode; } };
 declare global { interface Window { KEYMASH: typeof KEYMASH } }
 window.KEYMASH = KEYMASH;
 

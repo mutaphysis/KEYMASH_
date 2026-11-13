@@ -5,6 +5,7 @@ import type { KeyInfo } from '../lang/keys';
 import { $, ctx2d } from './dom';
 import { graphemes } from '../lang/lexer';
 
+const PETRI_KEYS: string[] = ['🌿', '☀️', '💧', '🫧', '🍄', '🦠', '🍬', '❄️', '🔥', '☠️', '💞', '🧫', '.', '~', '*', '!', '&', '+', '#', '@', '(', ')', '-', '?', '"'];
 const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ0123456789#$%&@!?*<>{}[]~^';
 
 interface RainCol { y: number; v: number; step?: number; inject?: string | null }
@@ -30,6 +31,9 @@ export class Editor {
   cols: RainCol[] = []; parts: Spark[] = []; typed: string[] = [];
   active = true; last = 0; dpr = 1; w = 0; h = 0;
   mirror: HTMLDivElement | null = null;
+  /** 'keymash': matrix rain and sparks; 'petri': drifting plankton and bubbles */
+  mode: 'keymash' | 'petri' = 'keymash';
+  plankton: { x: number; y: number; r: number; vx: number; vy: number; a: number; hue: number; ph: number }[] = [];
 
   constructor(opts: EditorOpts) {
     this.onChange = opts.onChange || (() => {});
@@ -75,8 +79,20 @@ export class Editor {
     this.wrap.classList.remove('pulse'); void this.wrap.offsetWidth; this.wrap.classList.add('pulse');
   }
 
+  setMode(m: 'keymash' | 'petri'): void {
+    this.mode = m;
+    this.buildKeybar();
+    this.rc.setTransform(1, 0, 0, 1, 0, 0); this.rc.clearRect(0, 0, this.rain.width, this.rain.height);
+    this.parts = [];
+  }
+
   burst(x: number, y: number, ch: string): void {
     const k = keyInfo(ch || 'a');
+    if (this.mode === 'petri') {
+      // a few bubbles rise from the caret
+      for (let i = 0; i < 5; i++) this.parts.push({ x: x + (Math.random() - 0.5) * 10, y, vx: (Math.random() - 0.5) * 20, vy: -30 - Math.random() * 50, life: 0.9 + Math.random() * 0.8, age: 0, hue: 165 + k.col * 6 });
+      return;
+    }
     const hue = 100 + k.col * 18;
     for (let i = 0; i < 14; i++) {
       const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 160;
@@ -105,6 +121,7 @@ export class Editor {
   }
 
   draw(dt: number): void {
+    if (this.mode === 'petri') { this.drawPetri(dt); return; }
     const c = this.rc; const d = this.dpr;
     c.setTransform(d, 0, 0, d, 0, 0);
     c.fillStyle = 'rgba(0,10,3,0.16)'; c.fillRect(0, 0, this.w, this.h);
@@ -133,6 +150,34 @@ export class Editor {
     s.globalCompositeOperation = 'source-over';
   }
 
+  /** PETRI editor backdrop: plankton drifting slowly behind the text, typed glyphs float up as bubbles */
+  drawPetri(dt: number): void {
+    const c = this.rc, d = this.dpr;
+    c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, this.w, this.h);
+    if (this.plankton.length < 34) {
+      for (let i = this.plankton.length; i < 34; i++) this.plankton.push({ x: Math.random() * this.w, y: Math.random() * this.h, r: 1 + Math.random() * (i % 7 === 0 ? 7 : 2.5), vx: 0, vy: 0, a: 0.15 + Math.random() * 0.3, hue: [174, 150, 96, 204, 276][i % 5]!, ph: Math.random() * 6 });
+    }
+    c.globalCompositeOperation = 'lighter';
+    for (const p of this.plankton) {
+      p.vx += ((Math.random() - 0.5) * 12 - p.vx) * dt * 0.6; p.vy += ((Math.random() - 0.5) * 12 - 3 - p.vy) * dt * 0.6;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.ph += dt;
+      if (p.y < -10) p.y = this.h + 10; if (p.x < -10) p.x = this.w + 10; if (p.x > this.w + 10) p.x = -10;
+      const a = p.a * (0.7 + 0.3 * Math.sin(p.ph * 1.3));
+      c.strokeStyle = `hsla(${p.hue},70%,70%,${a})`; c.lineWidth = 1;
+      c.beginPath(); c.arc(p.x, p.y, p.r, 0, 6.3); c.stroke();
+      if (p.r > 3) { c.fillStyle = `hsla(${p.hue},70%,70%,${a * 0.25})`; c.fill(); c.fillStyle = `hsla(${p.hue},60%,80%,${a})`; c.beginPath(); c.arc(p.x - p.r * 0.2, p.y, p.r * 0.3, 0, 6.3); c.fill(); }
+    }
+    const s = this.sc;
+    s.setTransform(d, 0, 0, d, 0, 0); s.clearRect(0, 0, this.w, this.h);
+    this.parts = this.parts.filter((p) => (p.age += dt) < p.life);
+    for (const p of this.parts) {
+      p.vx *= Math.pow(0.3, dt); p.x += (p.vx + Math.sin(p.age * 8) * 6) * dt; p.y += p.vy * dt;
+      const a = 0.8 * (1 - p.age / p.life), r = 1.5 + p.age * 2.5;
+      s.strokeStyle = `hsla(${p.hue},80%,80%,${a})`; s.lineWidth = 1; s.beginPath(); s.arc(p.x, p.y, r, 0, 6.3); s.stroke();
+    }
+    c.globalCompositeOperation = 'source-over';
+  }
+
   // ---------- key bar ----------
   buildKeybar(): void {
     const bar = $('keybar');
@@ -141,6 +186,8 @@ export class Editor {
       '!', '?', '~', '(', ')', '[', ']', '{', '}', '#', '*', '@', '&', '%', '$', '^', ':', '.', '"', '<', '>', '|', '/', '-', '+', '=',
       '🐶', '🐾', '💥', '🔥', '🌈', '❤️', '⭐', '✨', '🚀', '👻', '🦄', '🦖', '🎵', '🌀', '💻', '🐿️', '🎾', '🦴', '💩', '🍕',
     ];
+    bar.textContent = '';
+    if (this.mode === 'petri') keys.splice(5, keys.length - 5, ...PETRI_KEYS);
     for (const k of keys) {
       const b = document.createElement('button');
       const [label, val] = Array.isArray(k) ? k : [k, k];

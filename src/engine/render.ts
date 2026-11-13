@@ -80,7 +80,7 @@ export class Renderer {
   resize(cssW: number, cssH: number): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const W = Math.max(2, Math.round(cssW * dpr)), H = Math.max(2, Math.round(cssH * dpr));
-    if (W === this.W && H === this.H) return;
+    if (W === this.W && H === this.H && this.cv.width === W && this.cv.height === H) return; // (the canvas is shared with PETRI)
     // keep the old paint when resizing
     const keep = this.W ? (() => { this.tmp.width = this.W; this.tmp.height = this.H; this.tctx.drawImage(this.paint, 0, 0); return true; })() : false;
     this.cv.width = W; this.cv.height = H; this.cv.style.width = cssW + 'px'; this.cv.style.height = cssH + 'px';

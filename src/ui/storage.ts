@@ -1,7 +1,11 @@
 // Save slots in localStorage (best-effort) + demo programs.
 
-const KEY = 'keymash.slots.v1';
-const DRAFT = 'keymash.draft.v1';
+export type Mode = 'keymash' | 'petri';
+const KEYS: Record<Mode, { slots: string; draft: string }> = {
+  keymash: { slots: 'keymash.slots.v1', draft: 'keymash.draft.v1' },
+  petri: { slots: 'keymash.slots.petri.v1', draft: 'keymash.draft.petri.v1' },
+};
+const MODE = 'keymash.mode.v1';
 
 function read<T>(k: string, def: T): T { try { const v = localStorage.getItem(k); return v === null ? def : JSON.parse(v); } catch (e) { return def; } }
 function write(k: string, v: unknown): boolean { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
@@ -9,17 +13,20 @@ function write(k: string, v: unknown): boolean { try { localStorage.setItem(k, J
 export interface Slot { name: string; src: string; t: number }
 
 export const store = {
-  slots(): Slot[] { return read<Slot[]>(KEY, []); },
+  /** every mode keeps its own draft and saves */
+  mode: (read<string>(MODE, 'keymash') === 'petri' ? 'petri' : 'keymash') as Mode,
+  setMode(m: Mode): void { this.mode = m; write(MODE, m); },
+  slots(): Slot[] { return read<Slot[]>(KEYS[this.mode].slots, []); },
   save(src: string): number {
     const slots = this.slots();
     const first = (src.split('\n').find((l) => l.trim()) || 'mash').trim().slice(0, 22);
     slots.unshift({ name: first, src, t: Date.now() });
-    const ok = write(KEY, slots.slice(0, 40));
+    const ok = write(KEYS[this.mode].slots, slots.slice(0, 40));
     return ok ? slots.length : 0;
   },
-  remove(i: number): void { const s = this.slots(); s.splice(i, 1); write(KEY, s); },
-  draft(): string | null { return read<string | null>(DRAFT, null); },
-  setDraft(src: string): void { write(DRAFT, src); },
+  remove(i: number): void { const s = this.slots(); s.splice(i, 1); write(KEYS[this.mode].slots, s); },
+  draft(): string | null { return read<string | null>(KEYS[this.mode].draft, null); },
+  setDraft(src: string): void { write(KEYS[this.mode].draft, src); },
 };
 
 export const DEMOS: { name: string; src: string }[] = [
@@ -59,3 +66,14 @@ export function pawMash(len = 60): string {
   }
   return s.replace(/\n{2,}/g, '\n').trim();
 }
+
+export const PETRI_DEMOS: { name: string; src: string }[] = [
+  { name: '🌱 first culture', src: 'asdf jkl ölk 🌿\nqwert zuiop . 5 . 5\n☀️ * 🌱 7 . 7' },
+  { name: '🦠 hunters and grazers', src: 'mmm nnn bbb yyy xxx ccc vvv 🌿\nHUNTER GRRR >>\n🌿 9 . 9 . 9 ☀️' },
+  { name: '💞 symbiosis', src: 'aaa sss & ddd 🌱\nooo ppp & iii\n☀️ 4 . 4 . 4 💞' },
+  { name: '🍄 spores and decay', src: 'fungi . . . . 🍄\nxcvb !!! ☠️\n🌿 6 . 6 #' },
+  { name: '🌀 the swirl', src: 'sss @@ sss ~~~\n💧 ~ 💧 ~ 🌿 3\nvolvox ((( ooo ))) ☀️' },
+  { name: '❄️ winter pond', src: 'qwqwqw ~ erer 🌿\n❄️ . . . 3 . . .\nlkjh gfds ☀️' },
+  { name: '🐶 dog under the microscope', src: 'jfkdlsöä asdfghjkl JJJJJJJJJ\nkkkkk ddddd h h hhhh 🌿 5\nWOOF!!! ölkjhg 🐾 qqqqqqqq ☀️' },
+  { name: '🧮 math garden', src: '3*7= 12+30= 🌿\nasdf * jklö * ☀️\n"look, it grows"' },
+];

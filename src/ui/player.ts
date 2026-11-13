@@ -37,7 +37,7 @@ export class Player {
   constructor(audio: AudioEngine) {
     this.audio = audio;
     this.r = new Renderer(this.stage);
-    new ResizeObserver(() => this.fit()).observe(this.wrap);
+    new ResizeObserver(() => { if (this.running) this.fit(); }).observe(this.wrap); // the stage is shared with PETRI
     this.stage.addEventListener('pointerdown', (e) => this.tap(e));
     this.loop = this.loop.bind(this);
   }
