@@ -14,6 +14,8 @@ export const SEED_POP = 4;
 /** Swimmers turn first, then swim along their body axis (flagella and cilia push along it). */
 /** how far each body reaches beyond its radius as drawn (ciliates and rods are long), for collisions */
 const EXTENT: Record<string, number> = { amoeba: 1.22, bacillus: 1.2, coccus: 1.0, spirillum: 1.35, diatom: 1.3, ciliate: 1.3, flagellate: 1.25, volvox: 1.02 };
+/** collision bodies are a bit smaller than the drawn ones: a little overlap looks alive (and nicer when eating) */
+const COLLIDER = 0.85;
 /** how long a division takes (seconds) and the distance between the two daughters at the end (in radii) */
 export const DIVIDE_TIME = 2.6;
 export const DIVIDE_GAP = 0.82;
@@ -106,7 +108,7 @@ export class World {
       for (let j = i + 1; j < C.length; j++) {
         const b = C[j]!; if (b.gone || b.state === 'eaten') continue;
         const dx = b.x - a.x, dy = b.y - a.y;
-        const min = (a.r * (EXTENT[a.sp.body] ?? 1) + b.r * (EXTENT[b.sp.body] ?? 1)) * (a.state === 'dividing' || b.state === 'dividing' ? 1.2 : 1.03);
+        const min = (a.r * (EXTENT[a.sp.body] ?? 1) + b.r * (EXTENT[b.sp.body] ?? 1)) * (a.state === 'dividing' || b.state === 'dividing' ? 1.2 : 1.03) * COLLIDER;
         if (Math.abs(dx) > min || Math.abs(dy) > min) continue;
         const d = Math.hypot(dx, dy);
         if (d >= min) continue;

@@ -188,8 +188,8 @@ record the firsts: first division, first engulfing, extinctions.
 ### Balance
 The code only inoculates (up to 4 cells per species); growth after that is up to the
 culture. Above a comfortable 34 cells the dish pushes back: metabolism rises, cells
-age faster and need more energy to divide. All food rots. Cells are soft bodies and
-never overlap; swimmers turn first and then swim along their body axis. Over five
+age faster and need more energy to divide. All food rots. Cells are soft bodies that
+overlap only a little (colliders are 15 % smaller than the drawn bodies); swimmers turn first and then swim along their body axis. Over five
 minutes the demos settle at 20–45 cells with births about equal to deaths.
 
 ### Sound
