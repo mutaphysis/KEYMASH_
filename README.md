@@ -131,6 +131,62 @@ In the editor every key plays a soft kalimba note (pitched by its position on
 the keyboard), space is a brush, Enter strums a chord, backspace sighs, and a
 warm pad breathes in while you type. Fast typing gets quieter, not louder.
 
+## PETRI_ — the second mode
+
+**Double-tap the icon in the header** (or the logo, or use 📂 LOAD → MODE) to switch.
+KEYMASH_ is loud and fast; PETRI_ is a quiet culture of cells under a dark-field
+microscope. Each mode keeps its own draft and its own saves.
+
+### Every line is a genome
+How a line was typed decides what grows from it:
+
+| In the line | Trait |
+|---|---|
+| keyboard row the paw stayed on | body: home row → amoeba, top row → flagellate, bottom row → coccus |
+| `-` `_` `\|`, long words | rod bacterium (bacillus) |
+| `@`, many `s` | spirillum |
+| `#` `%`, digits | diatom (glass shell, armoured) |
+| held keys `jjjj`, `=` | ciliate |
+| `(` `)`, many `o` | volvox (rolling colony) |
+| where on the keyboard | colour |
+| vowels, word length | size |
+| CAPS | predator (lots) or omnivore (some) |
+| `*`, 🌿 ☀️ | photosynthetic, glows |
+| `!` | toxic: whoever eats it gets sick |
+| `&` 💞 | symbiotic: shares food with other symbionts |
+| `...` 🍄 | leaves spores when it dies |
+| `?` | mutates more when dividing |
+| `+` | divides sooner |
+| spaces | calmer, slower |
+
+Every species gets a binomial name made from its own keysmash (*Asdifella jkulula*,
+*Hunterophyta grana*) and is introduced in the dish when it first appears.
+
+### Every line is also a feeder
+The same line is read slowly, one token per beat (0.75 s), all lines in parallel:
+words release cells of that species, numbers drop algae, `.` crumbs, `*` light,
+`~` `@` a swirling current, `-` `/` a straight current, `!` a nutrient burst,
+`#` sediment; emoji: 🌿 a garden that keeps growing, ☀️ light, 💧 current, 🫧
+nutrients, 🍄 spores, 🦠 more cells, ❄️ cold, 🔥 warmth, ☠️ toxin, 🍬 sugar, 💞 a call
+to the symbionts. Sums (`3*7=`) and `"quotes"` are written into the water.
+Tap the dish to drop food.
+
+### Life in the dish
+Cells sense food, prey and threats. Rod bacteria run and tumble (keep running while
+food gets closer — real chemotaxis), flagellates dart, amoebae crawl, cocci jiggle and
+cluster, volvox rolls. Grazers eat algae, photosynthetic cells feed on light,
+predators engulf smaller cells of other species (toxic prey makes them sick), symbionts
+even out their energy when they touch. Cells divide with small mutations, age and
+die; their debris feeds the next generation and spores hatch later. Field notes
+record the firsts: first division, first engulfing, extinctions.
+
+### Sound
+A slow pad walks Dmaj9 – Bm9 – Gmaj9♯11 – A6/9 over a quiet water bed with stray
+bubbles. Interactions play on a slow eighth-note grid at 72 BPM, at most three notes
+at a time: eating a kalimba note, division a glass bell and its fifth, death a low
+wooden tone, engulfing a gloop, a new cell a water drop, symbiosis a soft swell,
+toxic prey a slightly sour shimmer. Typing in the editor drips water.
+
 ## Architecture
 
 ```
@@ -141,7 +197,13 @@ src/lang/vm.ts       the interpreter: threads, loops, forks, emits events
 src/engine/audio.ts  WebAudio synth, drums, sfx, reverb/delay, typing lounge, speech
 src/engine/render.ts canvas renderer: trails, feedback, sprites, glitch
 src/ui/*.ts          matrix editor, key bar, play mode, storage
-src/main.ts          wiring, layout (phone / split view), live hot-swap
+src/micro/genome.ts  PETRI_: line -> species genome + feeder steps, binomial names
+src/micro/sim.ts     PETRI_: seeded ecosystem simulation (pure, fixed step)
+src/micro/culture.ts PETRI_: reads the lines beat by beat, drives the world
+src/micro/render.ts  PETRI_: dark-field microscope renderer, per-body anatomy
+src/micro/ambient.ts PETRI_: pad, water bed, quantised interaction voices
+src/micro/player.ts  PETRI_: play mode, census, field notes
+src/main.ts          wiring, layout (phone / split view), live hot-swap; mode switching
 ```
 
 The VM is pure (no DOM): `vm.tick()` returns a list of timed `VMEvent`s that the
