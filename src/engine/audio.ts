@@ -97,12 +97,18 @@ export class AudioEngine {
   stop(): void {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    for (const b of [this.bus, this.busRev, this.busDel]) if (b) b.gain.setTargetAtTime(0, t, 0.05);
+    for (const b of [this.bus, this.busRev, this.busDel, ...this.extra]) if (b) b.gain.setTargetAtTime(0, t, 0.05);
     this.speechStop();
   }
+  /** buses of other sound engines (PETRI's ambient) that mute and stop must reach too */
+  extra: GainNode[] = [];
+  registerBus(g: GainNode): void { if (!this.extra.includes(g)) this.extra.push(g); }
+  /** 'lounge' (KEYMASH: kalimba keys) or 'water' (PETRI: drops and bubbles) */
+  typingStyle: 'lounge' | 'water' = 'lounge';
+
   setMuted(m: boolean): void {
     this.muted = m;
-    if (this.ctx) for (const b of [this.bus, this.busRev, this.busDel, this.ui]) if (b) b.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.03);
+    if (this.ctx) for (const b of [this.bus, this.busRev, this.busDel, this.ui, ...this.extra]) if (b) b.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.03);
     if (m) this.speechStop();
   }
   setBpm(bpm: number): void { if (this.ctx) this.delay.delayTime.setTargetAtTime(Math.min(1.9, 60 / bpm * 0.75), this.ctx.currentTime, 0.1); }
@@ -434,6 +440,7 @@ export class AudioEngine {
       this.env(g.gain, at, 0.004, 0.16 * vel, 1.8);
       this.env(h.gain, at, 0.002, 0.04 * vel, 0.15);
     };
+    if (this.typingStyle === 'water') { this.typingWater(kind, deg, v, out, kalimba, midiOf, t, quiet); return; }
     switch (kind) {
       case 'letter': kalimba(midiOf(deg), t, v); break;
       case 'digit': kalimba(midiOf(deg) + 12, t, v * 0.7); break;
@@ -449,14 +456,37 @@ export class AudioEngine {
     if (!quiet) this.padSwell(midiOf(0) - 12);
   }
 
+  /** PETRI editor: water drops pitched by key position, bubbles for space, a soft chord on enter */
+  private typingWater(kind: TypingKind, deg: number, v: number, out: (dur: number) => GainNode,
+    kalimba: (midi: number, at: number, vel: number) => void, _midiOf: (d: number) => number, t: number, quiet: boolean): void {
+    const tones = [62, 64, 66, 69, 71, 73, 74, 76, 78, 81, 83, 85, 86, 88]; // D lydian-ish, like the dish
+    const m = tones[((deg % tones.length) + tones.length) % tones.length]!;
+    const drop = (f0: number, f1: number, at: number, vel: number, len = 0.07): void => {
+      const o = out(1); const g = this.gain(0); g.connect(o);
+      const s = this.osc('sine', f0, at, at + len + 0.1, g); s.frequency.exponentialRampToValueAtTime(f1, at + len);
+      this.env(g.gain, at, 0.002, 0.09 * vel, len + 0.04);
+    };
+    switch (kind) {
+      case 'letter': drop(mtof(m) * 2.2, mtof(m), t, v); kalimba(m, t + 0.015, v * 0.45); break;
+      case 'digit': drop(mtof(m + 12) * 2, mtof(m + 12), t, v * 0.8); break;
+      case 'symbol': drop(1800, 900, t, v * 0.5, 0.04); break;
+      case 'emoji': [0, 4, 7].forEach((d, i) => kalimba(m + d, t + i * 0.11, v * 0.5)); break;
+      case 'space': drop(300, 820, t, v * 0.5, 0.05); break; // a bubble rising
+      case 'enter': [50, 57, 62, 66, 69].forEach((mm, i) => kalimba(mm + 12, t + i * 0.06, v * 0.45)); break;
+      case 'delete': drop(700, 380, t, v * 0.6, 0.12); break;
+    }
+    if (!quiet) this.padSwell(50, [0, 7, 16]); // major, like the dish
+  }
+
   // a warm pad that breathes in while you type and fades when you stop
-  padSwell(root: number): void {
+  padSwell(root: number, ints: number[] = [0, 7, 15]): void {
     const ctx = this.c; const t = ctx.currentTime;
-    if (!this.pad || this.pad.root !== root) {
+    const key = root + (ints[2] ?? 0) * 1000; // lounge and water pads may share a root
+    if (!this.pad || this.pad.root !== key) {
       if (this.pad) { const old = this.pad; old.g.gain.setTargetAtTime(0.0001, t, 0.8); setTimeout(() => { try { old.oscs.forEach((o) => o.stop()); old.g.disconnect(); } catch (e) {} }, 4000); }
       const g = this.gain(0.0001); const lp = this.filter('lowpass', 700, 0.7); lp.connect(g); g.connect(this.ui);
-      const oscs = [0, 7, 15].map((s, i) => { const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = mtof(root + s); o.detune.value = (i - 1) * 7; o.connect(lp); o.start(t); return o; });
-      this.pad = { g, oscs, root };
+      const oscs = ints.map((s, i) => { const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = mtof(root + s); o.detune.value = (i - 1) * 7; o.connect(lp); o.start(t); return o; });
+      this.pad = { g, oscs, root: key };
     }
     this.pad.g.gain.setTargetAtTime(0.045, t, 0.6);
     clearTimeout(this.padTimer);
