@@ -40,6 +40,7 @@ export class Editor {
     this.onKey = opts.onKey || (() => {});
     this.onType = opts.onType || (() => {});
     this.buildKeybar();
+    this.mouseScroll($('keybar'));
     this.ta.addEventListener('input', (e) => this.input(e as InputEvent));
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -176,6 +177,26 @@ export class Editor {
       s.strokeStyle = `hsla(${p.hue},80%,80%,${a})`; s.lineWidth = 1; s.beginPath(); s.arc(p.x, p.y, r, 0, 6.3); s.stroke();
     }
     c.globalCompositeOperation = 'source-over';
+  }
+
+  /** with a mouse the key bar can't be swiped: scroll it with the wheel or by dragging */
+  mouseScroll(bar: HTMLElement): void {
+    bar.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      bar.scrollLeft += e.deltaY; e.preventDefault();
+    }, { passive: false });
+    let drag: { x: number; left: number; moved: boolean } | null = null;
+    let dragged = false;
+    bar.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && e.button === 0) drag = { x: e.clientX, left: bar.scrollLeft, moved: false }; });
+    window.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x;
+      if (Math.abs(dx) > 5) { drag.moved = true; bar.classList.add('dragging'); }
+      if (drag.moved) bar.scrollLeft = drag.left - dx;
+    });
+    window.addEventListener('pointerup', () => { if (drag?.moved) dragged = true; drag = null; bar.classList.remove('dragging'); });
+    // a drag is not a key press
+    bar.addEventListener('click', (e) => { if (dragged) { e.stopPropagation(); e.preventDefault(); dragged = false; } }, true);
   }
 
   // ---------- key bar ----------

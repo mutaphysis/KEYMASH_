@@ -90,6 +90,7 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined, swapTimer: ReturnType<
 const state = { playing: false };
 const editor = new Editor({
   onChange: (v) => {
+    if (v && clearBtn.classList.contains('undo')) armUndo(false);
     status(v); clearTimeout(saveTimer); saveTimer = setTimeout(() => store.setDraft(v), 400);
     // live coding: in split view, edits go straight into the running program
     if (state.playing && isSplit()) { clearTimeout(swapTimer); swapTimer = setTimeout(() => P().hotSwap(editor.value), 650); }
@@ -128,6 +129,29 @@ function layout(): void {
 }
 window.addEventListener('resize', layout);
 
+// CLEAR turns into UNDO for a few seconds; a draining fill inside the button is the countdown
+const UNDO_MS = 6000;
+let undo = '', undoTimer: ReturnType<typeof setTimeout> | undefined;
+const clearBtn = $('btn-clear');
+function armUndo(on: boolean): void {
+  clearTimeout(undoTimer);
+  clearBtn.classList.remove('undo');
+  clearBtn.querySelector('i')!.textContent = on ? '↶' : '✖';
+  clearBtn.querySelector('span')!.textContent = on ? 'UNDO' : 'CLEAR';
+  if (!on) return;
+  void clearBtn.offsetWidth; // restart the countdown animation
+  clearBtn.style.setProperty('--undo-ms', UNDO_MS + 'ms');
+  clearBtn.classList.add('undo');
+  undoTimer = setTimeout(() => armUndo(false), UNDO_MS);
+}
+clearBtn.addEventListener('click', () => {
+  if (clearBtn.classList.contains('undo')) { editor.value = undo; armUndo(false); editor.ta.focus({ preventScroll: true }); return; }
+  if (!editor.value) return;
+  undo = editor.value;
+  editor.value = '';
+  armUndo(true);
+});
+
 const demos = () => (mode === 'petri' ? PETRI_DEMOS : DEMOS);
 function applyMode(m: Mode): void {
   mode = m; store.setMode(m);
@@ -137,6 +161,7 @@ function applyMode(m: Mode): void {
   document.title = m === 'petri' ? 'PETRI_ — a quiet culture of cells' : 'KEYMASH_ — every keystroke compiles';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m === 'petri' ? '#010a0d' : '#000800');
   editor.setMode(m);
+  armUndo(false);
   audio.typingStyle = m === 'petri' ? 'water' : 'lounge';
   const draft = store.draft();
   editor.value = draft !== null ? draft : demos()[0]!.src;
@@ -220,12 +245,6 @@ $('btn-mash').addEventListener('click', () => {
   tick();
 });
 
-let undo = '';
-$('btn-clear').addEventListener('click', () => {
-  undo = editor.value;
-  editor.value = '';
-  toast('CLEARED', 'UNDO', () => { editor.value = undo; });
-});
 $('btn-save').addEventListener('click', () => {
   const n = store.save(editor.value);
   toast(n ? `SAVED · SLOT ${String(n).padStart(2, '0')}` : 'STORAGE BLOCKED — COPY IT INSTEAD');
