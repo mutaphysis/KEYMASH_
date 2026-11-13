@@ -212,11 +212,11 @@ function steps(gs: string[], toks: Token[], sp: Species | null, line: number): S
         add(t, sp ? { k: 'spawn', n: Math.min(3, 1 + Math.floor(len / 6)), u, v } : { k: 'food', n: 2, u, v, kind: 'crumb' }, len >= 6 ? 2 : 1);
         break;
       }
-      case 'num': add(t, { k: 'food', n: Math.max(1, Math.min(14, Math.round(Math.abs(t.value)) % 15)), u, v, kind: 'algae' }); break;
+      case 'num': add(t, { k: 'food', n: Math.max(1, Math.min(7, Math.round(Math.abs(t.value)) % 8)), u, v, kind: 'algae' }); break;
       case 'math': {
         const val = Number.isFinite(t.value) ? t.value : 0;
         add(t, { k: 'note', text: `${t.text} = ${Number.isFinite(t.value) ? Number(t.value.toPrecision(6)) : '∞'}`, u, v });
-        out.push({ g0: t.g0, g1: t.g1, beats: 1, act: { k: 'food', n: 3 + (Math.round(Math.abs(val)) % 15), u, v, kind: 'algae' } });
+        out.push({ g0: t.g0, g1: t.g1, beats: 1, act: { k: 'food', n: 2 + (Math.round(Math.abs(val)) % 6), u, v, kind: 'algae' } });
         break;
       }
       case 'quote': add(t, { k: 'note', text: t.text || '…', u, v }, 2); break;

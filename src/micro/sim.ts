@@ -3,9 +3,16 @@ import type { Species, FoodKind } from './genome';
 import { mulberry32 } from '../lang/vm';
 
 export const DISH_R = 420;
-export const MAX_CELLS = 110;
-export const MAX_PER_SPECIES = 26;
-export const MAX_FOOD = 200;
+export const MAX_CELLS = 70;
+export const MAX_PER_SPECIES = 22;
+export const MAX_FOOD = 150;
+/** The dish is comfortable up to about this many cells. Above it, life gets harder:
+ *  cells burn energy faster, age faster and need more energy to divide (density dependence). */
+export const CAPACITY = 34;
+/** The code only inoculates: it adds cells of a species while there are fewer than this. */
+export const SEED_POP = 4;
+/** Swimmers turn first, then swim along their body axis (flagella and cilia push along it). */
+const SWIM_TURN: Partial<Record<string, number>> = { flagellate: 3.2, ciliate: 2.4, spirillum: 3.6, bacillus: 0, diatom: 1.1 };
 
 export interface Food { id: number; x: number; y: number; vx: number; vy: number; e: number; e0: number; kind: FoodKind; age: number; life: number; gone: boolean; spin: number }
 export type CellState = 'live' | 'dividing' | 'dying' | 'eaten';
@@ -17,6 +24,7 @@ export interface Cell {
   food: Food | null; prey: Cell | null; threat: Cell | null; partner: Cell | null;
   eatenBy: Cell | null; sick: number; bondT: number; seed: number; gone: boolean;
   /** divide axis while dividing */ axis: number;
+  /** how many cells it touched last step (local crowding) */ touching: number;
 }
 export interface Spore { x: number; y: number; sp: Species; hatch: number; hue: number }
 export type ZoneKind = 'light' | 'current' | 'toxin' | 'garden';
@@ -66,6 +74,32 @@ export class World {
   }
 
   population(sp?: Species): number { return sp ? this.counts.get(sp) ?? 0 : this.cells.length; }
+  /** cells / CAPACITY, updated every step */
+  crowd = 0;
+  private stress(): number { return Math.max(0, this.crowd - 0.6); }
+  /** energy needed to divide: more when the dish is crowded */
+  divideNeed(sp: Species): number { return sp.divideAt * (1 + Math.max(0, this.crowd - 0.4)); }
+
+  /** soft bodies: overlapping cells push each other apart (bigger cells push harder) */
+  private separate(): void {
+    const C = this.cells;
+    for (const c of C) c.touching = 0;
+    for (let i = 0; i < C.length; i++) {
+      const a = C[i]!; if (a.gone || a.state === 'eaten') continue;
+      for (let j = i + 1; j < C.length; j++) {
+        const b = C[j]!; if (b.gone || b.state === 'eaten') continue;
+        const dx = b.x - a.x, dy = b.y - a.y, min = (a.r + b.r) * (a.state === 'dividing' || b.state === 'dividing' ? 1.25 : 1.02);
+        if (Math.abs(dx) > min || Math.abs(dy) > min) continue;
+        const d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        a.touching++; b.touching++;
+        const nx = d > 1e-6 ? dx / d : 1, ny = d > 1e-6 ? dy / d : 0, push = (min - d) * 0.5;
+        const wa = b.r * b.r / (a.r * a.r + b.r * b.r), wb = 1 - wa;
+        a.x -= nx * push * wa * 2; a.y -= ny * push * wa * 2;
+        b.x += nx * push * wb * 2; b.y += ny * push * wb * 2;
+      }
+    }
+  }
 
   spawnCell(sp: Species, x: number, y: number, o: { energy?: number; gen?: number; hue?: number; size?: number; speed?: number } = {}): Cell | null {
     if (this.cells.length >= MAX_CELLS || (this.counts.get(sp) ?? 0) >= MAX_PER_SPECIES) return null;
@@ -76,7 +110,7 @@ export class World {
       size, r: size * 0.4, energy: o.energy ?? sp.divideAt * (0.45 + this.r() * 0.15), age: 0, life: sp.life * (0.8 + this.r() * 0.4), gen: o.gen ?? 1,
       state: 'live', t: 0, hue: o.hue ?? sp.hue, speed: o.speed ?? sp.speed,
       phase: this.r() * TAU, wander: this.r() * TAU, think: this.r() * 0.3, tumble: 0, lastFood: 0,
-      food: null, prey: null, threat: null, partner: null, eatenBy: null, sick: 0, bondT: 0, seed: (this.r() * 1e9) | 0, gone: false, axis: 0,
+      food: null, prey: null, threat: null, partner: null, eatenBy: null, sick: 0, bondT: 0, seed: (this.r() * 1e9) | 0, gone: false, axis: 0, touching: 0,
     };
     this.cells.push(c);
     this.counts.set(sp, (this.counts.get(sp) ?? 0) + 1);
@@ -89,8 +123,8 @@ export class World {
     for (let i = 0; i < n && this.food.length < MAX_FOOD; i++) {
       const a = this.r() * TAU, d = Math.sqrt(this.r()) * spread;
       const [fx, fy] = this.inside(x + Math.cos(a) * d, y + Math.sin(a) * d, 6);
-      const e = kind === 'sugar' ? 40 : kind === 'algae' ? 14 : kind === 'debris' ? 9 : 7;
-      this.food.push({ id: this.nextId++, x: fx, y: fy, vx: 0, vy: 0, e, e0: e, kind, age: 0, life: kind === 'debris' ? 45 + this.r() * 20 : kind === 'crumb' ? 90 : 160 + this.r() * 60, gone: false, spin: this.r() * TAU });
+      const e = kind === 'sugar' ? 34 : kind === 'algae' ? 12 : kind === 'debris' ? 8 : 6;
+      this.food.push({ id: this.nextId++, x: fx, y: fy, vx: 0, vy: 0, e, e0: e, kind, age: 0, life: kind === 'debris' ? 35 + this.r() * 15 : kind === 'crumb' ? 22 + this.r() * 10 : kind === 'sugar' ? 45 : 38 + this.r() * 24, gone: false, spin: this.r() * TAU });
       made++;
     }
     if (made) this.emit({ type: 'food', x, y, n: made, kind });
@@ -140,7 +174,7 @@ export class World {
     // zones: gardens grow algae, everything expires
     for (const z of this.zones) {
       if (z.kind === 'garden') {
-        z.acc += dt * 0.9 * z.strength;
+        z.acc += dt * 0.4 * z.strength;
         while (z.acc >= 1) { z.acc -= 1; const a = this.r() * TAU, d = Math.sqrt(this.r()) * z.r * 0.8; this.addFood(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d, 1, 'algae', 0); }
       }
     }
@@ -155,9 +189,9 @@ export class World {
       f.x += f.vx * dt; f.y += f.vy * dt; f.spin += dt * 0.3;
       [f.x, f.y] = this.inside(f.x, f.y, 6);
       f.age += dt;
-      if (f.kind === 'debris') f.e -= dt * 0.12;
+      f.e -= dt * (f.kind === 'debris' ? 0.12 : 0.04); // everything rots, slowly
       if (f.age > f.life || f.e <= 0.2) f.gone = true;
-      if (f.kind === 'algae' && fl.light > 0.5 && this.food.length < MAX_FOOD * 0.6 && this.r() < dt * 0.03 * fl.light) {
+      if (f.kind === 'algae' && fl.light > 0.5 && this.food.length < MAX_FOOD * 0.45 && this.r() < dt * 0.02 * fl.light) {
         if (this.addFood(f.x, f.y, 1, 'algae', 14)) blooms++;
       }
     }
@@ -172,6 +206,7 @@ export class World {
     this.spores = this.spores.filter((s) => s.hatch >= 0);
 
     const born: Cell[] = [];
+    this.crowd = this.cells.length / CAPACITY;
     for (const c of this.cells) {
       if (c.gone) continue;
       c.phase += dt * (1 + c.speed / 30);
@@ -181,6 +216,7 @@ export class World {
       this.live(c, dt, T);
     }
     for (const b of born) this.cells.push(b);
+    this.separate();
     for (const c of this.cells) [c.x, c.y] = this.inside(c.x, c.y, Math.min(c.r, 40) + 2);
 
     // bookkeeping
@@ -195,7 +231,7 @@ export class World {
 
   private live(c: Cell, dt: number, T: number): void {
     const sp = c.sp;
-    c.age += dt;
+    c.age += dt * (1 + Math.max(0, this.crowd - 0.8) * 2.5); // a crowded dish ages its cells faster
     c.sick = Math.max(0, c.sick - dt);
     c.bondT = Math.max(0, c.bondT - dt);
     const fl = this.field(c.x, c.y);
@@ -206,7 +242,7 @@ export class World {
       c.think = 0.25 + this.r() * 0.15;
       const sense2 = sp.sense * sp.sense;
       c.food = null; c.prey = null; c.threat = null; c.partner = null;
-      const hungry = c.energy < sp.divideAt * 1.05;
+      const hungry = c.energy < this.divideNeed(sp) * 1.05;
       if (sp.diet !== 'hunter' && (sp.diet !== 'photo' || c.energy < sp.divideAt * 0.5 || fl.light < 0.4) && hungry) {
         let best = sense2;
         for (const f of this.food) {
@@ -269,7 +305,6 @@ export class World {
           else c.tumble = 0.6;
           c.lastFood = dist;
         }
-        dx = Math.cos(c.heading) * 1.2 + dx * 0.35; dy = Math.sin(c.heading) * 1.2 + dy * 0.35;
         break;
       }
       case 'flagellate': speed *= 0.55 + 0.75 * Math.max(0, Math.sin(c.phase * 2.2)); break; // darting strokes
@@ -280,8 +315,20 @@ export class World {
       case 'ciliate': break;
       case 'spirillum': speed *= 1.1; break;
     }
-    const dl = Math.hypot(dx, dy) || 1;
-    const tx = dx / dl * speed, ty = dy / dl * speed;
+    let tx: number, ty: number;
+    const turnRate = SWIM_TURN[sp.body];
+    if (turnRate !== undefined) {
+      // swimmers: turn toward where they want to go, then push along the body axis
+      if (turnRate > 0) {
+        const diff = wrapAngle(Math.atan2(dy, dx) - c.heading);
+        c.heading += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
+        speed *= 0.35 + 0.65 * Math.max(0, Math.cos(diff)); // slow down in a sharp turn
+      }
+      tx = Math.cos(c.heading) * speed; ty = Math.sin(c.heading) * speed;
+    } else {
+      const dl = Math.hypot(dx, dy) || 1;
+      tx = dx / dl * speed; ty = dy / dl * speed;
+    }
     const ag = Math.min(1, dt * sp.agility);
     c.vx += (tx - c.vx) * ag + (this.r() - 0.5) * 4 * dt * (sp.body === 'coccus' ? 4 : 1); // a little Brownian jiggle
     c.vy += (ty - c.vy) * ag + (this.r() - 0.5) * 4 * dt * (sp.body === 'coccus' ? 4 : 1);
@@ -297,7 +344,7 @@ export class World {
       c.heading = Math.atan2(c.vy, c.vx);
     }
     const sp2 = Math.hypot(c.vx, c.vy);
-    if (sp2 > 1.5 && sp.body !== 'bacillus') c.heading += wrapAngle(Math.atan2(c.vy, c.vx) - c.heading) * Math.min(1, dt * 3);
+    if (turnRate === undefined && sp2 > 1.5) c.heading += wrapAngle(Math.atan2(c.vy, c.vx) - c.heading) * Math.min(1, dt * 3);
     if (sp.body === 'volvox') c.heading += dt * 0.4;
 
     // --- eat
@@ -309,11 +356,11 @@ export class World {
         if (f.e <= 0.2) { f.gone = true; c.food = null; this.emit({ type: 'eat', x: c.x, y: c.y, sp, size: c.size, kind: f.kind }); }
       }
     }
-    if (sp.diet === 'photo') c.energy += dt * (0.35 + fl.light * 3.2) * (c.size / 14);
+    if (sp.diet === 'photo') c.energy += dt * (0.05 + fl.light * 2.4) * (c.size / 14); // background light alone is not enough
     else if (sp.diet === 'omni') c.energy += dt * fl.light * 0.4;
 
     // --- hunt
-    if (c.prey && !c.prey.gone && c.prey.state !== 'eaten' && Math.hypot(c.prey.x - c.x, c.prey.y - c.y) < c.r + c.prey.r * 0.6) {
+    if (c.prey && !c.prey.gone && c.prey.state !== 'eaten' && Math.hypot(c.prey.x - c.x, c.prey.y - c.y) < c.r + c.prey.r + 3) {
       const p = c.prey;
       if (p.state === 'live' || p.state === 'dividing' || p.state === 'dying') {
         p.state = 'eaten'; p.eatenBy = c; p.t = 0;
@@ -338,11 +385,12 @@ export class World {
     // --- metabolism, toxin, size
     if (fl.toxin > 0 && sp.toxic < 0.5) c.energy -= dt * 14 * fl.toxin;
     const moving = Math.hypot(c.vx, c.vy) / 50;
-    c.energy -= dt * (0.45 + moving * moving * 1.1) * (c.size / 14) * T * (c.sick ? 1.6 : 1);
+    const stress = this.stress();
+    c.energy -= dt * (0.5 + moving * moving * 1.1) * (c.size / 14) * T * (c.sick ? 1.6 : 1) * (1 + stress * 1.8 + Math.min(4, c.touching) * 0.12);
     const target = c.size * (0.8 + 0.35 * Math.min(1.1, c.energy / sp.divideAt));
     c.r += (target - c.r) * Math.min(1, dt * 1.5);
 
-    if (c.energy >= sp.divideAt && c.age > 5 && this.cells.length < MAX_CELLS && (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES) {
+    if (c.energy >= this.divideNeed(sp) && c.age > 10 && this.cells.length < MAX_CELLS && (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES) {
       c.state = 'dividing'; c.t = 0; c.axis = c.heading + Math.PI / 2;
     } else if (c.energy <= 0 || c.age > c.life) {
       c.state = 'dying'; c.t = 0;

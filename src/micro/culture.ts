@@ -2,7 +2,7 @@
 // parallel) and turns what it reads into cells, food and weather in the dish.
 import { readCulture } from './genome';
 import type { Culture, LineProgram, Act, Species } from './genome';
-import { World, DISH_R } from './sim';
+import { World, DISH_R, SEED_POP } from './sim';
 import type { SimEvent } from './sim';
 import { hash } from '../lang/vm';
 
@@ -61,7 +61,8 @@ export class Petri {
         const sp = lp.species;
         const [x, y] = at(act.u, act.v);
         let made = 0;
-        if (sp) for (let i = 0; i < act.n; i++) {
+        // the code inoculates; growth after that is up to the culture
+        if (sp && W.population(sp) < SEED_POP && W.crowd < 1) for (let i = 0; i < act.n; i++) {
           const c = W.spawnCell(sp, x + (W.rng() - 0.5) * 30, y + (W.rng() - 0.5) * 30);
           if (c) { made++; out.push({ type: 'spawn', x: c.x, y: c.y, sp }); }
         }
