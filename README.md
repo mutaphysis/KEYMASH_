@@ -177,7 +177,12 @@ food gets closer — real chemotaxis), flagellates dart, amoebae crawl, cocci ji
 cluster, volvox rolls. Grazers eat algae, photosynthetic cells feed on light,
 predators engulf smaller cells of other species (toxic prey makes them sick), symbionts
 even out their energy when they touch. Cells divide with small mutations, age and
-die; their debris feeds the next generation and spores hatch later. Field notes
+die; their debris feeds the next generation and spores hatch later. Division is drawn
+as it happens: cells with a nucleus go through mitosis (the envelope dissolves,
+chromosomes line up on the spindle and are pulled apart, a cleavage furrow pinches the
+membrane, two nuclei form), bacteria split by binary fission (the rod doubles, the DNA
+separates, a wall grows in from the middle), ciliates split front to back. Dying cells
+swell, grey, their membrane breaks up and their contents drift away. Field notes
 record the firsts: first division, first engulfing, extinctions.
 
 ### Balance
