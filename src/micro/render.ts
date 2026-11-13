@@ -1,7 +1,7 @@
 // PETRI_ renderer: a dark-field microscope. Deep teal water in a round field of view,
 // out-of-focus specks drifting at two depths, slow caustic light, translucent glowing organisms.
 import type { Cell, Food, Zone, World, SimEvent } from './sim';
-import { DISH_R, DIVIDE_TIME, DIVIDE_GAP } from './sim';
+import { DISH_R, DIVIDE_TIME, DIVIDE_GAP, TRANSVERSE } from './sim';
 import type { Species } from './genome';
 import type { Note } from './culture';
 import { ctx2d } from '../ui/dom';
@@ -296,7 +296,7 @@ export class MicroRenderer {
     if (cell.state === 'eaten') alpha *= Math.max(0, 1 - cell.t / 1.5) * 0.8;
     if (alpha <= 0.01) return;
     const sick = cell.sick > 0;
-    const hue = sick ? 72 : cell.hue, sat = (sick ? 30 : sp.sat) * (1 - 0.75 * smooth(0, 0.4, this.dis));
+    const hue = sick ? 72 : cell.shownHue, sat = (sick ? 30 : sp.sat) * (1 - 0.75 * smooth(0, 0.4, this.dis));
     const R = Math.max(1.5, cell.r);
     const k = this.k, px = this.dpr / k;
 
@@ -313,8 +313,23 @@ export class MicroRenderer {
     c.translate(cell.x + (sick ? Math.sin(T * 40 + cell.seed) * 0.6 : 0), cell.y);
     c.globalAlpha = alpha;
     if (cell.state === 'dividing') {
-      c.rotate(cell.axis);
-      this.dividing(c, cell, sp, R, hue, sat, px, T + (cell.seed % 1000));
+      // crossfade in and out of the division drawing, so neither the start (the cell rounds up)
+      // nor the end (two daughters with their own shapes) jumps
+      const p = Math.min(1, cell.t / DIVIDE_TIME), base = c.globalAlpha;
+      const fin = smooth(0, 0.14, p), fout = smooth(0.82, 1, p);
+      if (fin < 1) { c.save(); c.rotate(cell.heading); c.globalAlpha = base * (1 - fin); this.body(c, cell, sp, R, hue, sat, px, T + (cell.seed % 1000)); c.restore(); }
+      if (fin * (1 - fout) > 0.01) { c.save(); c.rotate(cell.axis); c.globalAlpha = base * fin * (1 - fout); this.dividing(c, cell, sp, R, hue, sat, px, T + (cell.seed % 1000)); c.restore(); }
+      if (fout > 0) {
+        // the daughters exactly as the simulation will place them: ±DIVIDE_GAP·R along the axis, radius 0.78·R
+        const end = R * DIVIDE_GAP, r = R * 0.78;
+        const daughters: [number, number, number][] = [[1, cell.seed, cell.heading], [-1, cell.childSeed, cell.heading + (TRANSVERSE.has(sp.body) ? 0 : Math.PI)]];
+        for (const [sgn, seed, head] of daughters) {
+          c.save(); c.translate(Math.cos(cell.axis) * end * sgn, Math.sin(cell.axis) * end * sgn); c.rotate(head);
+          c.globalAlpha = base * fout;
+          this.body(c, { ...cell, seed, heading: head, r, vx: 0, vy: 0, state: 'live' }, sp, r, hue, sat, px, T + (seed % 1000));
+          c.restore();
+        }
+      }
     } else {
       c.rotate(cell.heading);
       if (this.dis) { const sw = 1 + 0.2 * smooth(0.1, 0.7, this.dis); c.scale(sw, sw); } // lysis: the cell swells
