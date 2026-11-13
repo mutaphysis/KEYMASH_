@@ -18,7 +18,7 @@ const EXTENT: Record<string, number> = { amoeba: 1.22, bacillus: 1.2, coccus: 1.
 export const DIVIDE_TIME = 2.6;
 export const DIVIDE_GAP = 0.82;
 /** ciliates and bacteria split across the body (front/back daughters), the rest side by side */
-const TRANSVERSE = new Set(['ciliate', 'bacillus', 'spirillum']);
+export const TRANSVERSE = new Set(['ciliate', 'bacillus', 'spirillum']);
 const SWIM_TURN: Partial<Record<string, number>> = { flagellate: 3.2, ciliate: 2.4, spirillum: 3.6, bacillus: 0, diatom: 1.1 };
 
 export interface Food { id: number; x: number; y: number; vx: number; vy: number; e: number; e0: number; kind: FoodKind; age: number; life: number; gone: boolean; spin: number }
@@ -32,6 +32,8 @@ export interface Cell {
   eatenBy: Cell | null; sick: number; bondT: number; seed: number; gone: boolean;
   /** divide axis while dividing */ axis: number;
   /** how many cells it touched last step (local crowding) */ touching: number;
+  /** the second daughter's seed, chosen when division starts so the renderer can already draw her */ childSeed: number;
+  /** colour as drawn: eases toward hue, so a mutation doesn't pop */ shownHue: number;
 }
 export interface Spore { x: number; y: number; sp: Species; hatch: number; hue: number }
 export type ZoneKind = 'light' | 'current' | 'toxin' | 'garden';
@@ -118,7 +120,7 @@ export class World {
       size, r: size * 0.4, energy: o.energy ?? sp.divideAt * (0.45 + this.r() * 0.15), age: 0, life: sp.life * (0.8 + this.r() * 0.4), gen: o.gen ?? 1,
       state: 'live', t: 0, hue: o.hue ?? sp.hue, speed: o.speed ?? sp.speed,
       phase: this.r() * TAU, wander: this.r() * TAU, think: this.r() * 0.3, tumble: 0, lastFood: 0,
-      food: null, prey: null, threat: null, partner: null, eatenBy: null, sick: 0, bondT: 0, seed: (this.r() * 1e9) | 0, gone: false, axis: 0, touching: 0,
+      food: null, prey: null, threat: null, partner: null, eatenBy: null, sick: 0, bondT: 0, seed: (this.r() * 1e9) | 0, gone: false, axis: 0, touching: 0, childSeed: 0, shownHue: o.hue ?? sp.hue,
     };
     this.cells.push(c);
     this.counts.set(sp, (this.counts.get(sp) ?? 0) + 1);
@@ -240,6 +242,7 @@ export class World {
   private live(c: Cell, dt: number, T: number): void {
     const sp = c.sp;
     c.age += dt * (1 + Math.max(0, this.crowd - 0.8) * 2.5); // a crowded dish ages its cells faster
+    c.shownHue += wrapAngle((c.hue - c.shownHue) * Math.PI / 180) * 180 / Math.PI * Math.min(1, dt * 0.8);
     c.sick = Math.max(0, c.sick - dt);
     c.bondT = Math.max(0, c.bondT - dt);
     const fl = this.field(c.x, c.y);
@@ -406,7 +409,7 @@ export class World {
     c.r += (target - c.r) * Math.min(1, dt * 1.5);
 
     if (c.energy >= this.divideNeed(sp) && c.age > 10 && this.cells.length < MAX_CELLS && (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES) {
-      c.state = 'dividing'; c.t = 0; c.axis = c.heading + (TRANSVERSE.has(sp.body) ? 0 : Math.PI / 2);
+      c.state = 'dividing'; c.t = 0; c.axis = c.heading + (TRANSVERSE.has(sp.body) ? 0 : Math.PI / 2); c.childSeed = (this.r() * 1e9) | 0;
     } else if (c.energy <= 0 || c.age > c.life) {
       c.state = 'dying'; c.t = 0;
       this.emit({ type: 'die', x: c.x, y: c.y, sp, size: c.size, cause: c.energy <= 0 ? (fl.toxin > 0 ? 'toxin' : 'starved') : 'old' });
@@ -430,7 +433,7 @@ export class World {
     const b: Cell = {
       ...c, id: this.nextId++, x: c.x - 2 * ax, y: c.y - 2 * ay, vx: -c.vx, vy: -c.vy, heading: TRANSVERSE.has(sp.body) ? c.heading : c.heading + Math.PI,
       hue: (c.hue + (this.r() - 0.5) * m * 70 + 360) % 360, size: Math.max(5, Math.min(40, mut(c.size, 0.5))), speed: Math.max(3, mut(c.speed, 0.6)),
-      phase: this.r() * TAU, seed: (this.r() * 1e9) | 0, food: null, prey: null, threat: null, partner: null, life: sp.life * (0.8 + this.r() * 0.4),
+      phase: this.r() * TAU, seed: c.childSeed, food: null, prey: null, threat: null, partner: null, life: sp.life * (0.8 + this.r() * 0.4),
     };
     born.push(b);
     this.counts.set(sp, (this.counts.get(sp) ?? 0) + 1);
