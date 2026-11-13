@@ -36,14 +36,20 @@ export class MicroPlayer {
     this.audio = audio;
     this.amb = new Ambient(audio);
     this.r = new MicroRenderer(this.stage);
-    new ResizeObserver(() => { if (this.running) this.fit(); }).observe(this.wrap);
+    new ResizeObserver(() => { if (this.active) this.fit(); }).observe(this.wrap); // the stage is shared: only the active player sizes it
     this.stage.addEventListener('pointerdown', (e) => this.tap(e));
     this.loop = this.loop.bind(this);
   }
 
+  /** true from start() until stop(): this player owns the shared stage */
+  active = false;
+  private fitW = 0; private fitH = 0;
+
   fit(): void {
-    const b = this.wrap.getBoundingClientRect();
+    // layout size, not getBoundingClientRect: transition animations transform the app
+    const b = { width: this.wrap.clientWidth, height: this.wrap.clientHeight };
     if (b.width < 2 || b.height < 2) return;
+    this.fitW = this.wrap.clientWidth; this.fitH = this.wrap.clientHeight;
     this.r.reserveBottom = 76; // the play buttons
     this.r.resize(b.width, b.height);
   }
@@ -58,6 +64,7 @@ export class MicroPlayer {
 
   async start(src: string): Promise<void> {
     this.stop(true);
+    this.active = true;
     this.src = src;
     this.audio.init();
     this.fit();
@@ -100,6 +107,7 @@ export class MicroPlayer {
 
   stop(silent = false): void {
     this.running = false;
+    this.active = false;
     cancelAnimationFrame(this.raf);
     this.amb.stop();
     if (!silent) this.audio.stop();
@@ -128,6 +136,7 @@ export class MicroPlayer {
 
   private loop(t: number): void {
     if (!this.running || !this.petri) return;
+    if (this.wrap.clientWidth !== this.fitW || this.wrap.clientHeight !== this.fitH) this.fit();
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.1, (t - this.lastFrame) / 1000); this.lastFrame = t;
     for (const ev of this.petri.tick(dt)) this.apply(ev);

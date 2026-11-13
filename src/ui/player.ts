@@ -37,14 +37,20 @@ export class Player {
   constructor(audio: AudioEngine) {
     this.audio = audio;
     this.r = new Renderer(this.stage);
-    new ResizeObserver(() => { if (this.running) this.fit(); }).observe(this.wrap); // the stage is shared with PETRI
+    new ResizeObserver(() => { if (this.active) this.fit(); }).observe(this.wrap); // the stage is shared: only the active player sizes it // the stage is shared with PETRI
     this.stage.addEventListener('pointerdown', (e) => this.tap(e));
     this.loop = this.loop.bind(this);
   }
 
+  /** true from start() until stop(): this player owns the shared stage */
+  active = false;
+  private fitW = 0; private fitH = 0;
+
   fit(): void {
-    const r = this.wrap.getBoundingClientRect();
+    // layout size, not getBoundingClientRect: the mode-switch glitch animation skews and scales the app
+    const r = { width: this.wrap.clientWidth, height: this.wrap.clientHeight };
     if (r.width < 2 || r.height < 2) return;
+    this.fitW = this.wrap.clientWidth; this.fitH = this.wrap.clientHeight;
     this.r.resize(r.width, r.height);
     this.r.reserveBottom = r.height - this.logEl.offsetTop + 4 * 16; // log grows upwards to 4 lines
     if (this.vm) this.vm.setBounds(this.r.hw, this.r.hh);
@@ -81,6 +87,7 @@ export class Player {
 
   async start(src: string): Promise<void> {
     this.stop(true);
+    this.active = true;
     this.src = src;
     this.audio.init(); this.audio.speechInit();
     this.fit();
@@ -124,6 +131,7 @@ export class Player {
 
   stop(silent = false): void {
     this.running = false;
+    this.active = false;
     cancelAnimationFrame(this.raf);
     if (!silent) this.audio.stop();
     else this.audio.speechStop();
@@ -174,6 +182,7 @@ export class Player {
 
   loop(t: number): void {
     if (!this.running || !this.vm) return;
+    if (this.wrap.clientWidth !== this.fitW || this.wrap.clientHeight !== this.fitH) this.fit();
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, (t - this.lastFrame) / 1000); this.lastFrame = t;
     const now = this.clock(dt);
