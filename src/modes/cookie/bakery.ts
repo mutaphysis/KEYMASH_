@@ -189,8 +189,6 @@ export class Bakery {
   r0 = 1;
 
   private t = 0; // seconds into the stage
-  private speed = 1;
-  private rush = false;
   private cues: [number, BakeEvent][] = [];
   private cue = 0;
   private queued: BakeEvent[] = [];
@@ -239,8 +237,6 @@ export class Bakery {
     this.batch++;
     if (this.pending) this.recipe = this.pending;
     this.pending = null;
-    this.speed = this.rush ? 2.5 : 1;
-    this.rush = false;
     const r = this.recipe;
     this.rnd = mulberry32(hash(r.seed + ':' + this.batch));
     // far enough apart that the middle between two centres is past every cutter's reach (the shader draws the nearest cookie)
@@ -558,10 +554,9 @@ export class Bakery {
         break;
       }
       const len = this.len(this.stage);
-      const rate = this.stage === 'sweep' ? 1 : this.speed;
-      const need = (len - this.t) / rate;
+      const need = len - this.t;
       const done = left >= need;
-      this.t = done ? len : this.t + left * rate;
+      this.t = done ? len : this.t + left;
       this.u = this.t / len;
       this.pose();
       while (this.cue < this.cues.length && this.cues[this.cue]![0] <= this.t) out.push(this.cues[this.cue++]![1]);
@@ -585,7 +580,6 @@ export class Bakery {
       return false;
     }
     this.pending = next;
-    this.rush = true;
     if (this.stage !== 'sweep') this.enter('sweep');
     return true;
   }

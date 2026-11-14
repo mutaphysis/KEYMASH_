@@ -79,8 +79,8 @@ The cookies of a batch differ a little in outline and turn, and each bakes up wi
 own. With `prefers-reduced-motion` the camera stands still, the dough does not bounce and the
 oven air does not shimmer.
 
-Editing while it runs (split view): a changed recipe sweeps the tray and bakes again, about
-2.5× faster.
+Editing while it runs (split view): a changed recipe sweeps the tray and bakes again from the
+start.
 
 ## Eating
 
