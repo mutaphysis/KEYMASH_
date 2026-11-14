@@ -97,7 +97,11 @@ try {
 }
 
 // ---- the current mode, its code (a chunk of its own, fetched on first use) and its player ----
-let mode: ModeDef = modeById(store.mode);
+// A link can choose both: ?mode=<id>&code=<text> opens that mode with that text and plays it on the
+// whole screen (see the end of this file). An unknown mode id is ignored.
+const link = new URLSearchParams(location.search);
+const linkCode = link.get('code');
+let mode: ModeDef = MODES.find((m) => m.id === link.get('mode')) ?? modeById(store.mode);
 const firstLoad = mode.load(); // start fetching now; applyMode() below waits for it
 let code!: ModeCode;
 const players = new Map<string, ModePlayer>();
@@ -466,6 +470,21 @@ declare global {
   }
 }
 window.KEYMASH = KEYMASH;
+
+// a link with code: show it, play it, only the stage. Browsers refuse real fullscreen and sound
+// without a tap, so the page fills the window and the first tap brings the sound.
+if (linkCode !== null) {
+  editor.value = linkCode; // it becomes this mode's draft, like a picked demo
+  run();
+  stageOnly(true);
+}
+// the link has done its job: a reload keeps the text as it is by then
+if (link.has('mode') || link.has('code')) {
+  link.delete('mode');
+  link.delete('code');
+  const rest = link.toString();
+  history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+}
 
 // everything is up: take the "waiting for JavaScript" message away
 document.getElementById('nojs')?.remove();

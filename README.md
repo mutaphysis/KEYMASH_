@@ -73,6 +73,14 @@ RUN rolls, cuts, bakes and decorates it in 3D, then every tap is a bite.</td>
 </tr>
 </table>
 
+### Links
+`?mode=<id>&code=<text>` opens a mode with that text and plays it with only the stage showing
+(✖ or Esc brings the editor back), e.g.
+[`?mode=cookie&code=round%20!!!%20blue%201`](https://mutaphysis.github.io/KEYMASH_/?mode=cookie&code=round%20!!!%20blue%201).
+Mode ids: `keymash`, `petri`, `cookie`; `code` is URL-encoded. Without `code` the link only picks
+the mode. Browsers start sound only after a tap, and real fullscreen only from a tap on ⛶.
+The text becomes the mode's draft, like a picked demo; the parameters leave the address bar.
+
 ### Side by side & live coding
 On wide screens (iPad landscape, desktop) editor and stage sit side by side.
 While a program runs, every edit is hot-swapped into it ~0.6 s after you stop
