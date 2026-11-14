@@ -23,6 +23,10 @@ bun run format        # oxfmt (format:check in CI)
 bun run analyze       # build, then open the bundle analyzer (DevTools for Rolldown) on :9999
 ```
 
+Git hooks ([lefthook](https://lefthook.dev), installed by `bun install`): every commit
+formats the staged files with oxfmt (and re-stages them) and lints them with oxlint;
+every push runs the tests. `LEFTHOOK=0` skips them once.
+
 The build is a single HTML file with everything inlined (vite-plugin-singlefile),
 so it also works opened straight from disk or as a Claude artifact.
 

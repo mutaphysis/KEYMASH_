@@ -12,7 +12,8 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "analyze": "vite build --mode analyze"
+    "analyze": "vite build --mode analyze",
+    "prepare": "lefthook install"
   },
   "devDependencies": {
     "@fontsource/major-mono-display": "^5.3.0",
@@ -22,6 +23,7 @@
     "@vanilla-extract/vite-plugin": "^5.2.6",
     "@vitejs/devtools": "^0.8.2",
     "@vitejs/devtools-rolldown": "^0.8.2",
+    "lefthook": "^2.2.2",
     "oxfmt": "^0.78.0",
     "oxlint": "^1.93.0",
     "typescript": "^7.0.2",

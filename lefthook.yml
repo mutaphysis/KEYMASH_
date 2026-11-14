@@ -1,0 +1,17 @@
+# Git hooks (lefthook). Installed by `bun install` (the `prepare` script).
+# Skip once with LEFTHOOK=0 git commit … / git push …
+pre-commit:
+  piped: true # format first, then lint what was formatted
+  jobs:
+    - name: format
+      glob: '*.{ts,js,mjs,json,jsonc,css,html,yml,yaml}'
+      run: bunx oxfmt {staged_files}
+      stage_fixed: true
+    - name: lint
+      glob: '*.{ts,js,mjs}'
+      run: bunx oxlint {staged_files}
+
+pre-push:
+  jobs:
+    - name: test
+      run: bun test
