@@ -8,6 +8,8 @@ typing their name, a poem, a shopping list, `HACK THE PLANET!!!`. The
 interpreter turns all of it into lines, curves, particles, glitches, music and
 speech.
 
+**▶ Play it: [mutaphysis.github.io/KEYMASH_](https://mutaphysis.github.io/KEYMASH_/)** — the latest build of `main`.
+
 ## Running
 
 TypeScript (strict) + Vite, with bun as package manager and test runner.
