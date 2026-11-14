@@ -56,6 +56,11 @@ test('species keep their identity across a live edit', () => {
   expect(p.species.length).toBe(3);
 });
 
+test('quotes count glyphs, not UTF-16 units: emoji in a quote make a line no calmer than letters', () => {
+  const speed = (src: string) => readCulture(src).species[0]!.speed;
+  expect(speed('asdf   "🐶🐶🐶🐶"')).toBe(speed('asdf   "abcd"'));
+});
+
 test('fuzz: random cultures for 90 s each never break the world', () => {
   const r = mulberry32(3);
   for (let i = 0; i < 40; i++) {

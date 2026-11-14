@@ -201,7 +201,7 @@ function analyse(toks: Token[]): Stats {
       for (let i = 0; i < t.n; i++) st.emoji.push(t.ch);
       st.total += t.n;
     } else if (t.t === 'quote') {
-      st.total += t.text.length;
+      st.total += t.g1 - t.g0; // glyphs, quote marks included (text.length would count an emoji twice)
     }
   }
   return st;
