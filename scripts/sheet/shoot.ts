@@ -12,6 +12,8 @@ import { Petri } from '../../src/modes/petri/culture';
 import { MicroRenderer } from '../../src/modes/petri/render';
 import type { Cell } from '../../src/modes/petri/sim';
 import { DISH_R } from '../../src/modes/petri/sim';
+import { Bakery } from '../../src/modes/cookie/bakery';
+import { CookieRenderer } from '../../src/modes/cookie/render';
 import { hash, mulberry32 } from '../../src/lang/rng';
 
 /** CSS pixels; the renderers draw at devicePixelRatio (capped at 1.5) */
@@ -81,7 +83,19 @@ function petri(card: SheetCard, cv: HTMLCanvasElement): void {
   }
 }
 
-const SHOOT: Record<string, (card: SheetCard, cv: HTMLCanvasElement) => void> = { keymash, petri };
+function cookie(card: SheetCard, cv: HTMLCanvasElement): void {
+  const r = new CookieRenderer(cv);
+  r.gentle = false;
+  r.zoom = card.zoom;
+  r.resize(W, H);
+  // the whole bake in simulated time, then one frame: toDataURL runs in the same task, so the drawing buffer is still there
+  const b = new Bakery(card.code, W / H);
+  for (let now = 0; now < card.at; now += 1 / 30) b.tick(1 / 30);
+  r.snap(b);
+  r.frame(0, b, 0.3);
+}
+
+const SHOOT: Record<string, (card: SheetCard, cv: HTMLCanvasElement) => void> = { keymash, petri, cookie };
 
 export interface Shot {
   mode: string;
