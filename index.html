@@ -29,11 +29,11 @@
   <!-- ================= EDIT MODE ================= -->
   <section id="edit">
     <header>
-      <button id="mode-icon" class="modeicon" type="button" aria-label="next mode" title="tap for the next mode" data-i18n-aria-label="modeAria" data-i18n-title="modeTitle"></button>
+      <km-mode-icon id="mode-icon"></km-mode-icon>
       <div class="logo" data-text="KEYMASH_">KEYMASH_</div>
       <span id="version" class="ver"></span>
       <div id="status"><b class="ok" id="st-ok">0 ERRORS</b> · <span id="st-threads">0</span> <span id="st-unit">THREADS</span> · <span id="st-glyphs">0</span> <span data-i18n="glyphs">GLYPHS</span><b id="st-live"> · LIVE</b></div>
-      <button id="btn-mute-edit" class="hbtn" title="sound on/off" data-i18n-title="soundToggle">🔊</button>
+      <km-mute id="btn-mute-edit" variant="header"></km-mute>
     </header>
     <div id="editorWrap">
       <canvas id="rain"></canvas>
@@ -42,11 +42,11 @@
     </div>
     <div id="keybar" role="toolbar" aria-label="extra keys" data-i18n-aria-label="extraKeys"></div>
     <nav id="controls">
-      <button id="btn-run" class="primary"><i>▶</i><span>RUN</span></button>
-      <button id="btn-mash" title="let a virtual paw type" data-i18n-title="mashTitle"><i>🐾</i><span data-i18n="mash">MASH</span></button>
-      <button id="btn-clear"><i>✖</i><span>CLEAR</span></button>
-      <button id="btn-save"><i>💾</i><span data-i18n="save">SAVE</span></button>
-      <button id="btn-load"><i>📂</i><span data-i18n="load">LOAD</span></button>
+      <km-button id="btn-run" icon="▶" label="run" primary></km-button>
+      <km-button id="btn-mash" icon="🐾" label="mash" title-key="mashTitle"></km-button>
+      <km-button id="btn-clear" icon="✖" label="clear"></km-button>
+      <km-button id="btn-save" icon="💾" label="save"></km-button>
+      <km-button id="btn-load" icon="📂" label="load"></km-button>
     </nav>
   </section>
 
@@ -57,24 +57,18 @@
       <div id="hud"></div>
       <div id="log"></div>
       <div id="boot"></div>
-      <div id="idle"><button id="btn-idle-run">▶ <span data-i18n="run">RUN</span></button><p data-i18n="idleHint">edit on the left — changes go live while it runs</p></div>
+      <div id="idle"><km-button id="btn-idle-run" variant="idle" icon="▶" label="run" primary></km-button><p data-i18n="idleHint">edit on the left — changes go live while it runs</p></div>
       <div class="playbtns">
-        <button id="btn-mute" title="sound on/off" data-i18n-title="soundToggle">🔊</button>
-        <button id="btn-restart" title="restart" data-i18n-title="restart">⟲</button>
-        <button id="btn-stop" class="primary">■ <span data-i18n="edit">EDIT</span></button>
+        <km-mute id="btn-mute" variant="play"></km-mute>
+        <km-button id="btn-restart" variant="play" icon="⟲" title-key="restart"></km-button>
+        <km-button id="btn-stop" variant="play" icon="■" label="edit" primary></km-button>
       </div>
     </div>
     <div id="codeview"></div>
   </section>
 
-  <!-- ================= DRAWER ================= -->
-  <div id="drawer" hidden>
-    <div class="panel">
-      <div class="phead"><span data-i18n="programs">// PROGRAMS</span><button id="drawer-close">✖</button></div>
-      <div id="drawer-body"></div>
-    </div>
-  </div>
-  <div id="toast" hidden></div>
+  <km-drawer id="drawer" title-key="programs"></km-drawer>
+  <km-toast id="toast"></km-toast>
 </div>
 <script type="module" src="/src/main.ts"></script>
 </body>

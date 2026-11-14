@@ -15,6 +15,8 @@ import { t, langPref, setLangPref, systemLang, LANG_NAMES } from './i18n';
 import type { LangPref } from './i18n';
 import { MODES, modeById, nextMode } from './modes';
 import type { ModeDef, ModePlayer } from './modes/types';
+import { KmMute, KmItem, KmSelect, KmDrawer } from './ui/components';
+import type { KmButton, KmModeIcon, KmToast } from './ui/components';
 
 localize();
 const app = $('app');
@@ -121,30 +123,24 @@ function layout(): void {
   if (split) { $('edit').hidden = false; $('play').hidden = false; }
   else { $('edit').hidden = state.playing; $('play').hidden = !state.playing; }
   editor.active = !$('edit').hidden;
-  const rb = $('btn-run');
-  rb.querySelector('i')!.textContent = split && state.playing ? '■' : '▶';
-  rb.querySelector('span')!.textContent = t(split && state.playing ? 'stop' : 'run');
+  const rb = $<KmButton>('btn-run');
+  rb.icon = split && state.playing ? '■' : '▶';
+  rb.text = t(split && state.playing ? 'stop' : 'run');
   requestAnimationFrame(() => { editor.resize(); P().fit(); });
 }
 window.addEventListener('resize', layout);
 
 // CLEAR turns into UNDO for a few seconds; a draining fill inside the button is the countdown
 const UNDO_MS = 6000;
-let undo = '', undoTimer: ReturnType<typeof setTimeout> | undefined;
-const clearBtn = $('btn-clear');
+let undo = '';
+const clearBtn = $<KmButton>('btn-clear');
 function armUndo(on: boolean): void {
-  clearTimeout(undoTimer);
-  clearBtn.classList.remove('undo');
-  clearBtn.querySelector('i')!.textContent = on ? '↶' : '✖';
-  clearBtn.querySelector('span')!.textContent = t(on ? 'undo' : 'clear');
-  if (!on) return;
-  void clearBtn.offsetWidth; // restart the countdown animation
-  clearBtn.style.setProperty('--undo-ms', UNDO_MS + 'ms');
-  clearBtn.classList.add('undo');
-  undoTimer = setTimeout(() => armUndo(false), UNDO_MS);
+  clearBtn.icon = on ? '↶' : '✖';
+  clearBtn.text = t(on ? 'undo' : 'clear');
+  clearBtn.countdown(on ? UNDO_MS : 0, () => armUndo(false));
 }
 clearBtn.addEventListener('click', () => {
-  if (clearBtn.classList.contains('undo')) { editor.value = undo; armUndo(false); editor.ta.focus({ preventScroll: true }); return; }
+  if (clearBtn.counting) { editor.value = undo; armUndo(false); editor.ta.focus({ preventScroll: true }); return; }
   if (!editor.value) return;
   undo = editor.value;
   editor.value = '';
@@ -159,7 +155,7 @@ function applyMode(m: ModeDef): void {
   root.classList.add(m.theme);
   const logo = document.querySelector<HTMLElement>('header .logo')!;
   logo.textContent = m.name; logo.dataset.text = m.name;
-  $('mode-icon').innerHTML = m.icon;
+  $<KmModeIcon>('mode-icon').mode = m;
   document.title = `${m.name} — ${m.tagline}`;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m.themeColor);
   editor.configure(m.backdrop(), m.keys);
@@ -178,9 +174,8 @@ function switchMode(m: ModeDef): void {
   toast(`${m.name} · ${m.tagline}`);
 }
 // tap the icon (or the logo) in the header: the next mode
-for (const el of [$('mode-icon'), document.querySelector<HTMLElement>('header .logo')!]) {
-  el.addEventListener('click', () => switchMode(nextMode(mode)));
-}
+$('mode-icon').addEventListener('next', () => switchMode(nextMode(mode)));
+document.querySelector<HTMLElement>('header .logo')!.addEventListener('click', () => switchMode(nextMode(mode)));
 applyMode(mode);
 
 /** the mode's own animation: switching in, starting and stopping a program */
@@ -212,13 +207,7 @@ $('btn-run').addEventListener('click', run);
 $('btn-idle-run').addEventListener('click', run);
 $('btn-stop').addEventListener('click', edit);
 $('btn-restart').addEventListener('click', () => P().restart());
-function toggleMute(): void {
-  audio.init();
-  audio.setMuted(!audio.muted);
-  for (const id of ['btn-mute', 'btn-mute-edit']) $(id).textContent = audio.muted ? '🔇' : '🔊';
-}
-$('btn-mute').addEventListener('click', toggleMute);
-$('btn-mute-edit').addEventListener('click', toggleMute);
+KmMute.audio = audio;
 layout();
 $('btn-mash').addEventListener('click', () => {
   audio.init();
@@ -246,66 +235,39 @@ $('btn-save').addEventListener('click', () => {
   toast(n ? t('saved', { n: String(n).padStart(2, '0') }) : t('storageBlocked'));
 });
 $('btn-load').addEventListener('click', openDrawer);
-$('drawer-close').addEventListener('click', () => { $('drawer').hidden = true; });
-$('drawer').addEventListener('click', (e) => { if (e.target === $('drawer')) $('drawer').hidden = true; });
 
 // ---- the program drawer ----
-function item(name: string, sub: string, onLoad: () => void, onDel?: () => void): HTMLDivElement {
-  const row = document.createElement('div'); row.className = 'item';
-  const b = document.createElement('button'); b.className = 'name';
-  b.textContent = name;
-  const sm = document.createElement('small'); sm.textContent = sub; b.appendChild(sm);
-  b.addEventListener('click', onLoad); row.appendChild(b);
-  if (onDel) { const d = document.createElement('button'); d.className = 'del'; d.textContent = '✖'; d.addEventListener('click', onDel); row.appendChild(d); }
-  return row;
-}
-
-/** a native select dressed like the drawer buttons */
-function picker<T extends string>(label: string, options: [T, string][], value: T, onPick: (v: T) => void): HTMLLabelElement {
-  const box = document.createElement('label'); box.className = 'pick';
-  const sel = document.createElement('select'); sel.setAttribute('aria-label', label); sel.title = label;
-  for (const [v, name] of options) {
-    const o = document.createElement('option'); o.value = v; o.textContent = name; o.selected = v === value;
-    sel.appendChild(o);
-  }
-  sel.addEventListener('change', () => onPick(sel.value as T));
-  box.appendChild(sel);
-  return box;
-}
-
-function heading(text: string): HTMLHeadingElement {
-  const h = document.createElement('h4'); h.textContent = text; return h;
-}
+const drawer = $<KmDrawer>('drawer');
+const item = (name: string, sub: string, onPick: () => void, onDelete?: () => void) => KmItem.create({ name, sub, onPick, onDelete });
 
 function openDrawer(): void {
-  const body = $('drawer-body'); body.innerHTML = '';
-  const load = (src: string) => () => { editor.value = src; $('drawer').hidden = true; toast(t('loaded')); };
-  body.appendChild(heading(t('mode')));
-  body.appendChild(picker(t('switchHint'), MODES.map((m): [string, string] => [m.id, `${m.glyph} ${m.name} — ${m.tagline}`]), mode.id, (id) => {
-    $('drawer').hidden = true; switchMode(modeById(id));
-  }));
-  body.appendChild(heading(t('demos')));
-  for (const d of mode.demos) body.appendChild(item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src)));
-  body.appendChild(heading(t('savedHere')));
+  const load = (src: string) => () => { editor.value = src; drawer.close(); toast(t('loaded')); };
+  const nodes: Node[] = [
+    KmDrawer.heading(t('mode')),
+    KmSelect.create({
+      label: t('switchHint'), value: mode.id,
+      options: MODES.map((m) => [m.id, `${m.glyph} ${m.name} — ${m.tagline}`] as const),
+      onPick: (id) => { drawer.close(); switchMode(modeById(id)); },
+    }),
+    KmDrawer.heading(t('demos')),
+    ...mode.demos.map((d) => item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src))),
+    KmDrawer.heading(t('savedHere')),
+  ];
   const slots = store.slots();
-  if (!slots.length) { const p = document.createElement('div'); p.className = 'empty'; p.textContent = t('nothingSaved'); body.appendChild(p); }
-  slots.forEach((s, i) => body.appendChild(item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => { store.remove(i); openDrawer(); })));
-  for (const sec of mode.drawer?.({ audio, item, refresh: openDrawer }) ?? []) {
-    body.appendChild(heading(sec.title));
-    for (const el of sec.items) body.appendChild(el);
-  }
-  body.appendChild(heading(t('share')));
-  body.appendChild(item(t('copy'), t('copySub'), async () => {
+  if (!slots.length) nodes.push(KmDrawer.empty(t('nothingSaved')));
+  slots.forEach((s, i) => nodes.push(item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => { store.remove(i); openDrawer(); })));
+  for (const sec of mode.drawer?.({ audio, item, refresh: openDrawer }) ?? []) nodes.push(KmDrawer.heading(sec.title), ...sec.items);
+  nodes.push(KmDrawer.heading(t('share')), item(t('copy'), t('copySub'), async () => {
     try { await navigator.clipboard.writeText(editor.value); toast(t('copied')); } catch (e) { toast(t('copyBlocked')); }
   }));
-  body.appendChild(heading('APP · ' + VERSION_LABEL));
-  // settings share one row: reload on the left, language on the right
-  const settings = item(t('reload'), t('reloadSub'), reloadApp); settings.classList.add('split');
-  const langs: [LangPref, string][] = [['auto', '🌐 ' + t('langAuto', { name: LANG_NAMES[systemLang] })], ['en', '🌐 ' + LANG_NAMES.en], ['de', '🌐 ' + LANG_NAMES.de]];
-  // every string is resolved at startup, so a change reloads (the text is kept)
-  settings.appendChild(picker(t('language'), langs, langPref, (p) => { setLangPref(p); reloadApp(); }));
-  body.appendChild(settings);
-  $('drawer').hidden = false;
+  // settings share one row: reload on the left, language on the right;
+  // every string is resolved at startup, so a language change reloads (the text is kept)
+  const langs = [['auto', '🌐 ' + t('langAuto', { name: LANG_NAMES[systemLang] })], ['en', '🌐 ' + LANG_NAMES.en], ['de', '🌐 ' + LANG_NAMES.de]] as const;
+  nodes.push(KmDrawer.heading('APP · ' + VERSION_LABEL), KmDrawer.split(
+    item(t('reload'), t('reloadSub'), reloadApp),
+    KmSelect.create<LangPref>({ label: t('language'), options: langs, value: langPref, onPick: (p) => { setLangPref(p); reloadApp(); } }),
+  ));
+  drawer.open(nodes);
 }
 
 /** Reload, for the home-screen app that has no reload button. The text survives as the draft. */
@@ -318,12 +280,7 @@ function reloadApp(): void {
   else location.reload();
 }
 
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
-function toast(text: string): void {
-  const t = $('toast'); t.textContent = text;
-  t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 1800);
-}
+function toast(text: string): void { $<KmToast>('toast').show(text); }
 
 // pause audio when the page is hidden
 document.addEventListener('visibilitychange', () => {

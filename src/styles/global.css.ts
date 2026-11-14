@@ -1,8 +1,9 @@
-// The app shell: page, layout (phone / split view), header, editor, key bar, controls, play area,
-// drawer and toast. Colours, glows and corner radii come from the mode theme (theme.css.ts);
-// what a theme can't express lives in the mode's own theme.css.ts.
+// The app shell: page, layout (phone / split view), header, editor, key bar, controls and play area.
+// The shared widgets (buttons, drawer, toast, …) style themselves in src/ui/components/.
+// Colours, glows and corner radii come from the mode theme (theme.css.ts); what a theme
+// can't express lives in the mode's own theme.css.ts.
 import { globalStyle, keyframes } from '@vanilla-extract/css';
-import { vars, layout, rgba } from './theme.css';
+import { vars, layout, rgba, blink } from './theme.css';
 
 const fg = vars.rgb.fg;
 const accent = vars.rgb.accent;
@@ -11,7 +12,6 @@ const accent2 = vars.rgb.accent2;
 const padL = (px: number) => `calc(${px}px + var(--pl))`;
 const padR = (px: number) => `calc(${px}px + var(--pr))`;
 
-export const blink = keyframes({ '50%': { opacity: 0.35 } });
 const flicker = keyframes({ '0%, 100%': { opacity: 0.6 }, '37%': { opacity: 1 }, '38%': { opacity: 0.3 }, '39%': { opacity: 1 }, '80%': { opacity: 0.8 } });
 const glitchA = keyframes({
   '0%': { clipPath: 'inset(0 0 85% 0)' }, '20%': { clipPath: 'inset(40% 0 40% 0)' }, '40%': { clipPath: 'inset(80% 0 2% 0)' },
@@ -22,7 +22,6 @@ const glitchB = keyframes({
   '75%': { clipPath: 'inset(20% 0 65% 0)' }, '100%': { clipPath: 'inset(90% 0 0 0)' },
 });
 const wrapPulse = keyframes({ '0%': { boxShadow: `0 0 40px ${rgba(fg, 0.5)} inset, 0 0 30px ${rgba(fg, 0.5)}` } });
-const undoDrain = keyframes({ from: { transform: 'scaleX(1)' }, to: { transform: 'scaleX(0)' } });
 const nojsIn = keyframes({ to: { opacity: 1 } });
 
 // ---------- page ----------
@@ -61,10 +60,7 @@ globalStyle('header', {
 globalStyle('header .logo', { gridArea: 'logo' });
 globalStyle('header .ver', { gridArea: 'ver', fontSize: 10, color: rgba(fg, 0.45), letterSpacing: 0.5, alignSelf: 'end', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
 globalStyle('header #status', { gridArea: 'status', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
-globalStyle('header .hbtn', { gridArea: 'mute' });
-globalStyle('.modeicon', { gridArea: 'icon', width: 44, height: 44, padding: 4, border: 0, borderRadius: 12, background: 'transparent', touchAction: 'manipulation', cursor: 'pointer' });
-globalStyle('.modeicon svg', { width: '100%', height: '100%', display: 'block', filter: `drop-shadow(0 0 6px ${rgba(fg, 0.6)})` });
-globalStyle('.modeicon:active', { transform: 'scale(.9)' });
+globalStyle('header #btn-mute-edit > button', { gridArea: 'mute' });
 globalStyle('.logo', {
   fontFamily: layout.display, fontSize: 24, lineHeight: 1.15, letterSpacing: 1, position: 'relative', color: rgba(fg, 1),
   textShadow: `0 0 8px ${rgba(fg, 1)}, 0 0 22px ${rgba(fg, 0.5)}`,
@@ -76,13 +72,12 @@ globalStyle('#status', { fontSize: 11, color: vars.color.dim, letterSpacing: 1 }
 globalStyle('#status .ok', { color: rgba(fg, 1), animation: `${blink} 1.2s infinite steps(2)` });
 globalStyle('#st-live', { display: 'none', color: rgba(accent, 1) });
 globalStyle('#app.split.playing #st-live', { display: 'inline' });
-globalStyle('.hbtn', { width: 52, height: 52, borderRadius: vars.radius.control, fontSize: 22, background: vars.color.surface, border: `1px solid ${vars.color.border}`, color: vars.color.text });
 // typing on a phone: squeeze the header
 globalStyle('#app.kb header .ver, #app.kb #status', { display: 'none' });
 globalStyle('#app.kb header', { gridTemplateAreas: '"icon logo ver mute"', paddingTop: `calc(2px + ${layout.safeTop})`, paddingBottom: 2 });
 globalStyle('#app.kb .logo', { fontSize: 20 });
-globalStyle('#app.kb .hbtn', { width: 44, height: 40 });
-globalStyle('#app.kb #controls > button', { height: 56 });
+globalStyle('#app.kb #btn-mute-edit > button', { width: 44, height: 40 });
+globalStyle('#app.kb #controls button', { height: 56 });
 globalStyle('#app.kbd #controls', { paddingBottom: 8 }); // the keyboard covers the home indicator
 
 // ---------- editor ----------
@@ -122,34 +117,10 @@ globalStyle('#keybar button', {
 globalStyle('#keybar button.nav', { background: rgba(accent2, 0.09), borderColor: rgba(accent2, 0.35), color: rgba(accent2, 1) });
 globalStyle('#keybar button:active', { background: rgba(fg, 1), color: vars.color.primaryFg, boxShadow: `0 0 14px ${rgba(fg, 0.8)}` });
 
-// ---------- buttons: controls, play buttons, drawer ----------
-globalStyle('#controls button, .playbtns button, #drawer button', {
-  flex: 1, height: 46, borderRadius: vars.radius.row, background: vars.color.surface, color: vars.color.text, border: `1px solid ${vars.color.border}`,
-  fontSize: 12, letterSpacing: 0.5, textShadow: vars.shadow.text, whiteSpace: 'nowrap', touchAction: 'manipulation',
-  minWidth: 0, padding: '0 4px', overflow: 'hidden', textOverflow: 'clip',
-});
-globalStyle('#controls button.primary, .playbtns button.primary', {
-  background: vars.bg.primary, color: vars.color.primaryFg, textShadow: 'none', fontWeight: 'bold', boxShadow: vars.shadow.primary, flex: 1.4, fontSize: 15,
-});
-globalStyle('#controls button:active, .playbtns button:active', { transform: 'scale(.95)' });
-
 // ---------- controls ----------
 globalStyle('#controls', {
   display: 'flex', gap: 8, padding: `4px ${padR(10)} calc(10px + ${layout.safeBottom}) ${padL(10)}`, flex: '0 0 auto',
   '@media': { '(max-width: 380px)': { gap: 6 } },
-});
-globalStyle('#app #controls > button', { height: 70, borderRadius: vars.radius.control, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 });
-globalStyle('#controls button i', { fontStyle: 'normal', fontSize: 26, lineHeight: 1, textShadow: 'none' });
-globalStyle('#controls button span', { fontSize: 11, letterSpacing: 1, '@media': { '(max-width: 380px)': { fontSize: 10 } } });
-globalStyle('#controls button.primary i', { fontSize: 30 });
-globalStyle('#controls button.primary span', { fontSize: 15, fontWeight: 'bold' });
-// CLEAR -> UNDO: the fill drains from right to left until the offer vanishes
-globalStyle('#controls > #btn-clear', { position: 'relative', overflow: 'hidden' });
-globalStyle('#controls > #btn-clear i, #controls > #btn-clear span', { position: 'relative', zIndex: 1 });
-globalStyle('#controls > #btn-clear.undo', { borderColor: rgba(accent, 1), color: '#fff', boxShadow: `0 0 16px ${rgba(accent, 0.35)}` });
-globalStyle('#controls > #btn-clear.undo::before', {
-  content: '""', position: 'absolute', inset: 0, borderRadius: 'inherit', zIndex: 0, transformOrigin: 'left center',
-  background: `linear-gradient(90deg, ${rgba(accent, 0.55)}, ${rgba(accent, 0.22)})`, animation: `${undoDrain} var(--undo-ms, 6s) linear forwards`,
 });
 
 // ---------- play mode ----------
@@ -175,15 +146,9 @@ globalStyle('#idle', {
   position: 'absolute', inset: 0, display: 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, zIndex: 4,
   background: `radial-gradient(circle, ${vars.color.editorBg}, ${vars.color.bg} 70%)`,
 });
-globalStyle('#idle button', {
-  fontSize: 28, padding: '18px 40px', borderRadius: vars.radius.control, border: 0, fontWeight: 'bold',
-  background: vars.bg.primary, color: vars.color.primaryFg, boxShadow: vars.shadow.primary, animation: `${blink} 1.6s infinite`,
-});
 globalStyle('#idle p', { color: rgba(fg, 0.6), fontSize: 13, margin: 0, letterSpacing: 1 });
 globalStyle('#app.split:not(.playing) #idle', { display: 'flex' });
 globalStyle('.playbtns', { position: 'absolute', right: padR(10), bottom: 10, display: 'flex', gap: 6 });
-globalStyle('.playbtns button', { flex: '0 0 auto', height: 60, minWidth: 64, padding: '0 16px', fontSize: 22, borderRadius: vars.radius.control });
-globalStyle('.playbtns button.primary', { fontSize: 18 });
 globalStyle('#codeview', {
   position: 'relative', flex: 1, overflowY: 'auto', padding: `14px ${padR(14)} calc(30vh + ${layout.safeBottom}) ${padL(14)}`,
   font: `18px/1.5 ${layout.mono}`, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: rgba(fg, 0.4), background: vars.bg.codeview, scrollbarWidth: 'none',
@@ -192,46 +157,6 @@ globalStyle('#codeview::-webkit-scrollbar', { display: 'none' });
 globalStyle('#codeview span', { transition: 'background-color .7s ease-out, color .7s ease-out, text-shadow .7s', borderRadius: 2 });
 globalStyle('#codeview span.on', { background: 'var(--c)', color: vars.color.primaryFg, transition: 'none', boxShadow: '0 0 12px var(--c)', textShadow: 'none' });
 globalStyle('#codeview span.seen', { color: vars.color.code, textShadow: `0 0 6px ${rgba(fg, 0.6)}` });
-
-// ---------- drawer ----------
-globalStyle('#drawer', { position: 'absolute', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 60, display: 'flex', alignItems: 'flex-end' });
-globalStyle('#drawer[hidden]', { display: 'none' });
-globalStyle('#drawer .panel', {
-  width: '100%', maxHeight: '80%', overflowY: 'auto', background: vars.color.panel, borderTop: `1px solid ${rgba(fg, 1)}`,
-  borderRadius: `${vars.radius.sheet} ${vars.radius.sheet} 0 0`, boxShadow: `0 -10px 40px ${rgba(fg, 0.22)}`,
-  padding: `10px calc(12px + ${layout.safeRight}) calc(16px + ${layout.safeBottom}) calc(12px + ${layout.safeLeft})`,
-});
-globalStyle('.phead', { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, color: rgba(fg, 1) });
-globalStyle('#drawer .phead button', { flex: '0 0 auto', width: 46 });
-globalStyle('#drawer h4', { margin: '14px 0 6px', fontWeight: 'normal', color: vars.color.dim, fontSize: 12, letterSpacing: 2 });
-globalStyle('#drawer .empty', { opacity: 0.5, fontSize: 13, padding: '6px 2px' });
-globalStyle('.item', { display: 'flex', gap: 6, alignItems: 'stretch', marginBottom: 6 });
-globalStyle('#drawer .item .name', { flex: 1, textAlign: 'left', padding: '8px 10px', height: 'auto', whiteSpace: 'normal' });
-globalStyle('.item .name small', { display: 'block', color: rgba(fg, 0.5), fontSize: 11, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: 'none' });
-globalStyle('#drawer .item .del', { flex: '0 0 46px', color: rgba(accent, 1), borderColor: rgba(accent, 0.5) });
-// settings row: two halves side by side
-globalStyle('#drawer .item.split > *', { flex: '1 1 0', minWidth: 0 });
-globalStyle('.item.split .name small', { whiteSpace: 'normal' });
-// a native select dressed like the drawer buttons, the arrow drawn on top
-globalStyle('.pick', { position: 'relative', display: 'flex', marginBottom: 6 });
-globalStyle('.item .pick', { marginBottom: 0 });
-globalStyle('.pick::after', { content: '"▾"', position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: rgba(fg, 1), fontSize: 14 });
-globalStyle('.pick select', {
-  flex: 1, minWidth: 0, WebkitAppearance: 'none', appearance: 'none', fontSize: 12, letterSpacing: 0.5, cursor: 'pointer', textOverflow: 'ellipsis',
-  color: vars.color.text, background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.row,
-  padding: '8px 30px 8px 10px', textShadow: vars.shadow.text,
-});
-globalStyle('.pick select:focus-visible', { outline: `1px solid ${rgba(fg, 1)}`, outlineOffset: 2 });
-globalStyle('.pick option', { background: vars.color.panel, color: vars.color.text });
-
-// ---------- toast ----------
-globalStyle('#toast', {
-  position: 'absolute', left: '50%', top: `calc(64px + ${layout.safeTop})`, transform: 'translateX(-50%)', zIndex: 70, background: '#000',
-  border: `1px solid ${rgba(fg, 1)}`, padding: '10px 14px', borderRadius: vars.radius.row, boxShadow: `0 0 20px ${rgba(fg, 0.38)}`,
-  fontSize: 14, whiteSpace: 'nowrap',
-});
-globalStyle('#toast[hidden]', { display: 'none' });
-
 // ---------- side by side (iPad landscape, desktop) ----------
 globalStyle('#app.split', { flexDirection: 'row' });
 globalStyle('#app.split section', { display: 'flex' });
@@ -240,7 +165,7 @@ globalStyle('#app.split #play', { flex: 1 });
 globalStyle('#app.split #stageWrap', { flex: '0 0 68%' });
 globalStyle('#app.split #btn-stop', { display: 'none' });
 globalStyle('#app.split #codeview', { paddingBottom: '40%', fontSize: 17 });
-globalStyle('#app.split #controls > button', { height: 64 });
+globalStyle('#app.split #controls button', { height: 64 });
 globalStyle('#code', { '@media': { '(min-width: 800px)': { fontSize: 22 } } });
 globalStyle('.logo', { '@media': { '(min-width: 800px)': { fontSize: 30 } } });
 

@@ -1,6 +1,8 @@
 // PETRI_: aqua on deep teal, no scanlines, soft round shapes, italic serif for the living things.
 import { createTheme, globalStyle, keyframes, style } from '@vanilla-extract/css';
 import { vars, layout } from '../../styles/theme.css';
+import { icon } from '../../ui/components/mode-icon.css';
+import { variant } from '../../ui/components/button.css';
 
 export const petriTheme = createTheme(vars, {
   rgb: { fg: '143, 245, 220', accent: '255, 168, 207', accent2: '168, 220, 255' },
@@ -38,11 +40,11 @@ globalStyle(p('.crt::before'), { display: 'none' });
 globalStyle(p('.crt::after'), { background: 'radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,.55) 100%)', mixBlendMode: 'normal' });
 globalStyle(p('.logo'), { textShadow: '0 0 10px rgba(143,245,220,.7), 0 0 26px rgba(143,245,220,.3)', letterSpacing: 2 });
 globalStyle(p('.logo::before, .logo::after'), { display: 'none' });
-globalStyle(p('.modeicon svg'), { filter: 'drop-shadow(0 0 7px rgba(143,245,220,.6))', animation: `${breathe} 6s ease-in-out infinite` });
+globalStyle(p(`${icon} svg`), { filter: 'drop-shadow(0 0 7px rgba(143,245,220,.6))', animation: `${breathe} 6s ease-in-out infinite` });
 globalStyle(p('#status .ok'), { animation: 'none' });
 globalStyle(p('#editorWrap.pulse'), { animation: 'none' });
 globalStyle(p('#rain'), { opacity: 0.9 });
-globalStyle(p('#idle button'), { animation: 'none' });
+globalStyle(p(`[primary] > ${variant.idle}`), { animation: 'none' });
 
 // the code view fades slowly, like stained cells
 globalStyle(p('#codeview span'), { transition: 'background-color 1.4s ease-out, color 1.4s ease-out, box-shadow 1.4s' });

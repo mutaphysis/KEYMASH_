@@ -1,7 +1,7 @@
 // The design tokens every mode fills in. A mode's theme (src/modes/<id>/theme.css.ts) calls
 // createTheme(vars, {...}); tsc fails if a token is missing. The theme class goes on <html>.
 // Colours that appear at several opacities are RGB triplets: rgba(${vars.rgb.fg}, .45).
-import { createGlobalTheme, createThemeContract } from '@vanilla-extract/css';
+import { createGlobalTheme, createThemeContract, keyframes } from '@vanilla-extract/css';
 
 export const vars = createThemeContract({
   rgb: {
@@ -73,3 +73,6 @@ export const layout = createGlobalTheme(':root', {
 
 /** rgba() of a triplet token */
 export const rgba = (triplet: string, a: number): string => `rgba(${triplet}, ${a})`;
+
+/** status OK, the log cursor, the big RUN */
+export const blink = keyframes({ '50%': { opacity: 0.35 } });
