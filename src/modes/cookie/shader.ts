@@ -38,7 +38,8 @@ uniform vec2 uCoatP;     // thickness, margin from the edge
 uniform vec3 uHalf;      // direction of the dipped half, z = 1 if only half is coated
 uniform vec3 uColor, uAccent, uRaw, uBakedCol, uInside;
 uniform float uChips;    // share of chip cells that hold one
-uniform vec3 uTopA, uTopB; // kind (1 sprinkles, 2 sugar, 3 strands, 4 pearls), cell size, share of cells
+uniform vec3 uTop[3];   // per layer of pieces: kind (1 sprinkles, 2 sugar, 3 strands, 4 pearls, 5 coconut, 6 candy), cell size, share of cells
+uniform float uPowder;  // powdered sugar dusted over everything, 0..1
 uniform float uGlitter, uBorder, uBorderIn, uPipeOn, uEyeR, uLevel;
 uniform int uPatternKind, uDoughKind;
 uniform vec4 uFix[12];   // per cookie 4: local x, y, kind (1 eye, 2 cherry, 3 almond), scale
@@ -160,13 +161,13 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
   float delay = h2.x * span;
   if (T < delay) return guard;
   // a piece stays inside its cell: the march only ever sees the cell it is in
-  float reach = kind < .5 ? .075 : kind < 1.5 ? .062 : kind < 2.5 ? .024 : kind < 3.5 ? .062 : .045;
+  float reach = kind < .5 ? .075 : kind < 1.5 ? .062 : kind < 2.5 ? .024 : kind < 3.5 ? .062 : kind < 4.5 ? .045 : kind < 5.5 ? .06 : .04;
   vec2 ctr = (cell + .5 + (h.xy - .5) * 2. * clamp((cs * .5 - .012 - reach) / cs, 0., .22)) * cs;
   vec4 fc = field(ci, ctr);
   float Rc = fc.r + uErode / uSize;
   if (Rc > -(max(uCoatP.y, .02) / uSize + .07) || fc.g < .04 || fc.b < .07) return guard;
   if (uCoat.x > .5 && uCoat.y < 1.5 && fc.a < COAT_D + .05) return guard; // no sprinkles past the icing at the tips
-  if (kind > 3.5 && abs(Rc + .26) > .07) return guard;
+  if (kind > 3.5 && kind < 4.5 && abs(Rc + .26) > .07) return guard; // pearls line the edge
   if (uHalf.z > .5 && dot(ctr, uHalf.xy) > -.06) return guard;
   for (int j = 0; j < 4; j++) {
     vec4 fx = uFix[ci * 4 + j];
@@ -189,8 +190,19 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
   } else if (kind < 3.5) {
     float t = clamp(dot(d.xz, dir), -.05, .05);
     sd = length(d - vec3(dir.x * t, .01, dir.y * t)) - .012;
-  } else {
+  } else if (kind < 4.5) {
     sd = length(d - vec3(0., .036, 0.)) - .045;
+  } else if (kind < 5.5) {
+    // a coconut shred: a thin flat strip with a little curl
+    vec2 uw = vec2(dot(d.xz, dir), dot(d.xz, vec2(-dir.y, dir.x)));
+    uw.y -= 6. * uw.x * uw.x * (h2.z - .5);
+    vec3 b = abs(vec3(uw.x, d.y - .009, uw.y)) - vec3(.048, .004, .011);
+    sd = (length(max(b, 0.)) + min(max(b.x, max(b.y, b.z)), 0.) - .004) * .8;
+  } else {
+    // a crushed candy-cane chunk: a knobbly little block, turned any way
+    vec2 uw = vec2(dot(d.xz, dir), dot(d.xz, vec2(-dir.y, dir.x)));
+    vec3 b = abs(vec3(uw.x, d.y - .017, uw.y)) - vec3(.02, .011, .014) * (.8 + .4 * h2.z);
+    sd = length(max(b, 0.)) + min(max(b.x, max(b.y, b.z)), 0.) - .008;
   }
   return min(sd, guard);
 }
@@ -213,7 +225,7 @@ float pipe2D(vec2 q, float R, float B) {
   return min(d, max(B, swept));
 }
 
-// material ids: 0 tray, 1 dough, 2 cookie, 3 coating, 4 piping, 5 chips, 6/7 toppings, 8 eye, 9 cherry, 10 almond, 11 pin, 12 cutter
+// material ids: 0 tray, 1 dough, 2 cookie, 3 coating, 4 piping, 5 chips, 6/7/13 topping layers, 8 eye, 9 cherry, 10 almond, 11 pin, 12 cutter
 void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
   // baking spreads and lifts the dough unevenly: every cookie gets lumps of its own
   float seed = uCookie[c.i].w;
@@ -293,13 +305,11 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
       if (d < res.x) res = vec2(d, 5.);
     }
     if (uTopT >= 0.) {
-      if (uTopA.x > .5) {
-        float d = pieces(L, c.i, uTopA.x, uTopA.y, uTopA.z, uTopT, 1.1, 11., y0) * uSize;
-        if (d < res.x) res = vec2(d, 6.);
-      }
-      if (uTopB.x > .5) {
-        float d = pieces(L, c.i, uTopB.x, uTopB.y, uTopB.z, uTopT, 1.1, 23., y0) * uSize;
-        if (d < res.x) res = vec2(d, 7.);
+      for (int j = 0; j < 3; j++) {
+        vec3 tp = uTop[j];
+        if (tp.x < .5) break;
+        float d = pieces(L, c.i, tp.x, tp.y, tp.z, uTopT, 1.1, 11. + 12. * float(j), y0) * uSize;
+        if (d < res.x) res = vec2(d, j == 0 ? 6. : j == 1 ? 7. : 13.); // material ids, see shade()
       }
     }
   }
@@ -446,14 +456,21 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
     alb = uAccent; rough = .5; wrap = .3; sparkle = uGlitter;
   } else if (id < 5.5) {
     alb = DARK_CHOC; rough = mix(.5, .15, uPuff); f0 = .06;
-  } else if (id < 7.5) {
-    vec3 top = id < 6.5 ? uTopA : uTopB;
-    float salt = id < 6.5 ? 11. : 23.;
-    vec3 h = h23(floor(c.q / top.y) * 2.3 + salt + float(c.i));
+  } else if (id < 7.5 || id > 12.5) {
+    int layer = id > 12.5 ? 2 : id > 6.5 ? 1 : 0;
+    vec3 top = uTop[layer];
+    vec3 h = h23(floor(c.q / top.y) * 2.3 + 11. + 12. * float(layer) + float(c.i));
     if (top.x < 1.5) { alb = CANDY[int(h.x * 5.99)]; rough = .3; }
     else if (top.x < 2.5) { alb = vec3(.92); rough = .25; sparkle = 1.; }
     else if (top.x < 3.5) { alb = DARK_CHOC * 1.6; rough = .4; }
-    else { alb = vec3(.86, .87, .9); rough = .16; metal = 1.; }
+    else if (top.x < 4.5) { alb = vec3(.86, .87, .9); rough = .16; metal = 1.; }
+    else if (top.x < 5.5) { alb = vec3(.9, .87, .8) * (.92 + .1 * h.y); rough = .75; wrap = .4; }
+    else {
+      // red and white, most chunks with a bit of the cane's stripe
+      float stripe = step(.5, fract(dot(p.xz, vec2(1.)) * 22. + h.y));
+      alb = mix(vec3(.9, .88, .86), vec3(.62, .01, .02), h.x < .6 ? stripe : step(.8, h.x));
+      rough = .12; f0 = .05;
+    }
   } else if (id < 8.5) {
     alb = vec3(.93); rough = .2;
     for (int j = 0; j < 4; j++) {
@@ -478,9 +495,24 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
     alb = vec3(.78, .8, .84); rough = .25; metal = 1.;
   }
 
+  // powdered sugar: sifted over everything that faces up, patchy where the sieve went, a little beside the cookie
+  if (uPowder > 0. && uTopT >= 0. && c.i >= 0 && (id < 10.5 || id > 12.5)) {
+    float fallen = sat(uTopT / 1.3);
+    // fine grains, evenly sifted with soft thicker and thinner parts; more of it, more grains
+    float density = (.3 + .35 * uPowder) * (.7 + .6 * fbm(vec3(c.q * 2.5, 7.)));
+    float grain = smoothstep(1. - density - .12, 1. - density + .12, n3(vec3(p.xz * 110., 3.)));
+    float dust = smoothstep(.3, .85, n.y) * fallen * (.1 + .8 * grain);
+    if (id < .5) dust *= .5 * smoothstep(.2, 0., Rw);
+    alb = mix(alb, vec3(.95, .94, .92), dust);
+    rough = mix(rough, .95, dust);
+    f0 = mix(f0, .02, dust);
+    metal *= 1. - dust;
+    sparkle *= 1. - dust;
+  }
+
   float ndl = dot(n, KEY_DIR);
   float sh = ndl > -wrap ? shadow(p + n * .012, KEY_DIR) : 0.;
-  float ao = id > 4.5 && id < 10.5 ? 1. : occlusion(p, n); // small pieces: the sample steps are bigger than they are
+  float ao = (id > 4.5 && id < 10.5) || id > 12.5 ? 1. : occlusion(p, n); // small pieces: the sample steps are bigger than they are
   vec3 keyC = keyLight(uHeat);
   float diff = max((ndl + wrap * .5) / (1. + wrap * .5), 0.);
   vec3 oven = vec3(1., .4, .09) * 2.4 * uHeat * (.4 + .6 * max(dot(n, normalize(vec3(0., .45, -1.))), 0.));

@@ -119,6 +119,9 @@ const TOP_COLOR: Record<Topping, () => RGB> = {
   sugar: () => [0.97, 0.97, 0.95],
   strands: () => CHOC.dark,
   pearls: () => [0.8, 0.82, 0.86],
+  coconut: () => [0.95, 0.93, 0.88],
+  candy: () => (Math.random() < 0.5 ? [0.85, 0.1, 0.12] : [0.97, 0.96, 0.95]),
+  powder: () => [0.97, 0.96, 0.94],
 };
 
 const ORDER: readonly Stage[] = [

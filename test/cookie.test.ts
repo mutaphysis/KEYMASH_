@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { readRecipe, recipeKey, SHAPES } from '../src/modes/cookie/recipe';
+import { readRecipe, recipeKey, SHAPES, MAX_TOPPINGS, PIECE_LAYERS } from '../src/modes/cookie/recipe';
 import type { Stage } from '../src/modes/cookie/recipe';
 import { Field, outline, anchors, distanceTransform, FIELD_N, FIELD_EXT } from '../src/modes/cookie/shapes';
 import { Bakery, MAX_CRUMBS } from '../src/modes/cookie/bakery';
@@ -22,6 +22,9 @@ const POOL = [
   '🍒',
   '🔥',
   '❄️',
+  '🥥',
+  '🍬',
+  '☁️',
   '漢',
   '\uD800',
   '\u0000',
@@ -51,6 +54,10 @@ test('keywords, numbers, symbols and quotes set the recipe', () => {
   expect(blank.message).toBe('');
   expect(blank.count).toBeGreaterThanOrEqual(1);
   expect(blank.count).toBeLessThanOrEqual(3);
+
+  // four kinds at once: powder dusts over three kinds of pieces
+  const four = readRecipe('sprinkles 🥥🥥 🍬🍬 ,,,');
+  expect(four.toppings.map((tp) => tp.kind).sort()).toEqual(['candy', 'coconut', 'powder', 'sprinkles']);
 });
 
 test('fuzz: any text is a recipe with every value in range', () => {
@@ -76,8 +83,9 @@ test('fuzz: any text is a recipe with every value in range', () => {
     within(c.glitter, 0, 1);
     expect(Number.isFinite(c.rotation)).toBe(true);
     for (const v of [...c.color, ...c.accent]) within(v, 0, 1);
-    expect(c.toppings.length).toBeLessThanOrEqual(2);
-    for (const tp of c.toppings) within(tp.amount, 0.1, 1);
+    expect(c.toppings.length).toBeLessThanOrEqual(MAX_TOPPINGS);
+    expect(c.toppings.filter((tp) => tp.kind !== 'powder').length).toBeLessThanOrEqual(PIECE_LAYERS);
+    for (const tp of c.toppings) within(tp.amount, 0.05, 1);
     expect(c.letters.length).toBeLessThanOrEqual(3);
     expect(recipeKey(readRecipe(src))).toBe(recipeKey(c));
   }

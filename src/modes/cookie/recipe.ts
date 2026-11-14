@@ -9,7 +9,7 @@ export type Shape = 'round' | 'star' | 'heart' | 'tree' | 'bear' | 'bell';
 export type Coat = 'none' | 'icing' | 'chocolate' | 'glaze';
 export type Flow = 'thick' | 'smooth' | 'runny';
 export type Pattern = 'plain' | 'stripes' | 'zigzag' | 'swirl' | 'half';
-export type Topping = 'sprinkles' | 'sugar' | 'strands' | 'pearls';
+export type Topping = 'sprinkles' | 'sugar' | 'strands' | 'pearls' | 'coconut' | 'candy' | 'powder';
 export type Face = 'none' | 'eyes' | 'smile' | 'frown';
 export type Extra = 'cherry' | 'almond';
 export type Stage =
@@ -65,7 +65,12 @@ export interface Recipe {
 
 export const DOUGHS: readonly Dough[] = ['butter', 'ginger', 'cocoa', 'oat', 'matcha'];
 export const SHAPES: readonly Shape[] = ['round', 'star', 'heart', 'tree', 'bear', 'bell'];
-export const TOPPINGS: readonly Topping[] = ['sprinkles', 'sugar', 'strands', 'pearls'];
+export const TOPPINGS: readonly Topping[] = ['sprinkles', 'sugar', 'strands', 'pearls', 'coconut', 'candy', 'powder'];
+/** at most this many toppings at once, of which at most PIECE_LAYERS lie on top as pieces (powder is a dusting) */
+export const MAX_TOPPINGS = 4;
+export const PIECE_LAYERS = 3;
+/** what a cookie gets when the text asks for nothing on top; sprinkles twice as likely */
+const DEFAULT_TOPS: readonly Topping[] = ['sprinkles', 'sprinkles', 'sugar', 'strands', 'pearls', 'coconut', 'candy', 'powder'];
 
 type Colour = 'white' | 'pink' | 'red' | 'orange' | 'yellow' | 'green' | 'mint' | 'blue' | 'purple';
 const COLOURS: readonly Colour[] = ['white', 'pink', 'red', 'orange', 'yellow', 'green', 'mint', 'blue', 'purple'];
@@ -180,6 +185,12 @@ const WORDS: Record<string, [Stage, Apply]> = {
   strands: kw('toppings', (a) => (a.top.strands += 2)),
   pearls: kw('toppings', (a) => (a.top.pearls += 2)),
   glitter: kw('toppings', (a) => (a.glitter += 1)),
+  coconut: kw('toppings', (a) => (a.top.coconut += 2)),
+  candy: kw('toppings', (a) => (a.top.candy += 2)),
+  candycane: kw('toppings', (a) => (a.top.candy += 2)),
+  powder: kw('toppings', (a) => (a.top.powder += 2)),
+  powdered: kw('toppings', (a) => (a.top.powder += 2)),
+  dust: kw('toppings', (a) => (a.top.powder += 2)),
   eyes: kw('deco', (a) => (a.eyes = true)),
   cherry: extra('cherry'),
   nut: extra('almond'),
@@ -231,6 +242,11 @@ const COUNTED: Record<string, Stage> = {
   '🔮': 'toppings',
   '^': 'toppings',
   '✨': 'toppings',
+  ',': 'toppings',
+  '☁': 'toppings',
+  '🥥': 'toppings',
+  '🍬': 'toppings',
+  '🍭': 'toppings',
   ':': 'deco',
   ')': 'deco',
   '(': 'deco',
@@ -254,13 +270,14 @@ export function readRecipe(src: unknown): Recipe {
   const dFlow = rnd();
   const dTop = rnd();
   const dThick = rnd();
+  const dTop2 = rnd(); // newer draws go last, so older ones keep their values
 
   const a: Asked = {
     chipWord: false,
     colours: [],
     pattern: new Set(),
     border: false,
-    top: { sprinkles: 0, sugar: 0, strands: 0, pearls: 0 },
+    top: { sprinkles: 0, sugar: 0, strands: 0, pearls: 0, coconut: 0, candy: 0, powder: 0 },
     glitter: 0,
     eyes: false,
   };
@@ -400,6 +417,9 @@ export function readRecipe(src: unknown): Recipe {
   a.top.sugar += has('+');
   a.top.strands += has('-');
   a.top.pearls += has('°') + has('🔮');
+  a.top.powder += has(',') + has('☁');
+  a.top.coconut += has('🥥');
+  a.top.candy += has('🍬') + has('🍭');
   let toppings = TOPPINGS.filter((k) => a.top[k] > 0).map((kind) => ({ kind, amount: clamp(a.top[kind] / 4, 0.25, 1) }));
   const nGlitter = a.glitter + has('^') + has('✨');
   const glitter = nGlitter ? clamp(nGlitter / 3, 0.34, 1) : 0;
@@ -407,13 +427,22 @@ export function readRecipe(src: unknown): Recipe {
   const face: Face = has(')') ? 'smile' : has('(') ? 'frown' : has(':') || has('👀') || a.eyes ? 'eyes' : 'none';
   let extraPiece: Extra | null = a.extra ?? null;
 
-  if (!toppings.length && !chips && face === 'none' && !letters.length && !extraPiece && !glitter) {
-    if (dTop < 0.3) toppings = [{ kind: 'sprinkles', amount: 0.4 }];
-    else if (dTop < 0.45) toppings = [{ kind: 'sugar', amount: 0.4 }];
+  // nothing asked for on top: most cookies get something anyway, now and then two things
+  if (!toppings.length && !chips && face === 'none' && !letters.length && !extraPiece && !glitter && dTop < 0.85) {
+    const kind = DEFAULT_TOPS[Math.floor((dTop / 0.85) * DEFAULT_TOPS.length)]!;
+    toppings = [{ kind, amount: 0.35 + 0.3 * dTop2 }];
+    if (dTop2 < 0.3) toppings.push({ kind: kind === 'powder' ? 'sprinkles' : 'powder', amount: 0.4 });
   }
 
-  // tidy: the cookie must never get crowded
-  if (toppings.length > 2) toppings = [...toppings].sort((x, y) => y.amount - x.amount).slice(0, 2); // stable: ties keep the list order
+  // tidy: the cookie must never get crowded. The most asked-for win (ties keep the list order).
+  const kept: typeof toppings = [];
+  for (const tp of [...toppings].sort((x, y) => y.amount - x.amount)) {
+    const pieces = kept.filter((k) => k.kind !== 'powder').length;
+    if (kept.length < MAX_TOPPINGS && (tp.kind === 'powder' || pieces < PIECE_LAYERS)) kept.push(tp);
+  }
+  toppings = kept;
+  // three kinds of pieces share the room
+  if (toppings.filter((k) => k.kind !== 'powder').length > 2) for (const tp of toppings) tp.amount *= 0.75;
   if (face !== 'none' || letters.length) {
     for (const tp of toppings) tp.amount *= 0.5;
     chips = Math.min(chips, 8);

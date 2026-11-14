@@ -55,14 +55,15 @@ and any keysmash is a recipe.
 | how it flows | `!` thick, `!!` smooth, `!!!` runny; `matte` `glossy` `runny` | from the text |
 | colour | `white red pink orange yellow green mint blue purple`, 🍓 🍋 🍊 🥝 🫐 🍇; the second colour named pipes the pattern | from the text |
 | pattern | `=` stripes, `~` zigzag, `@` swirl, `%` half dipped, `#` border | plain |
-| toppings | `*` sprinkles, `+` sugar, `-` chocolate strands, `°` pearls; more symbols, more of it | sometimes a few sprinkles |
+| toppings | `*` sprinkles, `+` sugar, `-` chocolate strands, `°` pearls, 🥥 `coconut`, 🍬 🍭 `candy` (crushed candy cane), `,` ☁️ `powder` (powdered sugar); more symbols, more of it | usually one, now and then two |
 | glitter | `^` ✨ | none |
 | face | `:` 👀 eyes, `)` smile, `(` frown | none |
 | letters | `[JOY]`: up to three, piped on | none |
 | on top | 🍒 `cherry`, 🥜 `almond` | nothing |
 | message | `"in quotes"` | Season's Greetings |
 
-Hot and long burns: `250 30` comes out black. At most two toppings; a face or letters thin
+Hot and long burns: `250 30` comes out black. Up to four toppings at once, three of them
+pieces (powdered sugar dusts over the rest); three kinds of pieces, a face or letters thin
 them out so the cookie never gets crowded. Chocolate takes `white` (white chocolate) and
 `pink` (ruby); every other colour makes it milk chocolate. An uncoated cookie gets its pattern
 piped straight on.

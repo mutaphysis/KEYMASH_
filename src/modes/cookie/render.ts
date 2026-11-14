@@ -33,7 +33,8 @@ const ELEV: Record<Stage, number> = {
   serve: 66,
   sweep: 50,
 };
-const TOP_KIND: Record<Topping, number> = { sprinkles: 1, sugar: 2, strands: 3, pearls: 4 };
+/** shader kinds of the pieces that lie on top; powder is a dusting, not a layer of pieces */
+const TOP_KIND: Record<Exclude<Topping, 'powder'>, number> = { sprinkles: 1, sugar: 2, strands: 3, pearls: 4, coconut: 5, candy: 6 };
 const COAT_KIND = { none: 0, icing: 1, chocolate: 2, glaze: 3 };
 const FLOW_KIND = { thick: 0, smooth: 1, runny: 2 };
 const COAT_SHAPE = { thick: [0.045, 0.13], smooth: [0.03, 0.09], runny: [0.02, 0.02] };
@@ -461,12 +462,19 @@ export class CookieRenderer {
     f3('uInside', lin([0, 1, 2].map((k) => Math.min(1, mix(d.raw[k]!, d.baked[k]!, 0.35) * 1.1)) as RGB));
     i1('uDoughKind', DOUGHS.indexOf(r.dough));
     f1('uChips', r.chips > 0 ? 0.1 + (0.85 * r.chips) / 16 : 0);
-    const topping = (t: Recipe['toppings'][number] | undefined): number[] =>
-      t
-        ? [TOP_KIND[t.kind], t.kind === 'pearls' ? 0.2 : mix(0.34, 0.2, t.amount), t.kind === 'pearls' ? 0.85 : 0.55 + 0.4 * t.amount]
-        : [0, 1, 0];
-    f3('uTopA', topping(r.toppings[0]));
-    f3('uTopB', topping(r.toppings[1]));
+    // per layer: kind, cell size, share of cells that hold a piece
+    const tops = new Float32Array(9);
+    let layer = 0;
+    let powder = 0;
+    for (const t of r.toppings) {
+      if (t.kind === 'powder') powder = t.amount;
+      else if (layer < 3) {
+        const cell = t.kind === 'pearls' ? 0.2 : t.kind === 'candy' ? mix(0.38, 0.24, t.amount) : mix(0.34, 0.2, t.amount);
+        tops.set([TOP_KIND[t.kind], cell, t.kind === 'pearls' ? 0.85 : 0.55 + 0.4 * t.amount], 3 * layer++);
+      }
+    }
+    gl.uniform3fv(u.uTop ?? null, tops);
+    f1('uPowder', powder);
     f1('uGlitter', r.glitter);
     i1('uPatternKind', PATTERN_KIND[r.pattern]);
     f1('uBorder', r.border ? 1 : 0);
