@@ -306,6 +306,31 @@ function boxBlur(src: Float32Array, dst: Float32Array, r: number, rows: boolean)
   }
 }
 
+/** how one bite looks: wider along the cookie's edge than deep, with an uneven rim */
+export interface BiteShape {
+  /** the direction out of the cookie, radians; the bite is wide across it */
+  angle: number;
+  /** width over depth */
+  wide: number;
+  /** lumps on the rim: [harmonic, amplitude as a share of the radius, phase] */
+  lumps: [number, number, number][];
+}
+
+/** a random bite; the lumps add up to at most .15 of the radius, so no tooth reaches far */
+export function biteShape(rnd: () => number, angle: number): BiteShape {
+  const lumps: [number, number, number][] = [
+    [2, 0.05, 0],
+    [3, 0.045, 0],
+    [5, 0.035, 0],
+    [9, 0.02, 0],
+  ];
+  for (const l of lumps) {
+    l[1] *= 0.4 + 0.6 * rnd();
+    l[2] = rnd() * Math.PI * 2;
+  }
+  return { angle, wide: 1.15 + 0.25 * rnd(), lumps };
+}
+
 export class Field {
   /** RGBA float tile, row-major, y up: R outline distance, G bite distance (negative = eaten), B decoration distance (negative = piped), A the footprint blurred wide (the rise follows it) */
   readonly data = new Float32Array(N * N * 4);
@@ -360,21 +385,29 @@ export class Field {
     return Math.max(s.r, -s.g);
   }
 
-  /** carve a scalloped circle; radius may grow on repeated calls (min with what is there) */
-  bite(cx: number, cy: number, radius: number, phase: number): void {
+  /** carve a bite; radius may grow on repeated calls (min with what is there) */
+  bite(cx: number, cy: number, radius: number, shape: BiteShape): void {
     if (!(Number.isFinite(cx) && Number.isFinite(cy) && radius > 0)) return;
-    const reach = radius + 0.1;
+    const reach = radius * shape.wide * 1.2 + 0.1;
     const i0 = Math.max(0, Math.floor((cx - reach + FIELD_EXT) / TEXEL));
     const i1 = Math.min(N - 1, Math.ceil((cx + reach + FIELD_EXT) / TEXEL));
     const j0 = Math.max(0, Math.floor((cy - reach + FIELD_EXT) / TEXEL));
     const j1 = Math.min(N - 1, Math.ceil((cy + reach + FIELD_EXT) / TEXEL));
+    const ca = Math.cos(shape.angle);
+    const sa = Math.sin(shape.angle);
     for (let j = j0; j <= j1; j++)
       for (let i = i0; i <= i1; i++) {
         const x = coord(i) - cx;
         const y = coord(j) - cy;
-        const dist = Math.hypot(x, y) - radius - 0.035 * Math.cos(7 * Math.atan2(y, x) + phase);
-        const k = (j * N + i) * 4 + 1;
-        if (dist < this.data[k]!) this.data[k] = dist;
+        // squeezed along the edge, so the circle comes out wide; the distance stays a safe underestimate
+        const along = (y * ca - x * sa) / shape.wide;
+        const out = x * ca + y * sa;
+        const a = Math.atan2(out, along);
+        let rim = 1;
+        for (const [k, amp, ph] of shape.lumps) rim += amp * Math.cos(k * a + ph);
+        const dist = Math.hypot(along, out) - radius * rim;
+        const at = (j * N + i) * 4 + 1;
+        if (dist < this.data[at]!) this.data[at] = dist;
       }
     this.version++;
   }

@@ -4,7 +4,8 @@
 import { hash, mulberry32 } from '../../lang/rng';
 import { readRecipe, recipeKey, CHOC } from './recipe';
 import type { Dough, Recipe, RGB, Stage, Topping } from './recipe';
-import { Field, outline, FIELD_EXT } from './shapes';
+import { Field, outline, biteShape, FIELD_EXT } from './shapes';
+import type { BiteShape } from './shapes';
 
 export interface Cookie {
   x: number;
@@ -169,7 +170,7 @@ interface ActiveBite {
   cy: number;
   r: number;
   target: number;
-  phase: number;
+  shape: BiteShape;
   t: number;
   dur: number;
   /** the last bite of a cookie: it crumbles */
@@ -631,12 +632,32 @@ export class Bakery {
       }
     }
     if (!best) return false;
-    const target = 0.34 * (0.9 + 0.2 * this.rnd());
-    this.active = { cookie: best, cx: bx, cy: by, r: 0, target, phase: this.rnd() * 6.2832, t: 0, dur: 0.14, last: false };
+    const target = 0.38 * (0.8 + 0.4 * this.rnd());
+    const [cx, cy, out] = this.rim(best.field, bx, by, target * 0.3);
+    this.active = { cookie: best, cx, cy, r: 0, target, shape: biteShape(this.rnd, out), t: 0, dur: 0.14, last: false };
     this.queued.push({ type: 'bite', pan: this.pan(best) });
     const n = Math.round((10 + this.rnd() * 6) * (this.gentle ? 0.5 : 1));
-    this.scatter(best, bx, by, target, n, true);
+    this.scatter(best, cx, cy, target, n, true);
     return true;
+  }
+
+  /**
+   * Bites come from the edge: a tap deeper than `depth` moves out along the field's slope to that depth.
+   * Returns the centre and the direction out of the cookie (random where the slope is flat, like the very middle).
+   */
+  private rim(f: Field, x: number, y: number, depth: number): [number, number, number] {
+    const h = 0.03;
+    let out = this.rnd() * Math.PI * 2;
+    for (let i = 0; i < 4; i++) {
+      const gx = f.d(x + h, y) - f.d(x - h, y);
+      const gy = f.d(x, y + h) - f.d(x, y - h);
+      if (Math.hypot(gx, gy) > 1e-3) out = Math.atan2(gy, gx);
+      const step = -f.d(x, y) - depth;
+      if (!(step > 0.005)) break;
+      x += Math.cos(out) * step;
+      y += Math.sin(out) * step;
+    }
+    return [x, y, out];
   }
 
   /** the active bite opens a little further; when it is done the cookie may crumble */
@@ -646,7 +667,7 @@ export class Bakery {
     a.t = Math.min(a.dur, a.t + dt);
     const f = a.t / a.dur;
     a.r = a.target * (1 - (1 - f) * (1 - f));
-    a.cookie.field.bite(a.cx, a.cy, a.r, a.phase);
+    a.cookie.field.bite(a.cx, a.cy, a.r, a.shape);
     if (a.t < a.dur) return;
     this.active = null;
     const c = a.cookie;
@@ -656,7 +677,7 @@ export class Bakery {
     } else if (c.field.left() < 0.08) {
       const [cx, cy] = c.field.centroid() ?? [0, 0];
       this.scatter(c, cx, cy, 0.3, 8, false);
-      this.active = { cookie: c, cx, cy, r: 0, target: 1.6, phase: a.phase, t: 0, dur: 0.3, last: true };
+      this.active = { cookie: c, cx, cy, r: 0, target: 1.6, shape: a.shape, t: 0, dur: 0.3, last: true };
     }
   }
 

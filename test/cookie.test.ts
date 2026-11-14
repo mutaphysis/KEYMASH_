@@ -164,6 +164,16 @@ test('eating: bites carve the cookies, crumbs stay bounded, an empty tray starts
   expect(b.batch).toBe(1);
 });
 
+test('a tap in the middle bites the nearest edge, not a hole', () => {
+  const b = new Bakery('round 1', 1.5);
+  for (let t = 0; t < 30 && b.stage !== 'serve'; t += 0.05) b.tick(0.05);
+  const c = b.cookies[0]!;
+  expect(b.bite(c.x, 5, c.z, 0, -1, 0)).toBe(true);
+  b.tick(0.5);
+  expect(c.field.left()).toBeLessThan(0.97);
+  expect(c.field.d(0, 0)).toBeLessThan(0);
+});
+
 test('a live edit rebakes only when the picture changes', () => {
   const b = new Bakery('butter round 2 180 12 plain', 1.5);
   for (let t = 0; t < 30; t += 0.05) b.tick(0.05);

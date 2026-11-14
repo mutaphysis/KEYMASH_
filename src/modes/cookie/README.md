@@ -86,7 +86,9 @@ start.
 
 ## Eating
 
-Tap a cookie to bite a piece off. Crumbs fall, bounce and stay, on the cookie or on the tray.
+Tap a cookie to bite a piece off. Bites come from the edge, each one a little different in size
+and shape; a tap in the middle bites the nearest edge. Crumbs fall, bounce and stay, on the
+cookie or on the tray.
 A cookie that is almost gone crumbles. When the tray is empty a new batch starts.
 
 ## Sound
