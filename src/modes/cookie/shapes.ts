@@ -96,17 +96,24 @@ function tree(widths: number[], top: number, bottom: number): Sdf {
   return poly([...right, ...left]);
 }
 
+/**
+ * Two round lobes on a square tip, the sides tangent to the lobes so the outline has no kink
+ * (Inigo Quilez's exact heart, scaled and centred, the tip rounded a little more).
+ */
 function heart(): Sdf {
-  return union(
-    0.1,
-    circle(-0.42, 0.35, 0.5),
-    circle(0.42, 0.35, 0.5),
-    poly([
-      [-0.8, 0.2],
-      [0.8, 0.2],
-      [0, -0.95],
-    ]),
-  );
+  const s = 1.55;
+  const dy = 0.856; // half its height: the middle of the heart sits at the origin
+  return (x, y) => {
+    const px = Math.abs(x) / s;
+    const py = (y + dy) / s;
+    let d: number;
+    if (px + py > 1) d = Math.hypot(px - 0.25, py - 0.75) - Math.SQRT2 / 4;
+    else {
+      const m = 0.5 * Math.max(px + py, 0);
+      d = Math.sqrt(Math.min(px * px + (py - 1) ** 2, (px - m) ** 2 + (py - m) ** 2)) * Math.sign(px - py);
+    }
+    return d * s - 0.04;
+  };
 }
 
 function teddy(armY: number): Sdf {
