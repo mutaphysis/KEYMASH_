@@ -345,6 +345,11 @@ globalStyle('#app.split #controls button', { height: 64 });
 globalStyle('#code', { '@media': { '(min-width: 800px)': { fontSize: 22 } } });
 globalStyle('.logo', { '@media': { '(min-width: 800px)': { fontSize: 30 } } });
 
+// ---------- stage only (⛶): just the picture; real fullscreen on top where the browser allows it ----------
+globalStyle('#app.stageonly #edit, #app.stageonly #codeview, #app.stageonly .playbtns', { display: 'none' });
+globalStyle('#app.stageonly #play', { flex: 1, vars: { '--pl': layout.safeLeft, '--pr': layout.safeRight } });
+globalStyle('#app.stageonly #stageWrap', { flex: 1, borderBottom: 0 });
+
 // ---------- fallback message: invisible for the first second so a normal start never flashes it ----------
 globalStyle('#nojs', {
   position: 'fixed',

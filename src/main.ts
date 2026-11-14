@@ -266,6 +266,21 @@ $('btn-run').addEventListener('click', run);
 $('btn-idle-run').addEventListener('click', run);
 $('btn-stop').addEventListener('click', edit);
 $('btn-restart').addEventListener('click', () => P().restart());
+
+// ⛶ in the stage corner: only the picture, the rest of the UI hides. Where the browser allows it
+// (not on iPhone, not in some embeds) the page goes fullscreen too.
+const fullBtn = $<KmButton>('btn-full');
+function stageOnly(on: boolean): void {
+  app.classList.toggle('stageonly', on);
+  fullBtn.icon = on ? '✖' : '⛶';
+  if (on && document.fullscreenEnabled && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+fullBtn.addEventListener('click', () => stageOnly(!app.classList.contains('stageonly')));
+// Esc or a system gesture left fullscreen: bring the UI back as well
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) stageOnly(false);
+});
 KmMute.audio = audio;
 layout();
 $('btn-mash').addEventListener('click', () => {

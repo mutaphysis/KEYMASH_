@@ -1,5 +1,5 @@
 import { globalStyle, keyframes, style, styleVariants } from '@vanilla-extract/css';
-import { vars, rgba, blink } from '../../styles/theme.css';
+import { vars, layout, rgba, blink } from '../../styles/theme.css';
 
 /** the <km-button> element itself takes no space: its <button> is the flex item */
 export const host = style({ display: 'contents' });
@@ -58,6 +58,23 @@ export const variant = styleVariants({
     base,
     { flex: '0 0 auto', width: 52, height: 52, padding: 0, fontSize: 22, borderRadius: vars.radius.control, textShadow: 'none' },
   ],
+  /** tiny, in the stage's top right corner: fullscreen */
+  corner: [
+    base,
+    {
+      top: `calc(8px + ${layout.safeTop})`,
+      right: 'calc(8px + var(--pr, 0px))',
+      zIndex: 6,
+      width: 34,
+      height: 34,
+      padding: 0,
+      fontSize: 18,
+      lineHeight: 1,
+      opacity: 0.6,
+      background: 'rgba(0,0,0,.35)',
+      selectors: { '&:hover, &:focus-visible': { opacity: 1 }, '&:active': { transform: 'scale(.92)' } },
+    },
+  ],
   /** the big RUN in the empty stage (split view) */
   idle: [
     base,
@@ -92,7 +109,7 @@ globalStyle(`${variant.control} i`, { fontStyle: 'normal', fontSize: 26, lineHei
 globalStyle(`${variant.control} span`, { fontSize: 11, letterSpacing: 1, '@media': { '(max-width: 380px)': { fontSize: 10 } } });
 globalStyle(`${host}[primary] > ${variant.control} i`, { fontSize: 30 });
 globalStyle(`${host}[primary] > ${variant.control} span`, { fontSize: 15, fontWeight: 'bold' });
-globalStyle(`${variant.play} i, ${variant.idle} i, ${variant.row} i, ${variant.header} i`, { fontStyle: 'normal' });
+globalStyle(`${variant.play} i, ${variant.idle} i, ${variant.row} i, ${variant.header} i, ${variant.corner} i`, { fontStyle: 'normal' });
 globalStyle(`${variant.play} i + span:not(:empty), ${variant.idle} i + span:not(:empty)`, { marginLeft: '0.4em' });
 
 // countdown(): a fill inside the button drains from right to left
@@ -100,6 +117,7 @@ const drain = keyframes({ from: { transform: 'scaleX(1)' }, to: { transform: 'sc
 const counting = `${host}[counting] > button`;
 globalStyle(`${host} > button`, { position: 'relative' });
 globalStyle(`${host} > button > *`, { position: 'relative', zIndex: 1 });
+globalStyle(`${host} > ${variant.corner}`, { position: 'absolute' }); // pinned to the stage corner, not part of a row
 globalStyle(counting, { borderColor: rgba(vars.rgb.accent, 1), color: '#fff', boxShadow: `0 0 16px ${rgba(vars.rgb.accent, 0.35)}` });
 globalStyle(`${counting}::before`, {
   content: '""',

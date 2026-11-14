@@ -72,6 +72,11 @@ On wide screens (iPad landscape, desktop) editor and stage sit side by side.
 While a program runs, every edit is hot-swapped into it ~0.6 s after you stop
 typing — the clock, the picture and the sound keep going.
 
+### Fullscreen
+**⛶** in the stage's top right corner hides everything but the picture and, where the
+browser allows it, goes fullscreen as well (on iPhone, which has no fullscreen for pages,
+only the rest of the UI hides). ✖ or Esc brings the UI back.
+
 ### Cheat-sheet pictures
 The cards behind 📖 are listed in `src/modes/<id>/sheet.ts` (snippet, short name, how long it runs
 before the picture is taken). `bun scripts/sheet.ts` plays every snippet through the real
