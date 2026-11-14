@@ -1,25 +1,14 @@
 // KEYMASH virtual machine. Pure: no DOM, no audio. tick() -> timed events.
-import { lex, fmtNum } from './lexer';
-import type { Token, WordTok, SymTok } from './lexer';
-import { keyInfo, adjacent, EMOJI_POWERS, stripAccents } from './keys';
-import type { KeyInfo } from './keys';
-import type {
-  Color,
-  Point,
-  Op,
-  Instrument,
-  DrumKind,
-  SfxKind,
-  ShapeKind,
-  ParticleKind,
-  TextStyle,
-  VMEvent,
-  EvInput,
-  EvBase,
-} from './types';
-import { t, tl } from '../modes/keymash/messages';
-import type { KeymashMsg } from '../modes/keymash/messages';
-import { hash, mulberry32 } from './rng';
+import { lex, fmtNum } from '../../lang/lexer';
+import type { Token, WordTok, SymTok } from '../../lang/lexer';
+import { keyInfo, adjacent, stripAccents } from '../../lang/keys';
+import type { KeyInfo } from '../../lang/keys';
+import { hash, mulberry32 } from '../../lang/rng';
+import type { Instrument, DrumKind, SfxKind } from '../../engine/sound';
+import type { Color, Point, Op, ShapeKind, ParticleKind, TextStyle, VMEvent, EvInput, EvBase } from './types';
+import { EMOJI_POWERS } from './powers';
+import { t, tl } from './messages';
+import type { KeymashMsg } from './messages';
 
 export type ScaleName = 'penta' | 'major' | 'minor' | 'blues' | 'spooky' | 'japan';
 

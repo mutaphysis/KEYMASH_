@@ -1,10 +1,10 @@
 // Play mode: runs the VM against the audio clock, feeds the renderer and the
 // scrolling, highlighted code view.
-import { VM, MAX_BPM } from '../../lang/vm';
+import { VM, MAX_BPM } from './vm';
 import { Renderer } from './render';
 import type { AudioEngine } from '../../engine/audio';
-import { isSound } from '../../lang/types';
-import type { VMEvent, EventOf } from '../../lang/types';
+import { isSound } from './types';
+import type { VMEvent, EventOf } from './types';
 import { $ } from '../../ui/dom';
 import { VERSION_LABEL } from '../../version';
 import { t } from './messages';
@@ -159,7 +159,7 @@ export class Player {
         }
         this.boot.textContent += lines[i++] + '\n';
         try {
-          this.audio.play({ type: 'sfx', dt: 0, kind: 'data', vel: 0.3, p: 1, pan: 0 }, this.audio.now, 0.125);
+          this.audio.play({ type: 'sfx', kind: 'data', vel: 0.3, p: 1, pan: 0 }, this.audio.now, 0.125);
         } catch (e) {}
         setTimeout(step, 110);
       };
@@ -203,7 +203,7 @@ export class Player {
     const deg = Math.round((x / this.r.hw + 1) * 5);
     const midi = 57 + [0, 3, 5, 7, 10][((deg % 5) + 5) % 5] + 12 * Math.floor(deg / 5) - (y > 0 ? 12 : 0);
     this.audio.play(
-      { type: 'note', dt: 0, inst: 'bell', midi, dur: 2, vel: 0.6, glide: 0, vib: 0, echo: 0, pan: x / this.r.hw },
+      { type: 'note', inst: 'bell', midi, dur: 2, vel: 0.6, glide: 0, vib: 0, echo: 0, pan: x / this.r.hw },
       this.audio.now,
       0.125,
     );

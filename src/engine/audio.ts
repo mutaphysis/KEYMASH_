@@ -1,6 +1,6 @@
-// KEYMASH audio: a tiny quirky synth workstation built on WebAudio. No samples.
-
-import type { VMEvent, EventOf, DrumKind, SfxKind } from '../lang/types';
+// The audio engine every mode shares: a tiny quirky synth workstation built on WebAudio. No samples.
+// It plays Sounds (./sound.ts); the modes decide when.
+import type { DrumKind, SfxKind, Panned, SoundOf } from './sound';
 
 declare global {
   interface Window {
@@ -325,7 +325,7 @@ export class AudioEngine {
   }
 
   // ---- dispatcher ----
-  play(e: VMEvent, t: number, tickDur: number): void {
+  play(e: Panned, t: number, tickDur: number): void {
     if (!this.ctx || this.muted) return;
     t = Math.max(t, this.ctx.currentTime + 0.005);
     try {
@@ -345,7 +345,7 @@ export class AudioEngine {
   }
 
   note(
-    e: Omit<EventOf<'note'>, 'dt' | 'glide' | 'vib' | 'echo'> & Partial<Pick<EventOf<'note'>, 'glide' | 'vib' | 'echo'>>,
+    e: Omit<SoundOf<'note'>, 'glide' | 'vib' | 'echo'> & Partial<Pick<SoundOf<'note'>, 'glide' | 'vib' | 'echo'>> & { pan?: number },
     t: number,
     tickDur: number,
   ): void {

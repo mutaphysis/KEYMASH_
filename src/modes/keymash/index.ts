@@ -1,4 +1,4 @@
-// KEYMASH_: every keystroke compiles. The VM lives in src/lang/vm.ts.
+// KEYMASH_: every keystroke compiles. The interpreter is vm.ts, its events types.ts.
 import type { ModeDef } from '../types';
 import type { VoiceMode } from '../../engine/audio';
 import { lex } from '../../lang/lexer';

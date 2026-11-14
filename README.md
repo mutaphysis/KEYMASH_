@@ -92,13 +92,13 @@ table in the mode's README. The pictures are committed and inlined into the buil
 src/main.ts              app shell: layout (phone / split view), run / edit, live hot-swap, drawer, mode switching
 src/modes/types.ts       ModeDef: everything a mode brings (see "Adding a mode")
 src/modes/index.ts       the registry: MODES in header-cycle order
-src/modes/keymash/       KEYMASH_: mode definition, player, renderer, backdrop, demos, cheat sheet, messages, theme, README (the language)
+src/modes/keymash/       KEYMASH_: interpreter (vm.ts), event protocol (types.ts), emoji powers, player, renderer,
+                         backdrop, demos, cheat sheet, messages, theme, README (the language)
 src/modes/petri/         PETRI_: genome, sim, culture, renderer, ambient, player, backdrop, demos, cheat sheet, messages, theme, README
-src/lang/types.ts        the event protocol (discriminated union) + op / sound / shape kinds
-src/lang/lexer.ts        total tokenizer (graphemes -> tokens), math evaluator
-src/lang/keys.ts         QWERTZ geometry (position, pitch, adjacency), emoji powers
-src/lang/rng.ts          seeded hash + PRNG shared by every mode
-src/lang/vm.ts           the KEYMASH interpreter: threads, loops, forks, emits events
+src/lang/lexer.ts        shared by every mode: total tokenizer (graphemes -> tokens), math evaluator
+src/lang/keys.ts         shared: QWERTZ geometry (position, pitch, adjacency)
+src/lang/rng.ts          shared: seeded hash + PRNG
+src/engine/sound.ts      what the audio engine plays (notes, drums, sfx, phone tones): the modes' sound vocabulary
 src/engine/audio.ts      WebAudio synth, drums, sfx, reverb/delay, typing sounds, speech
 src/ui/editor.ts         textarea, the mode's backdrop canvases, key bar
 src/ui/components/       light-DOM custom elements: km-button, km-mute, km-mode-icon, km-item, km-select, km-toast, km-drawer, km-card
@@ -110,10 +110,15 @@ scripts/sheet.ts         renders the cheat-sheet pictures (browser side: scripts
 scripts/icons.ts         renders the app icons
 ```
 
-The VM is pure (no DOM): `vm.tick()` returns a list of timed `VMEvent`s that the
+Shared code (`src/lang/`, `src/engine/`, `src/ui/`, `src/main.ts`) never imports from a mode;
+a mode only builds on it. Every mode reads its text through the same lexer, so the same text
+splits into the same tokens, glyph counts and highlight ranges everywhere; what a token *means*
+is the mode's business.
+
+The KEYMASH_ VM is pure (no DOM): `vm.tick()` returns a list of timed `VMEvent`s that the
 audio engine schedules and the renderer replays at the right moment. Adding an
-effect means adding a variant to `VMEvent` — the compiler then points at every
-place that has to handle it.
+effect means adding a variant to `VMEvent` (`src/modes/keymash/types.ts`) — the compiler then
+points at every place that has to handle it. A new kind of sound goes into `src/engine/sound.ts`.
 
 **Styles** are TypeScript, compiled to plain CSS at build time by
 [vanilla-extract](https://vanilla-extract.style). `src/styles/theme.css.ts` is a
@@ -142,7 +147,10 @@ in every language.
 1. Make `src/modes/<id>/` with an `index.ts` exporting a `ModeDef` (`src/modes/types.ts`
    documents every field): name, emoji, header icon (inline SVG), tagline, demos,
    key bar symbols, typing sound, status line, a `Backdrop` for the editor and a
-   `ModePlayer` for the stage (`#stage`, `#hud`, `#log`, `#boot`, `#codeview`).
+   `ModePlayer` for the stage (`#stage`, `#hud`, `#log`, `#boot`, `#codeview`). Read the text
+   with `lex()` (`src/lang/lexer.ts`), place keys with `keyInfo()`, seed with `hash()` /
+   `mulberry32()`, play `Sound`s through the shared `AudioEngine`; everything else (the
+   interpreter, its events, its effects) lives in the mode's folder.
 2. `messages.ts`: `defineMessages(en, de)` for its text.
 3. `theme.css.ts`: `createTheme(vars, {...})` plus a `style()` with the animation
    for switching in and starting / stopping (`transition`).

@@ -1,4 +1,5 @@
-// Shared types: the event protocol between the pure VM and the engines (audio, renderer, UI).
+// KEYMASH_'s event protocol between the pure VM and the player (audio, renderer, code view).
+import type { Sound } from '../../engine/sound';
 
 export interface Color {
   h: number;
@@ -192,54 +193,6 @@ export const OPS = [
 ] as const;
 export type Op = (typeof OPS)[number];
 
-export type Instrument = 'pluck' | 'bass' | 'bell' | 'chip' | 'lead' | 'pad' | 'organ' | 'piano' | 'robot';
-export type DrumKind = 'kick' | 'snare' | 'hat' | 'clap' | 'tom' | 'crash';
-export type SfxKind =
-  | 'data'
-  | 'computer'
-  | 'granted'
-  | 'spawn'
-  | 'boing'
-  | 'ooh'
-  | 'rumble'
-  | 'sweep'
-  | 'whoosh'
-  | 'chirp'
-  | 'zap'
-  | 'laser'
-  | 'gliss'
-  | 'question'
-  | 'explode'
-  | 'chime'
-  | 'crunch'
-  | 'kaching'
-  | 'fire'
-  | 'rain'
-  | 'party'
-  | 'whistle'
-  | 'bubbles'
-  | 'warp'
-  | 'bloop'
-  | 'drop'
-  | 'siren'
-  | 'bark'
-  | 'meow'
-  | 'moo'
-  | 'quack'
-  | 'oink'
-  | 'roar'
-  | 'fart'
-  | 'vroom'
-  | 'robot'
-  | 'ghost'
-  | 'ufo'
-  | 'rocket'
-  | 'train'
-  | 'buzz'
-  | 'ribbit'
-  | 'hoot'
-  | 'whalesong'
-  | 'hiss';
 export type ShapeKind = 'circle' | 'ring' | 'dot' | 'square' | 'tri' | 'poly' | 'star' | 'heart' | 'flower' | 'sun' | 'moon' | 'cross';
 export type ParticleKind =
   | 'burst'
@@ -281,12 +234,9 @@ export interface ParticleSpec {
 }
 
 export type VMEvent = EvBase &
-  // sound
+  // sound: whatever the engine plays, plus speech
   (
-    | { type: 'note'; inst: Instrument; midi: number; dur: number; vel: number; glide: number; vib: number; echo: number }
-    | { type: 'drum'; kind: DrumKind; vel: number }
-    | { type: 'sfx'; kind: SfxKind; vel: number; p: number }
-    | { type: 'dtmf'; digits: string }
+    | Sound
     | { type: 'say'; text: string; pitch: number; rate: number }
     // drawing
     | { type: 'stroke'; pts: Point[]; w: number; dur: number; color: Color; delay?: number; paw?: boolean }

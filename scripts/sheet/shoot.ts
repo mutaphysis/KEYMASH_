@@ -4,9 +4,9 @@
 import '../../src/fonts.css';
 import { MODES } from '../../src/modes';
 import type { SheetCard } from '../../src/modes/types';
-import { VM } from '../../src/lang/vm';
-import { isSound } from '../../src/lang/types';
-import type { VMEvent } from '../../src/lang/types';
+import { VM } from '../../src/modes/keymash/vm';
+import { isSound } from '../../src/modes/keymash/types';
+import type { VMEvent } from '../../src/modes/keymash/types';
 import { Renderer } from '../../src/modes/keymash/render';
 import { Petri } from '../../src/modes/petri/culture';
 import { MicroRenderer } from '../../src/modes/petri/render';

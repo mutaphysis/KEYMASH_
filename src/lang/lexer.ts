@@ -1,4 +1,6 @@
-// KEYMASH lexer: turns ANY string into tokens. It never throws.
+// The shared lexer: every mode reads its text through this. Turns ANY string into tokens and never
+// throws. Only syntax lives here (graphemes, words, numbers, runs, quotes, math); what a token
+// means is up to each mode.
 
 interface TokBase {
   g0: number;
