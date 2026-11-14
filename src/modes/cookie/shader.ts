@@ -29,7 +29,7 @@ uniform mat4 uViewProj;
 uniform float uTime, uGentle, uTopY, uSpot;
 uniform float uLift, uDoughR, uRAfter, uSquash, uPinX, uPinDir, uPin, uPinY, uPinLen, uPinW, uTBefore, uTAfter, uFlour, uDoughOn;
 uniform float uCutterY, uCutter, uGap, uEdge, uChipT, uHeat, uBaked, uPuff, uCoatReveal, uPattern, uTopT, uDeco, uErode, uDropH;
-uniform vec4 uCookie[3]; // x, z, gone
+uniform vec4 uCookie[3]; // x, z, gone, seed for its lumps
 uniform vec2 uRot[3];    // cos, sin of the cookie's turn
 uniform int uCount;
 uniform float uSize, uThick, uRise;
@@ -66,13 +66,14 @@ float sat(float x) { return clamp(x, 0., 1.); }
 float smax(float a, float b, float k) { float h = max(k - abs(a - b), 0.) / k; return max(a, b) + h * h * k * .25; }
 
 // ---- the cookies' footprints ----
-struct Ck { int i; vec2 q; float R; float G; float B; };
+struct Ck { int i; vec2 q; float R; float G; float B; float D; };
 
 // R outline, G bite, B piping; in cookie units. Past the tile's edge the outline is at least that much further.
-vec3 field(int i, vec2 q) {
+// A: the footprint blurred wide, about .5 at a straight edge, near 1 deep inside, less in narrow arms.
+vec4 field(int i, vec2 q) {
   vec2 uv = q / (2. * EXT) + .5;
   vec2 cl = clamp(uv, .5 / FN, 1. - .5 / FN);
-  vec3 f = texture(uField, vec2((float(i) + cl.x) / 3., cl.y)).rgb;
+  vec4 f = texture(uField, vec2((float(i) + cl.x) / 3., cl.y));
   f.r += length((uv - cl) * 2. * EXT);
   return f;
 }
@@ -88,13 +89,13 @@ void nearest(vec3 p, out Ck c) {
     float l = dot(d, d);
     if (l < best) { best = l; bi = i; }
   }
-  c.i = bi; c.q = vec2(0.); c.R = 1e3; c.G = 1.; c.B = 1.;
+  c.i = bi; c.q = vec2(0.); c.R = 1e3; c.G = 1.; c.B = 1.; c.D = 0.;
   if (bi < 0) return;
   vec2 v = (p.xz - uCookie[bi].xy) * vec2(1., -1.) / uSize;
   vec2 r = uRot[bi];
   c.q = vec2(r.x * v.x + r.y * v.y, -r.y * v.x + r.x * v.y);
-  vec3 f = field(bi, c.q);
-  c.R = f.r + uErode / uSize; c.G = f.g; c.B = f.b;
+  vec4 f = field(bi, c.q);
+  c.R = f.r + uErode / uSize; c.G = f.g; c.B = f.b; c.D = f.a;
 }
 
 // ---- shapes ----
@@ -112,8 +113,9 @@ float sdDough(vec3 p) {
   return (min(max(d.x, d.y), 0.) + length(max(d, 0.)) - h) * min(sy, sxz) + uErode;
 }
 
-// the dome is flat away from the edge: a height that followed the distance all the way would crease along the middle
-float topH(float Rw) { return uThick * (1. + .6 * uRise * uPuff * (1. - smoothstep(-.35, 0., Rw))); }
+// The rise follows the blurred footprint, not the distance to the edge: a distance has a ridge
+// along every arm and the dome would come out as a pyramid. Narrow tips stay low and round.
+float topH(float D) { return uThick * (1. + .6 * uRise * uPuff * smoothstep(.5, .95, D)); }
 
 float sdBody(vec3 p, float Rw, float H) {
   float er = uEdge * min(.07 + .125 * uThick, H * .5);
@@ -159,7 +161,7 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
   // a piece stays inside its cell: the march only ever sees the cell it is in
   float reach = kind < .5 ? .075 : kind < 1.5 ? .062 : kind < 2.5 ? .024 : kind < 3.5 ? .062 : .045;
   vec2 ctr = (cell + .5 + (h.xy - .5) * 2. * clamp((cs * .5 - .012 - reach) / cs, 0., .22)) * cs;
-  vec3 fc = field(ci, ctr);
+  vec4 fc = field(ci, ctr);
   float Rc = fc.r + uErode / uSize;
   if (Rc > -(max(uCoatP.y, .02) / uSize + .07) || fc.g < .04 || fc.b < .07) return guard;
   if (kind > 3.5 && abs(Rc + .26) > .07) return guard;
@@ -211,8 +213,11 @@ float pipe2D(vec2 q, float R, float B) {
 
 // material ids: 0 tray, 1 dough, 2 cookie, 3 coating, 4 piping, 5 chips, 6/7 toppings, 8 eye, 9 cherry, 10 almond, 11 pin, 12 cutter
 void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
-  float Rw = c.R * uSize - .05 * uRise * uPuff;
-  float H = topH(Rw);
+  // baking spreads and lifts the dough unevenly: every cookie gets lumps of its own
+  float seed = uCookie[c.i].w;
+  float lump = uPuff * (n3(vec3(c.q * 2.2, seed)) - .5);
+  float Rw = c.R * uSize - .05 * uRise * uPuff - .09 * lump * uSize;
+  float H = topH(c.D) * (1. + .3 * uPuff * (fbm(vec3(c.q * 1.7, seed + 3.)) - .5));
   float body = sdBody(p, Rw, H);
   float bite = 1e3;
   if (c.G < .3) {
@@ -294,7 +299,7 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
 vec2 map(vec3 p, bool lite) {
   vec2 res = vec2(1e5, 0.);
   Ck c;
-  c.i = -1; c.q = vec2(0.); c.R = 1e3; c.G = 1.; c.B = 1.;
+  c.i = -1; c.q = vec2(0.); c.R = 1e3; c.G = 1.; c.B = 1.; c.D = 0.;
   if (uGap > 0. || uCutter > 0.) nearest(p, c);
   float Rw = c.R * uSize;
   if (uDoughOn > .5) {

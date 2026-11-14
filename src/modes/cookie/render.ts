@@ -431,7 +431,7 @@ export class CookieRenderer {
       return s * (1 + 0.35 * Math.sin(s * Math.PI) * (1 - s));
     };
     b.cookies.slice(0, 3).forEach((c, i) => {
-      ck.set([c.x, c.z, c.gone ? 1 : 0, 0], i * 4);
+      ck.set([c.x, c.z, c.gone ? 1 : 0, (c.seed % 997) * 0.37], i * 4);
       rot.set([Math.cos(c.rot), Math.sin(c.rot)], i * 2);
       const put = (slot: number, x: number, y: number, kind: number, scale: number) =>
         fix.set([x, y, kind, c.field.d(x, y) < -0.03 ? scale : 0], (i * 4 + slot) * 4);

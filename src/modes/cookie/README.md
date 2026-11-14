@@ -75,8 +75,9 @@ then coating, pattern, toppings and the finishing touches, each only if the reci
 The code view lights up the words that decide the stage at work. At the end the message appears
 under the cookies: big round letters in the cookie's colours, hopping a little.
 
-The cookies of a batch differ a little in outline and turn. With `prefers-reduced-motion` the
-camera stands still, the dough does not bounce and the oven air does not shimmer.
+The cookies of a batch differ a little in outline and turn, and each bakes up with lumps of its
+own. With `prefers-reduced-motion` the camera stands still, the dough does not bounce and the
+oven air does not shimmer.
 
 Editing while it runs (split view): a changed recipe sweeps the tray and bakes again, about
 2.5× faster.

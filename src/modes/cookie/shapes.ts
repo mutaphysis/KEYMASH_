@@ -288,9 +288,26 @@ export function distanceTransform(inside: Uint8Array, n: number): Float32Array {
 
 const N = FIELD_N;
 const coord = (i: number) => -FIELD_EXT + (i + 0.5) * TEXEL;
+/** box radius in texels; three passes each way come close to a Gaussian about .16 cookie units wide */
+const DOME_BLUR = 7;
+
+/** one box-blur pass along rows or columns; outside the tile counts as empty */
+function boxBlur(src: Float32Array, dst: Float32Array, r: number, rows: boolean): void {
+  const w = 2 * r + 1;
+  for (let line = 0; line < N; line++) {
+    const at = (t: number) => (rows ? line * N + t : t * N + line);
+    let sum = 0;
+    for (let t = 0; t <= r && t < N; t++) sum += src[at(t)]!;
+    for (let t = 0; t < N; t++) {
+      dst[at(t)] = sum / w;
+      if (t + r + 1 < N) sum += src[at(t + r + 1)]!;
+      if (t - r >= 0) sum -= src[at(t - r)]!;
+    }
+  }
+}
 
 export class Field {
-  /** RGBA float tile, row-major, y up: R outline distance, G bite distance (negative = eaten), B decoration distance (negative = piped), A 0 */
+  /** RGBA float tile, row-major, y up: R outline distance, G bite distance (negative = eaten), B decoration distance (negative = piped), A the footprint blurred wide (the rise follows it) */
   readonly data = new Float32Array(N * N * 4);
   /** bumped on every change; the renderer re-uploads when it differs */
   version = 0;
@@ -309,6 +326,16 @@ export class Field {
         if (r < 0) area++;
       }
     this.area0 = area;
+    // the blurred footprint: smooth everywhere, so a dome that follows it has no ridge along the arms
+    let a = new Float32Array(N * N);
+    let b = new Float32Array(N * N);
+    for (let i = 0; i < N * N; i++) a[i] = this.data[i * 4]! < 0 ? 1 : 0;
+    for (let pass = 0; pass < 3; pass++)
+      for (const rows of [true, false]) {
+        boxBlur(a, b, DOME_BLUR, rows);
+        [a, b] = [b, a];
+      }
+    for (let i = 0; i < N * N; i++) this.data[i * 4 + 3] = a[i]!;
   }
 
   /** bilinear, clamped to the tile */
