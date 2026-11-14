@@ -165,6 +165,19 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 #drawer .item .name { flex: 1; text-align: left; padding: 8px 10px; height: auto !important; white-space: normal !important; }
 .item .name small { display: block; color: rgba(57,255,122,.5); font-size: 11px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: none; }
 .item .del { flex: 0 0 46px !important; color: var(--pink) !important; border-color: rgba(255,46,136,.5) !important; }
+/* settings row: two halves side by side */
+.item.split > * { flex: 1 1 0 !important; min-width: 0; }
+.item.split .name small { white-space: normal; }
+/* language: a native select dressed like the drawer buttons, the arrow drawn on top */
+.langpick { position: relative; display: flex; }
+.langpick::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--g); font-size: 14px; }
+.langpick select {
+  flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; font: 12px var(--mono); letter-spacing: .5px;
+  color: var(--g); background: rgba(0,0,0,.6); border: 1px solid rgba(57,255,122,.45); border-radius: 6px;
+  padding: 8px 30px 8px 10px; text-shadow: 0 0 6px rgba(57,255,122,.7); cursor: pointer; text-overflow: ellipsis;
+}
+.langpick select:focus-visible { outline: 1px solid var(--g); outline-offset: 2px; }
+.langpick option { background: #010d05; color: var(--g); }
 #toast { position: absolute; left: 50%; top: calc(64px + var(--sat)); transform: translateX(-50%); z-index: 70; background: #000; border: 1px solid var(--g); padding: 10px 14px; border-radius: 6px; box-shadow: 0 0 20px rgba(57,255,122,.4); display: flex; gap: 12px; align-items: center; font-size: 14px; white-space: nowrap; }
 #toast[hidden] { display: none; }
 #toast button { background: var(--g); color: #000; border: 0; border-radius: 4px; padding: 6px 10px; font-family: var(--mono); }
@@ -225,6 +238,8 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 /* two-line drawer rows: a pill radius would cut into the text */
 #app.petri #drawer .item button { border-radius: 12px; }
 #app.petri #drawer .item .name { padding: 8px 14px; }
+#app.petri .langpick select { border-radius: 12px; padding-left: 14px; background: rgba(2,22,26,.7); border-color: rgba(143,245,220,.3); color: #bff8ea; text-shadow: none; }
+#app.petri .langpick option { background: #011318; color: #bff8ea; }
 #app.petri #controls > button.primary, #app.petri .playbtns button.primary {
   background: linear-gradient(160deg, #a8fbe6, #5fd6c4); color: #022126; box-shadow: 0 0 24px rgba(95,214,196,.45); }
 #app.petri #stageWrap { background: #010608; border-bottom-color: rgba(143,245,220,.25); }

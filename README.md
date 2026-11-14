@@ -227,7 +227,7 @@ src/micro/culture.ts PETRI_: reads the lines beat by beat, drives the world
 src/micro/render.ts  PETRI_: dark-field microscope renderer, per-body anatomy
 src/micro/ambient.ts PETRI_: pad, water bed, quantised interaction voices
 src/micro/player.ts  PETRI_: play mode, census, field notes
-src/i18n.ts          UI language (German if the system prefers it, else English); all user-facing text
+src/i18n.ts          UI language (drawer select: auto / English / Deutsch; auto: German if the system prefers it); all user-facing text
 src/main.ts          wiring, layout (phone / split view), live hot-swap; mode switching
 ```
 

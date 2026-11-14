@@ -12,7 +12,8 @@ import { readCulture } from './micro/genome';
 import { lex } from './lang/lexer';
 import { keyInfo } from './lang/keys';
 import { VERSION_LABEL, BUILD_TIME } from './version';
-import { t, tn } from './i18n';
+import { t, tn, langPref, setLangPref, systemLang, LANG_NAMES } from './i18n';
+import type { LangPref } from './i18n';
 
 localize();
 const app = $('app');
@@ -293,8 +294,24 @@ function openDrawer(): void {
     try { await navigator.clipboard.writeText(editor.value); toast(t('copied')); } catch (e) { toast(t('copyBlocked')); }
   }));
   const ha = document.createElement('h4'); ha.textContent = 'APP · ' + VERSION_LABEL; body.appendChild(ha);
-  body.appendChild(item(t('reload'), t('reloadSub'), reloadApp));
+  // settings share one row: reload on the left, language on the right
+  const settings = item(t('reload'), t('reloadSub'), reloadApp); settings.classList.add('split');
+  settings.appendChild(langPicker()); body.appendChild(settings);
   $('drawer').hidden = false;
+}
+
+/** auto / English / Deutsch; every string is resolved at startup, so a change reloads (the text is kept) */
+function langPicker(): HTMLLabelElement {
+  const box = document.createElement('label'); box.className = 'langpick';
+  const sel = document.createElement('select'); sel.setAttribute('aria-label', t('language'));
+  const opts: [LangPref, string][] = [['auto', t('langAuto', { name: LANG_NAMES[systemLang] })], ['en', LANG_NAMES.en], ['de', LANG_NAMES.de]];
+  for (const [p, name] of opts) {
+    const o = document.createElement('option'); o.value = p; o.textContent = '🌐 ' + name; o.selected = p === langPref;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => { setLangPref(sel.value as LangPref); reloadApp(); });
+  box.appendChild(sel);
+  return box;
 }
 
 /** Reload, for the home-screen app that has no reload button. The text survives as the draft. */

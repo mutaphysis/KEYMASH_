@@ -1,4 +1,4 @@
-// UI language from the system: German when the browser prefers it, English otherwise.
+// UI language: the user's choice, else the system's (German when the browser prefers it, English otherwise).
 // Messages have ids; `en` is the reference and tsc checks that `de` covers every id with the same shape.
 // A message is a string with {placeholders}, a plural pair, or a list to pick from.
 
@@ -17,8 +17,25 @@ export function detectLang(prefs: readonly (string | undefined)[]): Lang {
   return 'en';
 }
 
+/** 'auto' follows the system; a manual choice is kept in localStorage */
+export type LangPref = Lang | 'auto';
+const LANG_KEY = 'keymash.lang.v1';
+
+function readPref(): LangPref {
+  try { const v = localStorage.getItem(LANG_KEY); return v === 'en' || v === 'de' ? v : 'auto'; } catch (e) { return 'auto'; }
+}
+
+/** Takes effect on the next load: every string is resolved once, at startup. */
+export function setLangPref(p: LangPref): void {
+  try { if (p === 'auto') localStorage.removeItem(LANG_KEY); else localStorage.setItem(LANG_KEY, p); } catch (e) { /* storage blocked */ }
+}
+
+export const langPref: LangPref = readPref();
 const nav = typeof navigator === 'undefined' ? undefined : navigator;
-export const lang: Lang = detectLang(nav?.languages?.length ? nav.languages : [nav?.language]);
+export const systemLang: Lang = detectLang(nav?.languages?.length ? nav.languages : [nav?.language]);
+export const lang: Lang = langPref !== 'auto' ? langPref : systemLang;
+/** language names are shown in their own language */
+export const LANG_NAMES: Record<Lang, string> = { en: 'English', de: 'Deutsch' };
 
 const en = {
   // ---- page ----
@@ -73,6 +90,8 @@ const en = {
   copyBlocked: 'COPY BLOCKED',
   reload: '⟳ reload app',
   reloadSub: 'fetch the newest version — your text is kept',
+  language: 'language',
+  langAuto: 'auto ({name})',
   // ---- demo names ----
   demoDog: '🐶 dog on keyboard',
   demoDrum: '🥁 paw drum machine',
@@ -251,6 +270,8 @@ const de: Messages = {
   copyBlocked: 'KOPIEREN GESPERRT',
   reload: '⟳ App neu laden',
   reloadSub: 'holt die neueste Version — dein Text bleibt',
+  language: 'Sprache',
+  langAuto: 'automatisch ({name})',
   demoDog: '🐶 Hund auf der Tastatur',
   demoDrum: '🥁 Pfoten-Drumcomputer',
   demoKid: '🧒 Mein erstes Programm',
