@@ -711,8 +711,8 @@ export class AudioEngine {
         const g = this.gain(0);
         ws.connect(g);
         g.connect(out);
-        const o = this.osc('square', 80 + R() * 200, t, t + 0.3, ws);
-        for (let i = 0; i < 8; i++) o.frequency.setValueAtTime(60 + R() * 1200, t + i * 0.03);
+        const o = this.osc('square', (80 + R() * 200) * p, t, t + 0.3, ws);
+        for (let i = 0; i < 8; i++) o.frequency.setValueAtTime((60 + R() * 1200) * p, t + i * 0.03);
         this.env(g.gain, t, 0.001, v * 0.5, 0.25);
         break;
       }
