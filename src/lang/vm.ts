@@ -40,11 +40,11 @@ const SCALE_LABEL: Record<Exclude<ScaleName, 'penta'>, KeymashMsg> = {
 const FORMULAS: { f: (x: number, A: number, k: number) => number; s: (A: number, k: number) => string }[] = [
   { f: (x, A, k) => A * Math.sin(k * x), s: (A, k) => `y = ${A}·sin(${k}x)` },
   { f: (x, A, k) => A * Math.cos(k * x) * Math.sin(x / 90), s: (A, k) => `y = ${A}·cos(${k}x)·sin(x/90)` },
-  { f: (x, A, k) => x * x / (A * 4), s: (A) => `y = x² / ${A * 4}` },
+  { f: (x, A) => x * x / (A * 4), s: (A) => `y = x² / ${A * 4}` },
   { f: (x, A, k) => (Math.abs(x) < 1e-6 ? A : A * Math.sin(k * x) / (k * x)), s: (A, k) => `y = ${A}·sin(${k}x)/(${k}x)` },
   { f: (x, A, k) => Math.max(-A * 3, Math.min(A * 3, A * 0.3 * Math.tan(k * x))), s: (A, k) => `y = ${(A * 0.3).toFixed(0)}·tan(${k}x)` },
   { f: (x, A, k) => Math.abs(A * Math.sin(k * x)), s: (A, k) => `y = |${A}·sin(${k}x)|` },
-  { f: (x, A, k) => A * 2 * Math.exp(-(x * x) / 20000), s: (A) => `y = ${A * 2}·e^(−x²/20000)` },
+  { f: (x, A) => A * 2 * Math.exp(-(x * x) / 20000), s: (A) => `y = ${A * 2}·e^(−x²/20000)` },
   { f: (x, A, k) => A * Math.sin(k * x) + A * 0.5 * Math.sin(k * 3.1 * x), s: (A, k) => `y = ${A}·sin(${k}x) + ${A / 2}·sin(${(k * 3.1).toFixed(3)}x)` },
 ];
 
