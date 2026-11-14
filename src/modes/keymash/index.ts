@@ -6,6 +6,7 @@ import { Player } from './player';
 import { MatrixRain } from './backdrop';
 import { DEMOS } from './demos';
 import { t } from './messages';
+import { keymashTheme, glitch } from './theme.css';
 
 const ICON = `<svg class="ic-key" viewBox="0 0 64 64" aria-hidden="true"><g fill="rgba(57,255,122,.18)" stroke="#39ff7a" stroke-width="3">
   <rect x="6" y="20" width="12" height="15" rx="4" transform="rotate(-22 12 27)"/><rect x="19" y="8" width="12" height="15" rx="4" transform="rotate(-8 25 15)"/>
@@ -25,8 +26,8 @@ export const keymash: ModeDef = {
   tagline: t('tagline'),
   emptyToast: t('emptyToast'),
   themeColor: '#000800',
-  className: 'keymash',
-  transition: 'switching',
+  theme: keymashTheme,
+  transition: glitch,
   typing: 'lounge',
   demos: DEMOS,
   keys: KEYS,

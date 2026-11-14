@@ -1,7 +1,7 @@
 // App shell: layout (phone / split view), the editor, running and stopping, the drawer, mode switching.
 // Everything mode specific comes from the ModeDef registry in src/modes/.
 import './fonts.css';
-import './style.css';
+import './styles/global.css';
 import { AudioEngine } from './engine/audio';
 import type { TypingKind } from './engine/audio';
 import { $, localize } from './ui/dom';
@@ -153,9 +153,10 @@ clearBtn.addEventListener('click', () => {
 
 // ---- modes ----
 function applyMode(m: ModeDef): void {
-  for (const other of MODES) app.classList.remove(other.className);
+  const root = document.documentElement;
+  for (const other of MODES) root.classList.remove(other.theme);
   mode = m; store.setMode(m.id);
-  app.classList.add(m.className);
+  root.classList.add(m.theme);
   const logo = document.querySelector<HTMLElement>('header .logo')!;
   logo.textContent = m.name; logo.dataset.text = m.name;
   $('mode-icon').innerHTML = m.icon;

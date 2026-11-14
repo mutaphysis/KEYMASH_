@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
@@ -13,7 +14,7 @@ function gitSha(): string {
 // One self-contained index.html: works as a Claude artifact, on GitHub Pages, or opened from disk.
 export default defineConfig(({ command }) => ({
   base: './',
-  plugins: [viteSingleFile()],
+  plugins: [vanillaExtractPlugin(), viteSingleFile()],
   build: { target: 'es2022' },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),

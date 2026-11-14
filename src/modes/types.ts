@@ -53,8 +53,8 @@ export interface ModeDef {
   emptyToast: string;
   /** <meta name="theme-color"> */
   themeColor: string;
-  /** class on #app that restyles the shared UI */
-  className: string;
+  /** theme class (createTheme in the mode's theme.css.ts), set on <html> */
+  theme: string;
   /** class on #app that animates switching into the mode and in/out of play */
   transition: string;
   /** typing sounds in the editor */
