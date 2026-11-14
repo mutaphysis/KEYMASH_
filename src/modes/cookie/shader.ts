@@ -399,6 +399,7 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
   } else if (id < 2.5) {
     float flake;
     vec3 col = doughColor(p, flake);
+    col = mix(col, col * 1.12 + .015, smoothstep(.35, .85, fbm(p * 7. + 2.))); // kneaded unevenly: soft lighter patches, always the same
     rough = .85; wrap = .5;
     if (id > 1.5) {
       float b = uBaked * (.75 + .25 * exp(min(Rw, 0.) / .15)) + .18 * (fbm(p * 5.) - .5) * sat(uBaked * 4.);
@@ -414,7 +415,6 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
         rough = .95;
       }
     }
-    col = mix(col, vec3(.93, .91, .85), .1 * uFlour * (1. - uPuff) * sat(n.y) * smoothstep(.3, .9, fbm(p * 7. + 2.)));
     alb = col * (.9 + .2 * n3(p * 55.));
     n = normalize(n + .1 * (vec3(n3(p * 60.), n3(p * 60. + 19.), n3(p * 60. + 37.)) - .5));
   } else if (id < 3.5) {
