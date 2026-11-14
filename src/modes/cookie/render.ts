@@ -38,6 +38,7 @@ const TOP_KIND: Record<Exclude<Topping, 'powder'>, number> = { sprinkles: 1, sug
 const COAT_KIND = { none: 0, icing: 1, chocolate: 2, glaze: 3 };
 const FLOW_KIND = { thick: 0, smooth: 1, runny: 2 };
 const COAT_SHAPE = { thick: [0.045, 0.13], smooth: [0.03, 0.09], runny: [0.02, 0.02] };
+const POUR_R = { thick: 0.075, smooth: 0.06, runny: 0.045 };
 const PATTERN_KIND = { plain: 0, stripes: 1, zigzag: 2, swirl: 3, half: 0 };
 
 const lin = (c: RGB): Vec3 => [c[0] ** 2.2, c[1] ** 2.2, c[2] ** 2.2];
@@ -420,6 +421,7 @@ export class CookieRenderer {
     if (L.pin > 0) top = Math.max(top, pinY + 0.3);
     if (L.cutter > 0) top = Math.max(top, cutterY + 0.5);
     if (L.gap > 0) top = Math.max(top, b.top + 0.32 + dropH);
+    if (L.pour > 0) top = Math.max(top, b.top + L.pourTail + 0.1);
     f1('uTopY', top);
 
     // the cookies
@@ -453,7 +455,11 @@ export class CookieRenderer {
     f2('uCoat', COAT_KIND[r.coat], FLOW_KIND[r.flow]);
     f2('uCoatP', shape[0]! * (r.coat === 'glaze' ? 0.5 : 1), margin);
     const dip = -0.6 + (r.seed % 7) * 0.2;
-    f3('uHalf', [Math.cos(dip), Math.sin(dip), r.pattern === 'half' && r.coat !== 'none' ? 1 : 0]);
+    const half = r.pattern === 'half' && r.coat !== 'none';
+    f3('uHalf', [Math.cos(dip), Math.sin(dip), half ? 1 : 0]);
+    // the stream lands in the middle of what gets coated; a thick coat pours in a fatter stream
+    f2('uPourAt', half ? -0.4 * Math.cos(dip) : 0, half ? -0.4 * Math.sin(dip) : 0);
+    f3('uPour', [L.pourFront, L.pourTail, L.pour * POUR_R[r.flow] * r.size]);
     const d = DOUGH[r.dough];
     f3('uColor', lin(r.color));
     f3('uAccent', lin(r.accent));

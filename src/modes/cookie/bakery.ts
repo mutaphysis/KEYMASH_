@@ -66,6 +66,10 @@ export interface Look {
   puff: number;
   /** 0..1 reveal */
   coat: number;
+  /** the stream the coating is poured from: heights of its front and its tail above the cookie, thickness 0..1 (0 = no stream) */
+  pourFront: number;
+  pourTail: number;
+  pour: number;
   pattern: number;
   /** seconds since toppings started to fall, -1 before */
   topT: number;
@@ -155,6 +159,9 @@ const PASS = 1.1;
 const PIN_OFF = 0.5;
 /** above the picture: the cutters come from there and go back (the renderer lifts them further for a far camera) */
 export const CUTTER_UP = 6;
+/** the coating's stream starts this high above the cookie and takes POUR_FALL seconds to land */
+const POUR_FROM = 5;
+const POUR_FALL = 0.4;
 
 interface ActiveBite {
   cookie: Cookie;
@@ -308,6 +315,9 @@ export class Bakery {
       baked: 0,
       puff: 0,
       coat: 0,
+      pourFront: 0,
+      pourTail: 0,
+      pour: 0,
       pattern: 0,
       topT: -1,
       deco: 0,
@@ -333,7 +343,7 @@ export class Bakery {
       case 'cool':
         return 0.8;
       case 'coat':
-        return r.coat !== 'none' ? 2 : 0;
+        return r.coat !== 'none' ? 2.4 : 0;
       case 'pattern':
         return r.pattern !== 'plain' || r.border ? 1.2 : 0;
       case 'toppings':
@@ -403,7 +413,7 @@ export class Bakery {
         cues.push([4.2, { type: 'ding' }]);
         break;
       case 'coat':
-        cues.push([0, { type: 'pour' }]);
+        cues.push([POUR_FALL - 0.05, { type: 'pour' }]); // as the stream lands
         break;
       case 'toppings':
         for (let i = 0; i < 10; i++) cues.push([0.1 + i * 0.12, { type: 'sprinkle', pan: this.pan(cs[i % cs.length]) }]);
@@ -504,9 +514,16 @@ export class Bakery {
       case 'cool':
         L.heat = 0.15 * (1 - ss(0, 0.8, t));
         break;
-      case 'coat':
-        L.coat = ss(0, 2, t);
+      case 'coat': {
+        // a stream falls from above, lands in the middle and spreads; then its tail falls after it
+        const f = sat(t / POUR_FALL);
+        const g = sat((t - 1.8) / 0.45);
+        L.pourFront = POUR_FROM * (1 - f * f);
+        L.pourTail = POUR_FROM * (1 - g * g);
+        L.pour = g < 1 ? 1 - 0.45 * ss(1.4, 2.25, t) : 0;
+        L.coat = ss(POUR_FALL - 0.05, 2.1, t);
         break;
+      }
       case 'pattern':
         L.pattern = ss(0, 1.2, t);
         break;
@@ -525,6 +542,7 @@ export class Bakery {
         const f = sat(t / 1.4);
         L.erode = 2 * f * f;
         L.pin = 0;
+        L.pour = 0;
         L.cutter = 0;
         for (const c of this.crumbs) c.life = Math.min(c.life, 1 - f);
         break;

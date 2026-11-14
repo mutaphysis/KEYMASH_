@@ -36,6 +36,8 @@ uniform float uSize, uThick, uRise;
 uniform vec2 uCoat;      // type (0 none, 1 icing, 2 chocolate, 3 glaze), flow (0 thick, 1 smooth, 2 runny)
 uniform vec2 uCoatP;     // thickness, margin from the edge
 uniform vec3 uHalf;      // direction of the dipped half, z = 1 if only half is coated
+uniform vec3 uPour;      // the coating's stream: front and tail height above the cookie, radius (0: none)
+uniform vec2 uPourAt;    // where it lands, in the cookie's frame
 uniform vec3 uColor, uAccent, uRaw, uBakedCol, uInside;
 uniform float uChips;    // share of chip cells that hold one
 uniform vec3 uTop[3];   // per layer of pieces: kind (1 sprinkles, 2 sugar, 3 strands, 4 pearls, 5 coconut, 6 candy), cell size, share of cells
@@ -66,6 +68,7 @@ float n3(vec3 x) {
 float fbm(vec3 p) { return .5 * n3(p) + .3 * n3(p * 2.03 + 7.) + .2 * n3(p * 4.1 + 13.); }
 float sat(float x) { return clamp(x, 0., 1.); }
 float smax(float a, float b, float k) { float h = max(k - abs(a - b), 0.) / k; return max(a, b) + h * h * k * .25; }
+float smin(float a, float b, float k) { float h = max(k - abs(a - b), 0.) / k; return min(a, b) - h * h * k * .25; }
 
 // ---- the cookies' footprints ----
 struct Ck { int i; vec2 q; float R; float G; float B; float D; };
@@ -241,6 +244,14 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
     body = max(body, -bite);
   }
   if (body < res.x) res = vec2(body, 2.);
+  // the coating's stream, from high above down to where it lands; before the far-away shortcut, it reaches up there
+  float pour = 1e3;
+  if (uPour.z > 0.) {
+    float y0 = H + uPour.x;
+    float r = uPour.z * (1. + .5 * smoothstep(.25, 0., p.y - y0)) + .004 * (1. - uGentle) * sin(p.y * 13. - uTime * 9.);
+    pour = length(vec2(length(c.q - uPourAt) * uSize, p.y - clamp(p.y, y0, H + uPour.y))) - r;
+    if (pour < res.x) res = vec2(pour, 3.);
+  }
   if (!lite && body > .3 + uDropH) {
     // far away: everything that sits on the cookie is within .3 of it, so stop short of that. Only for
     // the march: shadows and occlusion need a distance without this jump, or rings show on the tray.
@@ -269,9 +280,9 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
     // it pulls back from narrow tips (the blurred footprint is thin there) and its edge wanders a little
     if (uCoat.y < 1.5) region = max(region, (COAT_D - c.D) * .4 * uSize);
     region += .035 * (n3(vec3(c.q * 5., seed + 9.)) - .5) * uSize;
-    region = max(region, (length(c.q) + .05 - uCoatReveal * 1.75) * uSize); // poured from the middle; nothing at all before
+    region = max(region, (length(c.q - uPourAt) + .05 - uCoatReveal * 1.75) * uSize); // spreads from where the stream lands; nothing at all before
     covered = region < 0.;
-    float coat = max(smax(body - tc, region, tc * .8), -bite);
+    float coat = smin(max(smax(body - tc, region, tc * .8), -bite), pour, .05);
     if (coat < res.x) res = vec2(coat, 3.);
     base = min(base, coat);
   }

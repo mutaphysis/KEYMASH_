@@ -72,7 +72,8 @@ piped straight on.
 
 The dough ball drops and is rolled out in three passes, the cutters come down, the scrap goes,
 chips land, the oven glows while the timer runs (the HUD shows it), the cookies rise and brown,
-then coating, pattern, toppings and the finishing touches, each only if the recipe has them.
+then the coating pours down from above and spreads, pattern, toppings and the finishing
+touches, each only if the recipe has them.
 The code view lights up the words that decide the stage at work. At the end the message appears
 under the cookies: big round letters in the cookie's colours, hopping a little.
 
