@@ -49,6 +49,7 @@ const float EXT = ${FIELD_EXT.toFixed(4)};
 const float FN = ${FIELD_N.toFixed(1)};
 const vec3 CHAR = vec3(.006, .004, .003);
 const vec3 DARK_CHOC = vec3(.033, .01, .005);
+const float COAT_D = .7; // the blurred footprint where a coating stops at narrow tips
 ${TONE}
 
 // ---- noise ----
@@ -164,6 +165,7 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
   vec4 fc = field(ci, ctr);
   float Rc = fc.r + uErode / uSize;
   if (Rc > -(max(uCoatP.y, .02) / uSize + .07) || fc.g < .04 || fc.b < .07) return guard;
+  if (uCoat.x > .5 && uCoat.y < 1.5 && fc.a < COAT_D + .05) return guard; // no sprinkles past the icing at the tips
   if (kind > 3.5 && abs(Rc + .26) > .07) return guard;
   if (uHalf.z > .5 && dot(ctr, uHalf.xy) > -.06) return guard;
   for (int j = 0; j < 4; j++) {
@@ -217,7 +219,8 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
   float seed = uCookie[c.i].w;
   float lump = uPuff * (n3(vec3(c.q * 2.2, seed)) - .5);
   float Rw = c.R * uSize - .05 * uRise * uPuff - .09 * lump * uSize;
-  float H = topH(c.D) * (1. + .3 * uPuff * (fbm(vec3(c.q * 1.7, seed + 3.)) - .5));
+  // waves, not value noise, for the height: a glossy coat on top would mirror the noise's grid
+  float H = topH(c.D) * (1. + .1 * uPuff * (sin(c.q.x * 2.3 + seed) * sin(c.q.y * 2.9 + seed * 1.3) + .5 * sin((c.q.x + c.q.y) * 4.1 + seed * 2.1)));
   float body = sdBody(p, Rw, H);
   float bite = 1e3;
   if (c.G < .3) {
@@ -237,17 +240,23 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
   float tc = 0.;
   bool covered = false;
   if (uCoat.x > .5 && uCoatReveal > 0.) {
-    tc = uCoatP.x;
+    // poured by hand: thicker here, thinner there (waves, not value noise: a glossy coat would mirror its grid)
+    tc = uCoatP.x * (1. + .22 * sin(c.q.x * 3.1 + seed) * sin(c.q.y * 2.7 + seed * 1.7));
     float region = Rw + uCoatP.y;
     if (uHalf.z > .5) {
       region = max(Rw - .1, dot(c.q, uHalf.xy) * uSize);
     } else if (uCoat.y > 1.5) {
       // runny: it creeps over the edge and drips where the noise says so
       vec2 dir = c.q / max(length(c.q), 1e-3);
-      float drip = smoothstep(.6, .78, n3(vec3(dir * 4.5, float(c.i) * 3.7 + 1.)));
-      region = Rw + .1 - .28 * drip;
-      region = max(region, min(H - uThick * (.1 + .9 * drip) - p.y, Rw + .03));
+      // slow noise around the rim: each drip swells out of the edge over a wide arc, no square tabs
+      float drip = smoothstep(.45, .9, n3(vec3(dir * 2.6, float(c.i) * 3.7 + seed + 1.)));
+      region = Rw + .07 - .25 * drip;
+      // it only runs down the side once it is well over the edge, so a drip starts as a bulge, not a step
+      region = max(region, min(H - uThick * (.1 + .9 * smoothstep(.35, 1., drip)) - p.y, Rw + .03));
     }
+    // it pulls back from narrow tips (the blurred footprint is thin there) and its edge wanders a little
+    if (uCoat.y < 1.5) region = max(region, (COAT_D - c.D) * .4 * uSize);
+    region += .035 * (n3(vec3(c.q * 5., seed + 9.)) - .5) * uSize;
     region = max(region, (length(c.q) + .05 - uCoatReveal * 1.75) * uSize); // poured from the middle; nothing at all before
     covered = region < 0.;
     float coat = max(smax(body - tc, region, tc * .8), -bite);
