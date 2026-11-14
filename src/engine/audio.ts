@@ -747,6 +747,11 @@ export class AudioEngine {
       case 'bloop':
         this.sweep('sine', 500 * p, 120 * p, t, 0.15, v * 1.2, pan);
         break;
+      case 'squish':
+        // a soft wet press: a low tone that sags under a short, dull puff; p raises both
+        this.sweep('sine', 150 * p, 75 * p, t, 0.16, v * 0.9, pan, { rev: 0.1, del: 0 });
+        this.noiseSweep(1100 * p, 220 * p, t, 0.12, v * 0.45, pan, 'lowpass', 3, { rev: 0.1 });
+        break;
       case 'drop': {
         const out = this.out(t, 0, 0.1, 0, 2);
         const lp = this.filter('lowpass', 300, 12);

@@ -79,7 +79,7 @@ export interface Look {
 export type BakeEvent =
   | { type: 'stage'; stage: Stage }
   | { type: 'thud'; vel: number }
-  | { type: 'roll'; dur: number; dir: number }
+  | { type: 'roll'; vel: number; p: number; pan: number }
   | { type: 'cut'; pan: number }
   | { type: 'chip'; pan: number }
   | { type: 'tick' }
@@ -366,9 +366,31 @@ export class Bakery {
       case 'drop':
         cues.push([FALL, { type: 'thud', vel: 0.9 }]);
         break;
-      case 'roll':
-        for (let k = 0; k < 3; k++) cues.push([PIN_LIFT + k * PASS, { type: 'roll', dur: PASS, dir: k % 2 ? -1 : 1 }]);
+      case 'roll': {
+        // a squish whenever the pin has rolled a little further over the dough: they start when it
+        // meets the edge, follow its speed and stop when it rolls off; every pass a bit higher
+        let k = -1;
+        let last = 0;
+        let step = 1;
+        for (let t = PIN_LIFT; t < PIN_LIFT + 3 * PASS; t += 1 / 240) {
+          const g = this.rolling(t);
+          const on = g.x >= -g.back && g.x <= g.front;
+          if (!on) continue;
+          const p = 0.8 + 0.2 * g.k;
+          const pan = clamp((g.dir * g.x) / (this.sheetR + 1), -1, 1);
+          if (g.k !== k) {
+            // the pin presses in
+            k = g.k;
+            last = g.x;
+            step = Math.max(0.25, (g.back + g.front) / 10);
+            cues.push([t, { type: 'roll', vel: 0.55 - 0.1 * k, p, pan }]);
+          } else if (g.x - last >= step) {
+            last = g.x;
+            cues.push([t, { type: 'roll', vel: 0.3 - 0.05 * k, p, pan }]);
+          }
+        }
         break;
+      }
       case 'cut':
         cs.forEach((c, i) => cues.push([0.7 + i * 0.12, { type: 'cut', pan: this.pan(c) }]));
         break;
@@ -403,6 +425,32 @@ export class Bakery {
     this.cues = cues;
   }
 
+  /** the rolling pin at stage time t: pass k, its travel x along dir, the dough's edges behind and ahead of it */
+  private rolling(t: number): {
+    k: number;
+    dir: number;
+    x: number;
+    back: number;
+    front: number;
+    crossed: number;
+    h: number[];
+    R: number[];
+  } {
+    const half = this.recipe.thickness / 2;
+    const h = [this.r0, this.r0 * 0.5, mix(this.r0 * 0.5, half, 0.75), half];
+    // the sheet at each thickness keeps the ball's volume; the last one is exactly sheetR
+    const R = h.map((hh) => Math.min(this.sheetR, Math.sqrt((this.r0 ** 3 * 4) / 3 / (2 * hh))));
+    const k = clamp(Math.floor((t - PIN_LIFT) / PASS), 0, 2);
+    const f = sat((t - PIN_LIFT - k * PASS) / PASS);
+    const back = Math.max(R[k]!, h[k]!);
+    const front = Math.max(R[k + 1]!, h[k + 1]!);
+    // from just behind the dough to just past the sheet it leaves; the next pass starts where this one stops
+    const x = mix(-(back + PIN_OFF), front + PIN_OFF, ss(0, 1, f));
+    // share of the dough the pin has crossed: only what lies behind it is thinner and wider
+    const crossed = sat((x + back) / (back + front));
+    return { k, dir: k % 2 ? -1 : 1, x, back, front, crossed, h, R };
+  }
+
   /** set the look for the current stage at its local time */
   private pose(): void {
     const L = this.look;
@@ -418,17 +466,7 @@ export class Bakery {
         break;
       }
       case 'roll': {
-        const h = [this.r0, this.r0 * 0.5, mix(this.r0 * 0.5, half, 0.75), half];
-        // the sheet at each thickness keeps the ball's volume; the last one is exactly sheetR
-        const R = h.map((hh) => Math.min(this.sheetR, Math.sqrt((this.r0 ** 3 * 4) / 3 / (2 * hh))));
-        const edge = (j: number) => Math.max(R[j]!, h[j]!);
-        const k = clamp(Math.floor((t - PIN_LIFT) / PASS), 0, 2);
-        const f = sat((t - PIN_LIFT - k * PASS) / PASS);
-        const dir = k % 2 ? -1 : 1;
-        // from just behind the dough to just past the sheet it leaves; the next pass starts where this one stops
-        const x = mix(-(edge(k) + PIN_OFF), edge(k + 1) + PIN_OFF, ss(0, 1, f));
-        // share of the dough the pin has crossed: only what lies behind it is thinner and wider
-        const crossed = sat((x + edge(k)) / (edge(k) + edge(k + 1)));
+        const { k, dir, x, crossed, h, R } = this.rolling(t);
         L.pinDir = dir;
         L.pinX = dir * x;
         L.pin = Math.min(ss(0, PIN_LIFT, t), 1 - ss(4 - PIN_LIFT, 4, t));

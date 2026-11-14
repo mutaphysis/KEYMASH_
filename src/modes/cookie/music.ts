@@ -105,7 +105,7 @@ export class Jingle {
         this.now({ type: 'sfx', kind: 'drop', vel: 0.5, p: 1 });
         break;
       case 'roll':
-        this.now({ type: 'sfx', kind: 'rumble', vel: 0.4, p: 0.6, pan: -0.5 * ev.dir });
+        this.now({ type: 'sfx', kind: 'squish', vel: ev.vel, p: ev.p, pan: ev.pan });
         break;
       case 'cut':
         this.now({ type: 'drum', kind: 'tom', vel: 0.5, pan: ev.pan });
@@ -132,7 +132,9 @@ export class Jingle {
         [24, 28, 31].forEach((n, i) => this.note('bell', this.root + n, 8, 0.4, this.audio.now + i * 0.15, 0.3));
         break;
       case 'bite':
-        this.now({ type: 'sfx', kind: 'crunch', vel: 0.8, p: 0.8 + Math.random() * 0.5, pan: ev.pan });
+        // a deep crunch with a thump under it: a mouthful, not a click
+        this.now({ type: 'drum', kind: 'kick', vel: 0.55, pan: ev.pan });
+        this.now({ type: 'sfx', kind: 'crunch', vel: 0.8, p: 0.35 + Math.random() * 0.2, pan: ev.pan });
         break;
       case 'crumb':
         this.now({ type: 'drum', kind: 'hat', vel: 0.08 + 0.1 * ev.vel, pan: ev.pan });

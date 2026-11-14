@@ -30,6 +30,7 @@ export type SfxKind =
   | 'warp'
   | 'bloop'
   | 'drop'
+  | 'squish'
   | 'siren'
   | 'bark'
   | 'meow'
