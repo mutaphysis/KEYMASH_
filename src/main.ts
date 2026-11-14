@@ -229,7 +229,8 @@ applyMode(mode);
 
 /** the mode's own animation: switching in, starting and stopping a program */
 function transition(): void {
-  app.classList.remove(mode.transition);
+  // another mode's class may still be on #app; its animation would win over this one
+  for (const m of MODES) app.classList.remove(m.transition);
   void app.offsetWidth;
   app.classList.add(mode.transition);
 }
