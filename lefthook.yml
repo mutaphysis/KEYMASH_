@@ -9,7 +9,7 @@ pre-commit:
       stage_fixed: true
     - name: lint
       glob: '*.{ts,js,mjs}'
-      run: bunx oxlint {staged_files}
+      run: bunx oxlint --no-error-on-unmatched-pattern {staged_files} # scripts/ alone is all ignored: not an error
 
 pre-push:
   jobs:
