@@ -85,11 +85,11 @@ globalStyle('.crt::before', {
 });
 
 // ---------- header ----------
-// compact: logo + version on top, status underneath, mute button to the right of both
+// compact: logo + version on top, status underneath, cheat sheet and mute buttons to the right of both
 globalStyle('header', {
   display: 'grid',
-  gridTemplateColumns: 'auto auto minmax(0, 1fr) auto',
-  gridTemplateAreas: '"icon logo ver mute" "icon status status mute"',
+  gridTemplateColumns: 'auto auto minmax(0, 1fr) auto auto',
+  gridTemplateAreas: '"icon logo ver sheet mute" "icon status status sheet mute"',
   alignItems: 'center',
   columnGap: 10,
   rowGap: 2,
@@ -108,6 +108,7 @@ globalStyle('header .ver', {
   textOverflow: 'ellipsis',
 });
 globalStyle('header #status', { gridArea: 'status', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
+globalStyle('header #btn-sheet > button', { gridArea: 'sheet' });
 globalStyle('header #btn-mute-edit > button', { gridArea: 'mute' });
 globalStyle('.logo', {
   fontFamily: layout.display,
@@ -136,9 +137,13 @@ globalStyle('#st-live', { display: 'none', color: rgba(accent, 1) });
 globalStyle('#app.split.playing #st-live', { display: 'inline' });
 // typing on a phone: squeeze the header
 globalStyle('#app.kb header .ver, #app.kb #status', { display: 'none' });
-globalStyle('#app.kb header', { gridTemplateAreas: '"icon logo ver mute"', paddingTop: `calc(2px + ${layout.safeTop})`, paddingBottom: 2 });
+globalStyle('#app.kb header', {
+  gridTemplateAreas: '"icon logo ver sheet mute"',
+  paddingTop: `calc(2px + ${layout.safeTop})`,
+  paddingBottom: 2,
+});
 globalStyle('#app.kb .logo', { fontSize: 20 });
-globalStyle('#app.kb #btn-mute-edit > button', { width: 44, height: 40 });
+globalStyle('#app.kb #btn-sheet > button, #app.kb #btn-mute-edit > button', { width: 44, height: 40 });
 globalStyle('#app.kb #controls button', { height: 56 });
 globalStyle('#app.kbd #controls', { paddingBottom: 8 }); // the keyboard covers the home indicator
 

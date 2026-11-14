@@ -4,6 +4,7 @@ import { readCulture } from './genome';
 import { MicroPlayer } from './player';
 import { Plankton } from './backdrop';
 import { DEMOS } from './demos';
+import { SHEET } from './sheet';
 import { t, tn } from './messages';
 import { petriTheme, focus } from './theme.css';
 
@@ -53,6 +54,7 @@ export const petri: ModeDef = {
   typing: 'water',
   demos: DEMOS,
   keys: KEYS,
+  sheet: SHEET,
   backdrop: () => new Plankton(),
   status(src) {
     const n = readCulture(src).species.length;

@@ -46,6 +46,25 @@ export interface DrawerContext {
   refresh(): void;
 }
 
+/** one card of the cheat sheet (📖 in the header): a snippet, what it does, and a picture of it */
+export interface SheetCard {
+  /** the picture is src/modes/<mode>/sheet/<id>.webp, rendered by `bun scripts/sheet.ts` */
+  id: string;
+  code: string;
+  /** a short name, e.g. "spell" or "amoeba" */
+  name: string;
+  /** URL of the picture; missing until the script has rendered it */
+  img?: string;
+  /** seconds the snippet runs before the picture is taken */
+  at: number;
+  /** the picture's camera: this much closer than the app (1 = the whole stage); PETRI_ follows the first cell */
+  zoom: number;
+}
+export interface Sheet {
+  intro: string;
+  cards: SheetCard[];
+}
+
 export interface ModeDef {
   /** storage keys, the mode select, window.KEYMASH */
   id: string;
@@ -69,6 +88,8 @@ export interface ModeDef {
   demos: Demo[];
   /** key bar entries after the cursor keys */
   keys: string[];
+  /** the cheat sheet behind 📖 */
+  sheet: Sheet;
   backdrop(): Backdrop;
   status(src: string): Status;
   player(audio: AudioEngine): ModePlayer;

@@ -5,6 +5,7 @@ import { lex } from '../../lang/lexer';
 import { Player } from './player';
 import { MatrixRain } from './backdrop';
 import { DEMOS } from './demos';
+import { SHEET } from './sheet';
 import { t } from './messages';
 import { keymashTheme, glitch } from './theme.css';
 
@@ -75,6 +76,7 @@ export const keymash: ModeDef = {
   typing: 'lounge',
   demos: DEMOS,
   keys: KEYS,
+  sheet: SHEET,
   backdrop: () => new MatrixRain(),
   status(src) {
     const L = lex(src);

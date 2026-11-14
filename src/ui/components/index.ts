@@ -7,3 +7,4 @@ export { KmItem } from './item';
 export { KmSelect } from './select';
 export { KmToast } from './toast';
 export { KmDrawer } from './drawer';
+export { KmCard } from './card';

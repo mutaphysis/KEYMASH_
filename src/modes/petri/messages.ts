@@ -16,6 +16,10 @@ const en = {
   petriWinter: '❄️ winter pond',
   petriDog: '🐶 dog under the microscope',
   petriMath: '🧮 math garden',
+  // ---- cheat sheet ----
+  sheetIntro: 'Every line is a genome: how it was typed decides what grows.',
+  sheetFeed: 'feeding the dish',
+  sheetQuote: 'words in the water',
   // ---- play mode ----
   bootPrep: 'preparing culture medium …… ok',
   bootGenome: { one: 'reading {n} line of genome …… ok', other: 'reading {n} lines of genome …… ok' },
@@ -81,6 +85,9 @@ const de: Translation<typeof en> = {
   petriWinter: '❄️ Winterteich',
   petriDog: '🐶 Hund unterm Mikroskop',
   petriMath: '🧮 Mathegarten',
+  sheetIntro: 'Jede Zeile ist ein Genom: wie sie getippt wurde, entscheidet, was wächst.',
+  sheetFeed: 'Schale füttern',
+  sheetQuote: 'Worte im Wasser',
   bootPrep: 'rühre Nährboden an …… ok',
   bootGenome: { one: 'lese {n} Zeile Genom …… ok', other: 'lese {n} Zeilen Genom …… ok' },
   bootInoculate: { one: 'impfe {n} Art', other: 'impfe {n} Arten' },
@@ -131,3 +138,4 @@ const de: Translation<typeof en> = {
 };
 
 export const { t, tn, tl } = defineMessages(en, de);
+export type PetriMsg = Parameters<typeof t>[0];

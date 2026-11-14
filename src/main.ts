@@ -15,7 +15,7 @@ import { t, langPref, setLangPref, systemLang, LANG_NAMES } from './i18n';
 import type { LangPref } from './i18n';
 import { MODES, modeById, nextMode } from './modes';
 import type { ModeDef, ModePlayer } from './modes/types';
-import { KmMute, KmItem, KmSelect, KmDrawer } from './ui/components';
+import { KmMute, KmItem, KmSelect, KmDrawer, KmCard } from './ui/components';
 import type { KmButton, KmModeIcon, KmToast } from './ui/components';
 
 localize();
@@ -295,6 +295,21 @@ $('btn-save').addEventListener('click', () => {
   toast(n ? t('saved', { n: String(n).padStart(2, '0') }) : t('storageBlocked'));
 });
 $('btn-load').addEventListener('click', openDrawer);
+
+// ---- the cheat sheet (📖 next to the sound button): the current mode's cards ----
+// A tap adds the card's snippet as a new last line; the sheet stays open for more.
+function addLine(code: string): void {
+  const ta = editor.ta,
+    end = ta.value.length;
+  const add = (ta.value && !ta.value.endsWith('\n') ? '\n' : '') + code;
+  ta.setRangeText(add, end, end, 'end'); // no focus: on a phone that would open the keyboard over the sheet
+  editor.input({ data: add });
+  ta.scrollTop = ta.scrollHeight;
+  toast(t('added', { code }));
+}
+$('btn-sheet').addEventListener('click', () => {
+  $<KmDrawer>('sheet').open([KmCard.intro(mode.sheet.intro), KmCard.grid(mode.sheet.cards, addLine)]);
+});
 
 // ---- the program drawer ----
 const drawer = $<KmDrawer>('drawer');
