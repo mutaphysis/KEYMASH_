@@ -4,7 +4,11 @@
 import type { AudioEngine, TypingStyle } from '../engine/audio';
 import type { Demo } from '../ui/storage';
 
-/** Play mode: owns the shared stage (#stage, #hud, #log, #boot, #codeview) between start() and stop(). */
+/**
+ * Play mode: owns the shared stage (#stage, #hud, #log, #boot, #codeview) between start() and stop().
+ * A player that cannot draw on #stage (it has a 2D context) may add its own canvas to #stageWrap,
+ * and must hide it in stop().
+ */
 export interface ModePlayer {
   start(src: string): void | Promise<void>;
   /** silent: keep the sound running (another start follows at once) */

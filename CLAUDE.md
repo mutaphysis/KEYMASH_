@@ -1,7 +1,8 @@
 # CLAUDE.md
 
-KEYMASH_ is a live-coding toy: any text is a valid program (no syntax errors, ever). Two modes:
-KEYMASH_ (lines → threads → visuals, music, speech) and PETRI_ (lines → genomes → a cell culture).
+KEYMASH_ is a live-coding toy: any text is a valid program (no syntax errors, ever). Three modes:
+KEYMASH_ (lines → threads → visuals, music, speech), PETRI_ (lines → genomes → a cell culture) and
+COOKIE_ (the whole text → one recipe → cookies baked in 3D, eaten by tapping).
 README.md is the user-facing doc (running, architecture, conventions); each mode's language reference
 lives in `src/modes/<id>/README.md`. Read them before larger changes.
 
@@ -10,7 +11,7 @@ lives in `src/modes/<id>/README.md`. Read them before larger changes.
 ```sh
 bun run dev          # Vite dev server; tsc + oxlint + oxfmt problems show in terminal and in-page overlay
 bun run build        # tsc + vite build -> dist/ (index.html, main chunk, one chunk per mode; served by GitHub Pages, needs http)
-bun test             # test/vm.test.ts (fuzz: the VM must never throw), test/petri.test.ts
+bun test             # test/vm.test.ts (fuzz: the VM must never throw), test/petri.test.ts, test/cookie.test.ts
 bun run typecheck    # tsc (TypeScript 7, strict, noUnusedLocals, noImplicitOverride)
 bun run lint         # oxlint (scripts/ is ignored)
 bun run format       # oxfmt: printWidth 140, single quotes; *.md and public/ are not formatted
@@ -31,6 +32,7 @@ Git hooks (lefthook): pre-commit formats + lints staged files, pre-push runs tes
 - `src/modes/types.ts` — `ModeDef` (eager: name, icon, tagline, theme, transition, `load()`), `ModeCode` (lazy: demos, keys, sheet, backdrop, status, player, drawer), `ModePlayer`, `Backdrop`, `Sheet`/`SheetCard`. `src/modes/index.ts` — `MODES` registry. Each mode: `index.ts` (its `ModeDef`, in the main bundle) + `mode.ts` (its `ModeCode`, dynamic `import()` → own chunk).
 - `src/modes/keymash/` — `vm.ts` (the interpreter: `VM.tick()` returns timed `VMEvent`s), `types.ts` (`VMEvent` union, ops, shapes), `powers.ts` (emoji → op), `Player` (VM on the audio clock, 0.12 s lookahead) + `Renderer` (canvas 2D, world coords ±hw/±hh with `s` px per unit, `handle(VMEvent)`, `frame(dt, level, bass)`).
 - `src/modes/petri/` — `genome.ts` (`readCulture`), `culture.ts` (`Petri`: feeder + `World`, fixed 30 Hz steps), `sim.ts` (`World`, `DISH_R = 420`), `render.ts` (`MicroRenderer`: `cx/cy/R/k` camera, `frame(dt, world, activity)`), `ambient.ts` (music).
+- `src/modes/cookie/` — pure and DOM-free: `recipe.ts` (`readRecipe`, `recipeKey`), `shapes.ts` (cutter SDFs, `anchors`, `Field`: one cookie's footprint/bites/piping as a 128² distance tile), `bakery.ts` (`Bakery`: stage timeline → `Look`, `swap`, `bite`, crumbs; emits `BakeEvent`s). Drawing: `gl.ts` (WebGL2 helpers), `shader.ts` (the raymarched scene, crumbs, blit), `render.ts` (`CookieRenderer`: `frame(dt, bakery, level)`, `ray()` for taps, a scene target that steps down when frames are slow). `music.ts` (`Jingle`). The player adds its own `<canvas class="stage3d">` after `#stage` (WebGL needs a canvas without a 2D context) and hides it in `stop()`. Shader tuning: look at frames (`bun scripts/sheet.ts`), headless Chromium renders it with SwiftShader.
 - `src/modes/<id>/sheet.ts` — `SHEET` (the 📖 cheat sheet: a one-sentence intro + exactly 12 `SheetCard`s per mode — the grid in `card.css.ts` uses 2/3/4/6 columns so rows stay full, 6 × 2 on desktop — with snippet, short name — no explanations, the user wants it terse —, capture time `at`, camera `zoom`; one-line snippets only); pictures in `sheet/<card>.webp`, loaded via `import.meta.glob` (URLs; the files load lazily when the sheet opens). `src/modes/<id>/README.md` — the mode's language reference.
 - `src/lang/` — shared by every mode, pure and DOM-free: `lexer.ts` (syntax only: graphemes, words, numbers, runs, quotes, math; meaning is per mode), `keys.ts` (QWERTZ geometry), `rng.ts` (seeded hash + PRNG).
 - `src/engine/sound.ts` — the `Sound` vocabulary (`note`/`drum`/`sfx`/`dtmf`, instruments, sfx kinds); `src/engine/audio.ts` — the shared WebAudio engine (`play(Panned)`), speech, typing sounds. Neither knows any mode.
@@ -48,7 +50,7 @@ Git hooks (lefthook): pre-commit formats + lints staged files, pre-push runs tes
 - A mode's `index.ts` is in the main bundle: only light imports there (messages, theme). Anything heavy belongs behind `mode.ts`. Check the build output: each mode should be one `mode-*.js` chunk.
 - Adding a KEYMASH_ effect = new `VMEvent` variant in `src/modes/keymash/types.ts`; the compiler points at every handler. A new sound kind goes into `src/engine/sound.ts`.
 - The interpreter must stay total: any input (emoji, lone surrogates, NUL) must not throw — the fuzz test guards this.
-- The stage canvas is shared by both players; only the `active` one sizes it.
+- The stage canvas is shared by the 2D players; only the `active` one sizes it. A mode that needs WebGL brings its own canvas (see COOKIE_).
 - Changing a card's snippet, name or timing in `sheet.ts`: re-run `bun scripts/sheet.ts` and look at the pictures (they must show something recognisable at ~170 px wide).
 - Respect `prefers-reduced-motion` (`gentle` flag in both renderers).
 - Comments explain *why*, in plain short sentences; keep the existing tone.

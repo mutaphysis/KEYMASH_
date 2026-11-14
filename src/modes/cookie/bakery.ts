@@ -237,7 +237,8 @@ export class Bakery {
     this.rush = false;
     const r = this.recipe;
     this.rnd = mulberry32(hash(r.seed + ':' + this.batch));
-    const P = 2.3 * r.size;
+    // far enough apart that the middle between two centres is past every cutter's reach (the shader draws the nearest cookie)
+    const P = 2.55 * r.size;
     const at: [number, number][] =
       r.count === 1
         ? [[0, 0]]
@@ -258,8 +259,8 @@ export class Bakery {
                 [P, 0],
               ]
             : [
-                [-P / 2, -0.45 * P],
-                [P / 2, -0.45 * P],
+                [-P / 2, -0.5 * P],
+                [P / 2, -0.5 * P],
                 [0, 0.5 * P],
               ];
     this.cookies = at.map(([x, z], i) => {
@@ -603,7 +604,7 @@ export class Bakery {
     const r = this.recipe;
     const d = DOUGH[r.dough];
     const inside = mix3(d.raw, d.baked, 0.35).map((v) => Math.min(1, v * 1.1)) as RGB;
-    const crust = mix3(mix3(d.raw, d.baked, sat(r.bake)), CHAR, sat((r.bake - 1.2) / 0.6));
+    const crust = mix3(mix3(d.raw, d.baked, sat(r.bake)), CHAR, sat((r.bake * 0.85 - 1.1) / 0.35));
     const top = this.top;
     let extra = 0;
     if (toppings) {

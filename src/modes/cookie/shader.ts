@@ -12,7 +12,7 @@ void main() {
 
 const TONE = `
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
-vec3 display(vec3 c) { return pow(aces(c * .9), vec3(1. / 2.2)); }
+vec3 display(vec3 c) { return pow(aces(c * .72), vec3(1. / 2.2)); }
 const vec3 KEY_DIR = vec3(-.4497, .7995, .3997);
 vec3 keyLight(float heat) { return vec3(1., .94, .84) * 1.75 * mix(1., .25, heat); }
 vec3 skyLight(float up, float heat) { return mix(vec3(.2, .15, .11), vec3(.42, .5, .62), up * .5 + .5) * .6 * mix(1., .45, heat); }
@@ -110,7 +110,8 @@ float sdDough(vec3 p) {
   return (min(max(d.x, d.y), 0.) + length(max(d, 0.)) - h) * min(sy, sxz) + uErode;
 }
 
-float topH(float Rw) { return uThick * (1. + .6 * uRise * uPuff * (1. - exp(min(Rw, 0.) / .3))); }
+// the dome is flat away from the edge: a height that followed the distance all the way would crease along the middle
+float topH(float Rw) { return uThick * (1. + .6 * uRise * uPuff * (1. - smoothstep(-.35, 0., Rw))); }
 
 float sdBody(vec3 p, float Rw, float H) {
   float er = uEdge * min(.07 + .125 * uThick, H * .5);
@@ -134,13 +135,15 @@ float fixRadius(float kind) { return kind < 1.5 ? uEyeR : kind < 2.5 ? .13 : .2;
 float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float span, float salt, float y0) {
   vec2 cell = floor(L.xz / cs);
   vec2 f = L.xz - (cell + .5) * cs;
-  float guard = cs * .5 - max(abs(f.x), abs(f.y)) + .03;
+  float guard = cs * .5 - max(abs(f.x), abs(f.y)) + .012;
   vec3 h = h23(cell + salt + float(ci) * 17.);
   if (h.z > keep) return guard;
   vec3 h2 = h23(cell * 1.7 + salt + 5.);
   float delay = h2.x * span;
   if (T < delay) return guard;
-  vec2 ctr = (cell + .5 + (h.xy - .5) * .36) * cs;
+  // a piece stays inside its cell: the march only ever sees the cell it is in
+  float reach = kind < .5 ? .075 : kind < 1.5 ? .062 : kind < 2.5 ? .024 : kind < 3.5 ? .062 : .045;
+  vec2 ctr = (cell + .5 + (h.xy - .5) * 2. * clamp((cs * .5 - .012 - reach) / cs, 0., .22)) * cs;
   vec3 fc = field(ci, ctr);
   float Rc = fc.r + uErode / uSize;
   if (Rc > -(max(uCoatP.y, .02) / uSize + .07) || fc.g < .04 || fc.b < .07) return guard;
@@ -162,8 +165,8 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
     float t = clamp(dot(d.xz, dir), -.045, .045);
     sd = length(d - vec3(dir.x * t, .014, dir.y * t)) - .017;
   } else if (kind < 2.5) {
-    vec3 b = abs(d - vec3(0., .018, 0.)) - .015;
-    sd = length(max(b, 0.)) - .009;
+    vec3 b = abs(d - vec3(0., .014, 0.)) - .01;
+    sd = length(max(b, 0.)) + min(max(b.x, max(b.y, b.z)), 0.) - .008;
   } else if (kind < 3.5) {
     float t = clamp(dot(d.xz, dir), -.05, .05);
     sd = length(d - vec3(dir.x * t, .01, dir.y * t)) - .012;
@@ -203,7 +206,11 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
     body = max(body, -bite);
   }
   if (body < res.x) res = vec2(body, 2.);
-  if (body > .3 + uDropH) return;
+  if (body > .3 + uDropH) {
+    // far away: everything that sits on the cookie is within .3 of it, so stop short of that
+    res.x = min(res.x, body - .25 - uDropH);
+    return;
+  }
 
   float base = body;
   float tc = 0.;
@@ -216,9 +223,9 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
     } else if (uCoat.y > 1.5) {
       // runny: it creeps over the edge and drips where the noise says so
       vec2 dir = c.q / max(length(c.q), 1e-3);
-      float drip = smoothstep(.45, .8, n3(vec3(dir * 2.2, float(c.i) * 3.7 + 1.)));
-      region = Rw - .015 - .1 * drip;
-      region = max(region, min(H - uThick * (.2 + .9 * drip) - p.y, Rw + .03));
+      float drip = smoothstep(.6, .78, n3(vec3(dir * 4.5, float(c.i) * 3.7 + 1.)));
+      region = Rw + .1 - .28 * drip;
+      region = max(region, min(H - uThick * (.1 + .9 * drip) - p.y, Rw + .03));
     }
     region = max(region, (length(c.q) - uCoatReveal * 1.7) * uSize); // poured from the middle
     covered = region < 0.;
@@ -247,7 +254,10 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
     if (sd < res.x) res = vec2(sd, id);
   }
 
-  if (!lite && Rw < .05 && p.y < H + .3 + uDropH) {
+  // above the layer of pieces the march must not step past its top: they are only looked at inside it
+  float over = p.y - (H + .16 + uDropH);
+  if (!lite && Rw < .05 && over > 0.) res.x = min(res.x, over + .01);
+  if (!lite && Rw < .05 && over <= .01) {
     if (uChips > 0. && uChipT >= 0.) {
       float d = pieces(L, c.i, 0., .3, uChips, uChipT, .6, 3., y0) * uSize;
       if (d < res.x) res = vec2(d, 5.);
@@ -295,7 +305,8 @@ vec2 map(vec3 p, bool lite) {
 
 vec3 calcNormal(vec3 p, float t) {
   vec2 e = vec2(1., -1.) * max(.0012, .0005 * t);
-  return normalize(e.xyy * map(p + e.xyy, false).x + e.yyx * map(p + e.yyx, false).x + e.yxy * map(p + e.yxy, false).x + e.xxx * map(p + e.xxx, false).x);
+  vec3 g = e.xyy * map(p + e.xyy, false).x + e.yyx * map(p + e.yyx, false).x + e.yxy * map(p + e.yxy, false).x + e.xxx * map(p + e.xxx, false).x;
+  return normalize(g + vec3(0., 1e-7, 0.)); // never a zero vector
 }
 
 float shadow(vec3 ro, vec3 rd) {
@@ -357,19 +368,19 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
     alb = vec3(.7, .64, .54) * (.92 + .16 * fbm(vec3(p.xz * 1.3, 0.)));
     if (uBaked > .3) alb *= mix(1., .82, smoothstep(.2, -.02, Rw) * sat((uBaked - .3) * 3.));
     float fl = uFlour * smoothstep(uSpot * 1.2, uSpot * .45, length(p.xz));
-    alb = mix(alb, vec3(.95, .94, .9), fl * (.3 * smoothstep(.4, .7, fbm(vec3(p.xz * 2.5, 5.))) + .6 * step(.86, h21(floor(p.xz * 60.)))));
+    alb = mix(alb, vec3(.95, .94, .9), fl * (.3 * smoothstep(.4, .7, fbm(vec3(p.xz * 2.5, 5.))) + .3 * step(.86, h21(floor(p.xz * 60.)))));
     rough = .9;
   } else if (id < 2.5) {
     float flake;
     vec3 col = doughColor(p, flake);
     rough = .85; wrap = .5;
     if (id > 1.5) {
-      float b = uBaked * (.6 + .4 * exp(min(Rw, 0.) / .15)) + .18 * (fbm(p * 5.) - .5) * sat(uBaked * 4.);
+      float b = uBaked * (.75 + .25 * exp(min(Rw, 0.) / .15)) + .18 * (fbm(p * 5.) - .5) * sat(uBaked * 4.);
       vec3 done = uBakedCol * mix(1., col.g / max(uRaw.g, .01), .6);
       col = mix(col, done, sat(b));
-      col = mix(col, CHAR, sat((b - 1.2) / .6));
+      col = mix(col, CHAR, sat((b - 1.1) / .35));
       float cr = 1. - abs(2. * n3(p * vec3(7., 3., 7.) + 3.) - 1.);
-      col *= 1. - .45 * smoothstep(.9, .99, cr) * uRise * uPuff * step(.5, n.y);
+      col *= 1. - .3 * smoothstep(.93, .99, cr) * smoothstep(.4, .65, n3(p * 2.3 + 9.)) * uRise * uPuff * step(.5, n.y); // a few cracks, not a net
       if (c.G * uSize < .04 && n.y < .75) {
         // inside: paler, full of pores
         col = uInside * (.8 + .4 * n3(p * 45.)) * (1. - .35 * smoothstep(.55, .8, n3(p * 30. + 9.)));
@@ -377,7 +388,7 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
         rough = .95;
       }
     }
-    col = mix(col, vec3(.93, .91, .85), .3 * uFlour * (1. - uPuff) * sat(n.y) * smoothstep(.45, .8, fbm(p * 5. + 2.)));
+    col = mix(col, vec3(.93, .91, .85), .1 * uFlour * (1. - uPuff) * sat(n.y) * smoothstep(.3, .9, fbm(p * 7. + 2.)));
     alb = col * (.9 + .2 * n3(p * 55.));
     n = normalize(n + .1 * (vec3(n3(p * 60.), n3(p * 60. + 19.), n3(p * 60. + 37.)) - .5));
   } else if (id < 3.5) {
@@ -429,7 +440,7 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
 
   float ndl = dot(n, KEY_DIR);
   float sh = ndl > -wrap ? shadow(p + n * .012, KEY_DIR) : 0.;
-  float ao = occlusion(p, n);
+  float ao = id > 4.5 && id < 10.5 ? 1. : occlusion(p, n); // small pieces: the sample steps are bigger than they are
   vec3 keyC = keyLight(uHeat);
   float diff = max((ndl + wrap * .5) / (1. + wrap * .5), 0.);
   vec3 oven = vec3(1., .4, .09) * 2.4 * uHeat * (.4 + .6 * max(dot(n, normalize(vec3(0., .45, -1.))), 0.));
@@ -445,14 +456,14 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
   vec3 specC = mix(vec3(1.), alb, metal);
   float F = mix(fres, 1., metal);
   col += specC * keyC * D * mix(f0, 1., metal) * .25 * max(ndl, 0.) * sh;
-  col += specC * env(reflect(rd, n)) * F * (1. - rough) * (1. - rough * .6) * mix(.35, 1., ao);
+  col += specC * env(reflect(rd, n)) * F * (1. - rough) * (1. - rough) * mix(.35, 1., ao);
 
   if (sparkle > 0. && n.y > .3) {
     // tiny facets that catch the key light
     vec3 cell = floor(p * 55.);
     vec3 fd = normalize(vec3(h31(cell), h31(cell + 7.), h31(cell + 13.)) - .5 + n * .6);
     float reveal = sat(uTopT / .8);
-    col += keyC * (5. + 4. * uLevel) * step(mix(.9993, .986, sparkle), dot(fd, hv)) * reveal * (.3 + .7 * sh); // louder music, brighter glitter
+    col += keyC * (5. + 4. * uLevel) * step(mix(.9996, .994, sparkle), dot(fd, hv)) * reveal * (.3 + .7 * sh); // louder music, brighter glitter
   }
   // the light falls on the middle of the tray
   return col * mix(1., .2, smoothstep(.75, 2.4, length(p.xz) / uSpot));
@@ -470,7 +481,7 @@ void main() {
   for (int i = 0; i < 64; i++) {
     vec2 m = map(ro + rd * t, false);
     id = m.y;
-    if (m.x < .0007 * t) break;
+    if (m.x < min(.0007 * t, .008)) break;
     t += m.x * .85;
     if (t >= tEnd) break;
   }

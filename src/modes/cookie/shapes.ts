@@ -239,13 +239,13 @@ export function anchors(shape: Shape, variant: number, face = false): Anchors {
     default:
       return {
         eyes: [
-          [-0.26, 0.2],
-          [0.26, 0.2],
+          [-0.26, 0.3],
+          [0.26, 0.3],
         ],
         eyeR: 0.11,
         letters: [0, face ? -0.42 : -0.05],
-        letterH: face ? 0.3 : 0.6,
-        mouth: [0, -0.1],
+        letterH: face ? 0.28 : 0.6,
+        mouth: [0, 0.02],
       };
   }
 }

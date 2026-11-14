@@ -2,8 +2,9 @@
 import type { ModeDef } from './types';
 import { keymash } from './keymash';
 import { petri } from './petri';
+import { cookie } from './cookie';
 
-export const MODES: readonly ModeDef[] = [keymash, petri];
+export const MODES: readonly ModeDef[] = [keymash, petri, cookie];
 
 export function modeById(id: string): ModeDef {
   return MODES.find((m) => m.id === id) ?? MODES[0]!;

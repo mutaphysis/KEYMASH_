@@ -59,14 +59,17 @@ lives with each mode:
 
 <table>
 <tr>
-<td width="50%"><a href="src/modes/keymash/README.md"><img src="src/modes/keymash/sheet/spell.webp" alt="a KEYMASH_ spell"></a></td>
-<td width="50%"><a href="src/modes/petri/README.md"><img src="src/modes/petri/sheet/volvox.webp" alt="a PETRI_ volvox colony"></a></td>
+<td width="33%"><a href="src/modes/keymash/README.md"><img src="src/modes/keymash/sheet/spell.webp" alt="a KEYMASH_ spell"></a></td>
+<td width="33%"><a href="src/modes/petri/README.md"><img src="src/modes/petri/sheet/volvox.webp" alt="a PETRI_ volvox colony"></a></td>
+<td width="33%"><a href="src/modes/cookie/README.md"><img src="src/modes/cookie/sheet/letters.webp" alt="three COOKIE_ cookies with JOY piped on"></a></td>
 </tr>
 <tr>
 <td><b><a href="src/modes/keymash/README.md">KEYMASH_</a></b> — loud and fast. Every line is a thread;
 where a key sits decides where it draws and how it sounds; mashes cast spells.</td>
 <td><b><a href="src/modes/petri/README.md">PETRI_</a></b> — a quiet culture of cells under a dark-field
 microscope. Every line is a genome and a feeder.</td>
+<td><b><a href="src/modes/cookie/README.md">COOKIE_</a></b> — warm and edible. The whole text is one recipe:
+RUN rolls, cuts, bakes and decorates it in 3D, then every tap is a bite.</td>
 </tr>
 </table>
 
@@ -85,8 +88,8 @@ The cards behind 📖 are listed in `src/modes/<id>/sheet.ts` (snippet, short na
 before the picture is taken). `bun scripts/sheet.ts` plays every snippet through the real
 interpreter and renderer in headless Chromium, in simulated time with seeded randomness, and
 saves the last frame as `src/modes/<id>/sheet/<card>.webp`; it also rewrites the picture
-table in the mode's README. The pictures are committed and served as files (about 165 kB of
-WebP for both modes), loaded when the sheet opens. Twelve cards per mode: the sheet shows them in
+table in the mode's README. The pictures are committed and served as files (about 370 kB of
+WebP for the three modes), loaded when the sheet opens. Twelve cards per mode: the sheet shows them in
 2, 3, 4 or 6 columns depending on the width, so every row is full.
 
 ## Architecture
@@ -98,6 +101,8 @@ src/modes/index.ts       the registry: MODES in header-cycle order
 src/modes/keymash/       KEYMASH_: interpreter (vm.ts), event protocol (types.ts), emoji powers, player, renderer,
                          backdrop, demos, cheat sheet, messages, theme, README (the language)
 src/modes/petri/         PETRI_: genome, sim, culture, renderer, ambient, player, backdrop, demos, cheat sheet, messages, theme, README
+src/modes/cookie/        COOKIE_: recipe, shapes (distance fields), bakery (timeline, bites, crumbs), WebGL2 renderer + shaders,
+                         music, player, backdrop, demos, cheat sheet, messages, theme, README
 src/lang/lexer.ts        shared by every mode: total tokenizer (graphemes -> tokens), math evaluator
 src/lang/keys.ts         shared: QWERTZ geometry (position, pitch, adjacency)
 src/lang/rng.ts          shared: seeded hash + PRNG

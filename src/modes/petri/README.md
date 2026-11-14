@@ -1,6 +1,6 @@
 # PETRI_ — the language
 
-[← back to the README](../../../README.md) · [← KEYMASH_](../keymash/README.md)
+[← back to the README](../../../README.md) · [← KEYMASH_](../keymash/README.md) · [COOKIE_ →](../cookie/README.md)
 
 PETRI_ is the quiet one: a culture of cells under a dark-field microscope. Every line of
 text is the genome of a species and, read slowly, a feeder for the dish.

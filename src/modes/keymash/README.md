@@ -1,6 +1,6 @@
 # KEYMASH_ — the language
 
-[← back to the README](../../../README.md) · [PETRI_ →](../petri/README.md)
+[← back to the README](../../../README.md) · [PETRI_ →](../petri/README.md) · [COOKIE_ →](../cookie/README.md)
 
 Keysmash doesn't produce real words, so KEYMASH never looks words up. It reads
 *how* the keys were hit: where they sit on the keyboard, how they cluster,
