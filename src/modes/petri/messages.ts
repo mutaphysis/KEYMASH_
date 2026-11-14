@@ -69,15 +69,15 @@ const en = {
 };
 
 const de: Translation<typeof en> = {
-  tagline: 'eine stille Zellkultur',
-  emptyToast: 'SCHALE LEER? EINE PFOTE HAT GESÄT 🐾',
+  tagline: 'eine entspannte Zellkultur',
+  emptyToast: 'SCHALE LEER? DIE PFOTE KANN SIE FÜLLEN 🐾',
   alive: 'LEBT',
   species: { one: 'ART', other: 'ARTEN' },
-  petriFirst: '🌱 erste Kultur',
-  petriHunters: '🦠 Jäger und Weider',
+  petriFirst: '🌱 Erste Kultur',
+  petriHunters: '🦠 Jäger und Sammler',
   petriSymbiosis: '💞 Symbiose',
   petriSpores: '🍄 Sporen und Zerfall',
-  petriSwirl: '🌀 der Strudel',
+  petriSwirl: '🌀 Der Strudel',
   petriWinter: '❄️ Winterteich',
   petriDog: '🐶 Hund unterm Mikroskop',
   petriMath: '🧮 Mathegarten',
