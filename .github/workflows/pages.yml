@@ -1,4 +1,4 @@
-# Typecheck + build KEYMASH with Vite, run the fuzz tests, publish dist/ to GitHub Pages.
+# Run the checks (check.yml), build KEYMASH with Vite, publish dist/ to GitHub Pages.
 name: Deploy to GitHub Pages
 
 on:
@@ -16,16 +16,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
   build:
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - name: Lint + formatting
-        run: bun run lint && bun run format:check
-      - name: Test (the interpreter must never throw)
-        run: bun test
       - name: Typecheck + build single-file page
         run: bun run build
       - uses: actions/configure-pages@v5

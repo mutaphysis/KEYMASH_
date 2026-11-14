@@ -1,0 +1,28 @@
+# Lint, formatting, types and tests — the same checks as the git hooks.
+# Runs on pull requests and on branches; on main the deploy workflow calls it before building.
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+      - name: Formatting
+        run: bun run format:check
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test (the interpreter must never throw)
+        run: bun test
