@@ -4,8 +4,9 @@ import type { Token, WordTok, SymTok } from './lexer';
 import { keyInfo, adjacent, EMOJI_POWERS, stripAccents } from './keys';
 import type { KeyInfo } from './keys';
 import type { Color, Point, Op, Instrument, DrumKind, SfxKind, ShapeKind, ParticleKind, TextStyle, VMEvent, EvInput, EvBase } from './types';
-import { t, tl } from '../i18n';
-import type { Msg } from '../i18n';
+import { t, tl } from '../modes/keymash/messages';
+import type { KeymashMsg } from '../modes/keymash/messages';
+import { hash, mulberry32 } from './rng';
 
 export type ScaleName = 'penta' | 'major' | 'minor' | 'blues' | 'spooky' | 'japan';
 
@@ -20,20 +21,6 @@ interface Loop { start: number; left: number; close?: number }
 /** One step of a letter chunk: a key, possibly held (n > 1), possibly the start of a roll. */
 export interface Step { ch: string; g0: number; g1: number; n: number; key: KeyInfo; big: boolean; roll?: { len: number; dir: number; keys: KeyInfo[] } }
 
-export function hash(str: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-  return h >>> 0;
-}
-export function mulberry32(a: number): () => number {
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 export const SCALES: Record<ScaleName, number[]> = {
   penta: [0, 3, 5, 7, 10],
   major: [0, 2, 4, 7, 9],
@@ -47,7 +34,7 @@ const INSTRUMENTS: Instrument[] = ['pluck', 'bass', 'bell', 'chip', 'lead', 'pad
 const MAX_THREADS = 12;
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
-const SCALE_LABEL: Record<Exclude<ScaleName, 'penta'>, Msg> = {
+const SCALE_LABEL: Record<Exclude<ScaleName, 'penta'>, KeymashMsg> = {
   major: 'scaleMajor', minor: 'scaleMinor', blues: 'scaleBlues', spooky: 'scaleSpooky', japan: 'scaleJapan',
 };
 const FORMULAS: { f: (x: number, A: number, k: number) => number; s: (A: number, k: number) => string }[] = [

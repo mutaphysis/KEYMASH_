@@ -1,12 +1,12 @@
 // PETRI_ sound: calm and spacious. A slow pad walks through four chords in D, a quiet water bed
 // breathes underneath, and every interaction in the dish plays one soft note, placed on a slow
 // grid and rate limited, so a busy dish sounds like a music box, never like an alarm.
-import type { AudioEngine } from '../engine/audio';
+import type { AudioEngine } from '../../engine/audio';
 import type { SimEvent } from './sim';
 import { DISH_R, DIVIDE_TIME } from './sim';
 import type { Species, Body } from './genome';
-import { mulberry32 } from '../lang/vm';
-import { t, tl } from '../i18n';
+import { mulberry32 } from '../../lang/rng';
+import { t, tl } from './messages';
 
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 

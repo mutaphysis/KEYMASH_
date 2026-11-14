@@ -5,6 +5,8 @@ import type { VMEvent, EventOf, DrumKind, SfxKind } from '../lang/types';
 declare global { interface Window { webkitAudioContext?: typeof AudioContext } }
 
 export type TypingKind = 'letter' | 'digit' | 'symbol' | 'emoji' | 'space' | 'enter' | 'delete';
+/** 'lounge' (KEYMASH: kalimba keys) or 'water' (PETRI: drops and bubbles) */
+export type TypingStyle = 'lounge' | 'water';
 interface SweepOpts { rev?: number; del?: number; lp?: number; bp?: number; q?: number; a?: number }
 
 const mtof = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
@@ -103,8 +105,7 @@ export class AudioEngine {
   /** buses of other sound engines (PETRI's ambient) that mute and stop must reach too */
   extra: GainNode[] = [];
   registerBus(g: GainNode): void { if (!this.extra.includes(g)) this.extra.push(g); }
-  /** 'lounge' (KEYMASH: kalimba keys) or 'water' (PETRI: drops and bubbles) */
-  typingStyle: 'lounge' | 'water' = 'lounge';
+  typingStyle: TypingStyle = 'lounge';
 
   setMuted(m: boolean): void {
     this.muted = m;

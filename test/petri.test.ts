@@ -1,8 +1,8 @@
 import { test, expect } from 'bun:test';
-import { readCulture, pronounce } from '../src/micro/genome';
-import { Petri } from '../src/micro/culture';
-import { DISH_R, MAX_CELLS, MAX_FOOD } from '../src/micro/sim';
-import { mulberry32 } from '../src/lang/vm';
+import { readCulture, pronounce } from '../src/modes/petri/genome';
+import { Petri } from '../src/modes/petri/culture';
+import { DISH_R, MAX_CELLS, MAX_FOOD } from '../src/modes/petri/sim';
+import { mulberry32 } from '../src/lang/rng';
 
 const POOL = [
   ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZäöü0123456789',

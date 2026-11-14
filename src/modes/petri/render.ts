@@ -4,8 +4,8 @@ import type { Cell, Food, Zone, World, SimEvent } from './sim';
 import { DISH_R, DIVIDE_TIME, DIVIDE_GAP, TRANSVERSE } from './sim';
 import type { Species } from './genome';
 import type { Note } from './culture';
-import { ctx2d } from '../ui/dom';
-import { t } from '../i18n';
+import { ctx2d } from '../../ui/dom';
+import { t } from './messages';
 
 type Ctx = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;

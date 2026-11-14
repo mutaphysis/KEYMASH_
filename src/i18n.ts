@@ -1,5 +1,6 @@
 // UI language: the user's choice, else the system's (German when the browser prefers it, English otherwise).
-// Messages have ids; `en` is the reference and tsc checks that `de` covers every id with the same shape.
+// Each part of the app defines its own messages with `defineMessages(en, de)`: the shared UI here,
+// every mode in its own folder. `en` is the reference; tsc checks that `de` covers every id with the same shape.
 // A message is a string with {placeholders}, a plural pair, or a list to pick from.
 
 type Plural = { one: string; other: string };
@@ -37,10 +38,47 @@ export const lang: Lang = langPref !== 'auto' ? langPref : systemLang;
 /** language names are shown in their own language */
 export const LANG_NAMES: Record<Lang, string> = { en: 'English', de: 'Deutsch' };
 
+type Shape<T> = T extends string ? string : T extends readonly string[] ? readonly string[] : Plural;
+/** the German table must have exactly the ids of the English one, each with the same shape */
+export type Translation<E> = { [K in keyof E]: Shape<E[K]> };
+type KeysOf<E, T> = { [K in keyof E]: Shape<E[K]> extends T ? K : never }[keyof E] & string;
+
+const plural = new Intl.PluralRules(lang);
+
+function fill(s: string, vars?: Vars): string {
+  return vars ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : s;
+}
+
+export interface Messages<E> {
+  /** a plain message */
+  t(key: KeysOf<E, string>, vars?: Vars): string;
+  /** plural message; `{n}` is filled with the count */
+  tn(key: KeysOf<E, Plural>, n: number, vars?: Vars): string;
+  /** a list of variants, e.g. for picking one at random */
+  tl(key: KeysOf<E, readonly string[]>): readonly string[];
+}
+
+export function defineMessages<E extends Record<string, Entry>>(en: E, de: Translation<E>): Messages<E> {
+  const M = (lang === 'de' ? de : en) as Record<string, Entry>;
+  return {
+    t(key, vars) {
+      const s = M[key];
+      if (typeof s !== 'string') throw new Error(`i18n: no message "${key}"`); // e.g. a typo in a data-i18n attribute
+      return fill(s, vars);
+    },
+    tn(key, n, vars) {
+      const p = M[key] as Plural;
+      return fill(plural.select(n) === 'one' ? p.one : p.other, { n, ...vars });
+    },
+    tl(key) { return M[key] as readonly string[]; },
+  };
+}
+
+// ---------------- the shared UI ----------------
+
 const en = {
-  // ---- page ----
-  modeAria: 'switch mode (double-tap)',
-  modeTitle: 'double-tap to switch mode',
+  modeAria: 'next mode',
+  modeTitle: 'tap for the next mode',
   soundToggle: 'sound on/off',
   placeholder: 'type anything.\nmash the keys.\nlet the dog walk over it.\n\nthere are no errors.',
   extraKeys: 'extra keys',
@@ -57,17 +95,7 @@ const en = {
   idleHint: 'edit on the left — changes go live while it runs',
   programs: '// PROGRAMS',
   built: 'built {time}',
-  // ---- status line ----
-  errors0: '0 ERRORS',
-  alive: 'ALIVE',
-  threads: 'THREADS',
-  species: { one: 'SPECIES', other: 'SPECIES' },
   glyphs: 'GLYPHS',
-  // ---- modes, toasts, drawer ----
-  tagKeymash: 'every keystroke compiles',
-  tagPetri: 'a quiet culture of cells',
-  emptyKeymash: 'EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾',
-  emptyPetri: 'EMPTY DISH? A PAW SEEDED IT 🐾',
   saved: 'SAVED · SLOT {n}',
   storageBlocked: 'STORAGE BLOCKED — COPY IT INSTEAD',
   loaded: 'LOADED',
@@ -75,14 +103,7 @@ const en = {
   savedHere: 'SAVED ON THIS DEVICE',
   nothingSaved: 'nothing yet. press 💾 SAVE.',
   mode: 'MODE',
-  switchTo: '⇄ switch to {app}',
-  switchHint: 'or double-tap the icon in the header',
-  voice: 'VOICE',
-  voiceSystem: '🗣 system speech',
-  voiceSystemSub: 'real words from your device — Firefox on macOS may click',
-  voiceBabble: '🤖 keymash babble',
-  voiceBabbleSub: 'made right here, sounds the same everywhere, never clicks',
-  voiceHello: 'hello, i am keymash!',
+  switchHint: 'mode — or tap the icon in the header',
   share: 'SHARE',
   copy: '📋 copy program text',
   copySub: 'paste it anywhere — any text is a program',
@@ -92,137 +113,12 @@ const en = {
   reloadSub: 'fetch the newest version — your text is kept',
   language: 'language',
   langAuto: 'auto ({name})',
-  // ---- demo names ----
-  demoDog: '🐶 dog on keyboard',
-  demoDrum: '🥁 paw drum machine',
-  demoKid: '🧒 kid\'s first program',
-  demoHack: '💻 hack the planet',
-  demoMath: '📈 math mode',
-  demoBallet: '🩰 paw ballet',
-  demoTunnel: '🌀 tunnel vision',
-  petriFirst: '🌱 first culture',
-  petriHunters: '🦠 hunters and grazers',
-  petriSymbiosis: '💞 symbiosis',
-  petriSpores: '🍄 spores and decay',
-  petriSwirl: '🌀 the swirl',
-  petriWinter: '❄️ winter pond',
-  petriDog: '🐶 dog under the microscope',
-  petriMath: '🧮 math garden',
-  // ---- KEYMASH_ play mode ----
-  runSummary: '{glyphs} glyphs :: {threads} thread(s) :: 0 errors',
-  bootLex: '> lexing {n} glyphs ......... ok',
-  bootSpawn: '> spawning {n} thread(s) ....... ok',
-  bootErrors: '> syntax errors: 0 (there are never errors)',
-  bootGranted: '> ACCESS GRANTED',
-  tapTempo: 'TAP TEMPO :: {bpm} BPM',
-  generation: 't{th} :: generation {gen} :: mutating…',
-  exited: 't{th} :: exited (0)',
-  segfault: '!! SEGFAULT IN THREAD {id} — IGNORED LIKE A PRO',
-  spell: 'SPELL {word} -> {op} :: t{th} :: 0x{hex}',
-  spawnLog: 'SPAWN thread {id} ×{runs}',
-  answer: 'THE ANSWER.',
-  mathCrash: 'MATH.EXE HAS STOPPED',
-  scaleMajor: 'MAJOR',
-  scaleMinor: 'MINOR',
-  scaleBlues: 'BLUES',
-  scaleSpooky: 'SPOOKY',
-  scaleJapan: 'JAPAN',
-  boom: 'BOOM',
-  bone: '+1 BONE',
-  accessLines: ['ACCESS GRANTED', 'ROOT ACCESS: GOOD BOY', 'PASSWORD: ********', 'I\'M IN.'],
-  mainframeLines: ['MAINFRAME BREACHED', 'FIREWALL: LOL', 'TRACE BLOCKED', 'PROXY: 127.0.0.1'],
-  virusLines: ['VIRUS DETECTED: IT\'S FRIENDLY', 'WORM.EXE IS WIGGLING', 'ANTIVIRUS ON VACATION'],
-  download: 'DOWNLOADING MORE RAM',
-  matrixLines: ['WAKE UP, NEO…', 'FOLLOW THE WHITE RABBIT 🐇', 'THERE IS NO SPOON'],
-  hackLines: [
-    'ACCESS GRANTED', 'MAINFRAME BREACHED', 'FIREWALL: LOL', 'DOWNLOADING MORE RAM',
-    'ROOT ACCESS: GOOD BOY', 'HACKING THE PLANET', 'BYPASSING CAT DEFENSES', 'ENCRYPTING BONES',
-    'I\'M IN.', 'SNIFFING PACKETS 🐽', 'TREAT.EXE INSTALLED', 'PASSWORD: ********',
-    'SUDO MAKE ME A SANDWICH', 'TRACE BLOCKED', 'UPLOADING BARK.MP3', 'NEURAL LINK ESTABLISHED',
-    'COMPILING… 0 ERRORS', 'KERNEL PANIC (JUST KIDDING)', 'ENHANCE!', 'SQUIRREL.DLL LOADED',
-  ],
-  bluescreenLines: [':( DOG.SYS HAS CRASHED', ':( YOUR PC RAN INTO A SQUIRREL', 'STOP 0x000000WOOF', 'GURU MEDITATION #00000004'],
-  errorInfo: 'collecting error info… 0% (it will stay at 0%)',
-  dogWords: ['WOOF', 'WUFF', 'BORK', 'ARF'],
-  catWords: ['MEOW', 'MIAU', 'NYA'],
-  cowWord: 'MOOO',
-  duckWord: 'QUACK',
-  pigWord: 'OINK',
-  birdWord: 'tweet',
-  ghostWord: 'BOO',
-  robotWord: 'BEEP BOOP',
-  ballSay: ['ball!', 'fetch!', 'get it!'],
-  squirrelWord: 'SQUIRREL!!!',
-  poopWords: ['PFFRT', 'OOPS', 'LOL'],
-  yum: 'yum',
-  carWord: 'VROOM',
-  trainWord: 'CHOO CHOO',
-  bark: 'WOOF',
-  meow: 'MEOW',
-  moo: 'MOO',
-  quack: 'QUACK',
-  frogWord: 'RIBBIT',
-  owlWord: 'HOO HOO',
-  constellations: ['CANIS MAJOR', 'CANIS MINOR', 'URSA WOOFER', 'THE GREAT PAW', 'LEPUS', 'VULPECULA', 'SQUIRREL NEBULA'],
-  radarLines: ['SCANNING…', 'SQUIRREL DETECTED', 'TREAT AT 3 O\'CLOCK', 'CAT ON RADAR'],
-  receiptLines: ['1× GOOD BOY', '1× TENNIS BALL', '3× TREATS', '1× KEYBOARD (CHEWED)'],
-  // ---- PETRI_ ----
-  bootPrep: 'preparing culture medium …… ok',
-  bootGenome: { one: 'reading {n} line of genome …… ok', other: 'reading {n} lines of genome …… ok' },
-  bootInoculate: { one: 'inoculating {n} species', other: 'inoculating {n} species' },
-  bootNoSpecies: 'no species — just weather and food',
-  bootTuning: 'tuning to {key}',
-  bootFocus: 'focusing',
-  genomeEdited: { one: '{t} · genome edited — {n} species', other: '{t} · genome edited — {n} species' },
-  noteAppears: '{name} appears',
-  noteDivides: '{name} divides for the first time',
-  noteGeneration: '{name} reaches generation {gen}',
-  noteEngulfs: '{pred} engulfs {prey}',
-  noteShare: '{a} and {b} share food',
-  noteToxic: '{name} ate something toxic',
-  noteHatch: 'spores of {name} hatch',
-  noteStarves: '{name} starves',
-  noteOld: '{name} dies of old age',
-  notePoisoned: '{name} poisoned',
-  noteBloom: 'algae bloom',
-  noteExtinct: '{name} is extinct',
-  hudCells: { one: '{n} cell', other: '{n} cells' },
-  hudFood: '{n} food',
-  cold: 'cold',
-  warm: 'warm',
-  extinctSub: 'extinct — for now',
-  darkField: '400× · dark field',
-  amoeba: 'amoeba',
-  bacillus: 'bacillus',
-  coccus: 'coccus',
-  spirillum: 'spirillum',
-  diatom: 'diatom',
-  ciliate: 'ciliate',
-  flagellate: 'flagellate',
-  volvox: 'volvox',
-  grazer: 'grazer',
-  hunter: 'predator',
-  photo: 'photosynthetic',
-  omni: 'omnivore',
-  toxic: 'toxic',
-  symbiotic: 'symbiotic',
-  spores: 'spore-forming',
-  colonial: 'colonial',
-  lydian: 'lydian',
-  dorian: 'dorian',
-  aeolian: 'aeolian',
-  open: 'open',
-  hirajoshi: 'hirajoshi',
-  noteNames: ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'],
-} satisfies Record<string, Entry>;
-
-type Shape<T> = T extends string ? string : T extends readonly string[] ? readonly string[] : Plural;
-type Messages = { [K in keyof typeof en]: Shape<(typeof en)[K]> };
+};
 
 // casual "du", short words: the buttons and the status line are small
-const de: Messages = {
-  modeAria: 'Modus wechseln (Doppeltipp)',
-  modeTitle: 'doppelt tippen zum Wechseln',
+const de: Translation<typeof en> = {
+  modeAria: 'nächster Modus',
+  modeTitle: 'tippen für den nächsten Modus',
   soundToggle: 'Ton an/aus',
   placeholder: 'tipp irgendwas.\nhau in die tasten.\nlass den hund drüberlaufen.\n\nfehler gibt\'s hier nicht.',
   extraKeys: 'Extratasten',
@@ -236,18 +132,10 @@ const de: Messages = {
   load: 'LADEN',
   edit: 'CODE',
   restart: 'neu starten',
-  idleHint: 'links tippen — Änderungen laufen gleich mit',
+  idleHint: 'links tippen — Änderungen sind live',
   programs: '// PROGRAMME',
   built: 'gebaut {time}',
-  errors0: '0 FEHLER',
-  alive: 'LEBT',
-  threads: 'THREADS',
-  species: { one: 'ART', other: 'ARTEN' },
   glyphs: 'ZEICHEN',
-  tagKeymash: 'jeder Tastendruck kompiliert',
-  tagPetri: 'eine stille Zellkultur',
-  emptyKeymash: 'LEER? EINE PFOTE HAT WAS FÜR DICH GETIPPT 🐾',
-  emptyPetri: 'SCHALE LEER? EINE PFOTE HAT GESÄT 🐾',
   saved: 'GESICHERT · PLATZ {n}',
   storageBlocked: 'SPEICHER GESPERRT — KOPIER\'S LIEBER',
   loaded: 'GELADEN',
@@ -255,14 +143,7 @@ const de: Messages = {
   savedHere: 'AUF DEINEM GERÄT',
   nothingSaved: 'noch nix da. drück 💾 SICHERN.',
   mode: 'MODUS',
-  switchTo: '⇄ zu {app} wechseln',
-  switchHint: 'oder tipp oben doppelt aufs Symbol',
-  voice: 'STIMME',
-  voiceSystem: '🗣 Systemstimme',
-  voiceSystemSub: 'echte Wörter von deinem Gerät — Firefox auf dem Mac knackst evtl.',
-  voiceBabble: '🤖 Keymash-Gebrabbel',
-  voiceBabbleSub: 'kommt von hier, klingt überall gleich, knackst nie',
-  voiceHello: 'hallo, ich bin keymash!',
+  switchHint: 'Modus — oder tipp oben aufs Symbol',
   share: 'TEILEN',
   copy: '📋 Programm kopieren',
   copySub: 'füg\'s überall ein — jeder Text ist ein Programm',
@@ -272,150 +153,7 @@ const de: Messages = {
   reloadSub: 'holt die neueste Version — dein Text bleibt',
   language: 'Sprache',
   langAuto: 'automatisch ({name})',
-  demoDog: '🐶 Hund auf der Tastatur',
-  demoDrum: '🥁 Pfoten-Drumcomputer',
-  demoKid: '🧒 Mein erstes Programm',
-  demoHack: '💻 hack den Planeten',
-  demoMath: '📈 Mathe-Modus',
-  demoBallet: '🩰 Pfotenballett',
-  demoTunnel: '🌀 Tunnelblick',
-  petriFirst: '🌱 erste Kultur',
-  petriHunters: '🦠 Jäger und Weider',
-  petriSymbiosis: '💞 Symbiose',
-  petriSpores: '🍄 Sporen und Zerfall',
-  petriSwirl: '🌀 der Strudel',
-  petriWinter: '❄️ Winterteich',
-  petriDog: '🐶 Hund unterm Mikroskop',
-  petriMath: '🧮 Mathegarten',
-  runSummary: '{glyphs} Zeichen :: {threads} Thread(s) :: 0 Fehler',
-  bootLex: '> lexe {n} Zeichen ......... ok',
-  bootSpawn: '> starte {n} Thread(s) ....... ok',
-  bootErrors: '> Syntaxfehler: 0 (gibt\'s hier nie)',
-  bootGranted: '> ZUGRIFF GEWÄHRT',
-  tapTempo: 'TAP-TEMPO :: {bpm} BPM',
-  generation: 't{th} :: Generation {gen} :: mutiert…',
-  exited: 't{th} :: fertig (0)',
-  segfault: '!! SEGFAULT IN THREAD {id} — LÄSSIG IGNORIERT',
-  spell: 'ZAUBER {word} -> {op} :: t{th} :: 0x{hex}',
-  spawnLog: 'SPAWN Thread {id} ×{runs}',
-  answer: 'DIE ANTWORT.',
-  mathCrash: 'MATH.EXE GEHT NICHT MEHR',
-  scaleMajor: 'DUR',
-  scaleMinor: 'MOLL',
-  scaleBlues: 'BLUES',
-  scaleSpooky: 'GRUSELIG',
-  scaleJapan: 'JAPAN',
-  boom: 'BUMM',
-  bone: '+1 KNOCHEN',
-  accessLines: ['ZUGRIFF GEWÄHRT', 'ROOT-ZUGRIFF: FEINER HUND', 'PASSWORT: ********', 'BIN DRIN.'],
-  mainframeLines: ['MAINFRAME GEKNACKT', 'FIREWALL: LOL', 'TRACE BLOCKIERT', 'PROXY: 127.0.0.1'],
-  virusLines: ['VIRUS GEFUNDEN: IST LIEB', 'WURM.EXE ZAPPELT', 'ANTIVIRUS IM URLAUB'],
-  download: 'LADE MEHR RAM RUNTER',
-  matrixLines: ['WACH AUF, NEO…', 'FOLG DEM WEISSEN KANINCHEN 🐇', 'ES GIBT KEINEN LÖFFEL'],
-  hackLines: [
-    'ZUGRIFF GEWÄHRT', 'MAINFRAME GEKNACKT', 'FIREWALL: LOL', 'LADE MEHR RAM RUNTER',
-    'ROOT-ZUGRIFF: FEINER HUND', 'HACK DEN PLANETEN', 'UMGEHE KATZENABWEHR', 'VERSCHLÜSSLE KNOCHEN',
-    'BIN DRIN.', 'SCHNÜFFLE PAKETE 🐽', 'LECKERLI.EXE INSTALLIERT', 'PASSWORT: ********',
-    'SUDO MACH MIR EIN BROT', 'TRACE BLOCKIERT', 'LADE BELL.MP3 HOCH', 'NEURO-LINK STEHT',
-    'KOMPILIERE… 0 FEHLER', 'KERNEL PANIC (SPASS)', 'SCHÄRFER!', 'EICHHÖRNCHEN.DLL GELADEN',
-  ],
-  bluescreenLines: [':( DOG.SYS IST ABGESTÜRZT', ':( DEIN PC IST IN EIN EICHHÖRNCHEN GERANNT', 'STOP 0x000000WUFF', 'GURU MEDITATION #00000004'],
-  errorInfo: 'sammle Fehlerinfos… 0% (bleibt bei 0%)',
-  dogWords: ['WAU', 'WUFF', 'WAU WAU', 'KLÄFF'],
-  catWords: ['MIAU', 'MAUZ', 'NYA'],
-  cowWord: 'MUUUH',
-  duckWord: 'QUAK',
-  pigWord: 'GRUNZ',
-  birdWord: 'piep',
-  ghostWord: 'BUH',
-  robotWord: 'PIEP PIEP',
-  ballSay: ['Ball!', 'hol!', 'fang!'],
-  squirrelWord: 'EICHHÖRNCHEN!!!',
-  poopWords: ['PFFRT', 'UPS', 'LOL'],
-  yum: 'lecker',
-  carWord: 'BRUMM',
-  trainWord: 'TSCHU TSCHU',
-  bark: 'WAU',
-  meow: 'MIAU',
-  moo: 'MUH',
-  quack: 'QUAK',
-  frogWord: 'QUAAK',
-  owlWord: 'HUHU',
-  constellations: ['CANIS MAJOR', 'CANIS MINOR', 'URSA WAUWAU', 'DIE GROSSE PFOTE', 'LEPUS', 'VULPECULA', 'EICHHÖRNCHENNEBEL'],
-  radarLines: ['SCANNE…', 'EICHHÖRNCHEN ENTDECKT', 'LECKERLI AUF 3 UHR', 'KATZE AUF DEM RADAR'],
-  receiptLines: ['1× FEINER HUND', '1× TENNISBALL', '3× LECKERLIS', '1× TASTATUR (ANGEKAUT)'],
-  bootPrep: 'rühre Nährboden an …… ok',
-  bootGenome: { one: 'lese {n} Zeile Genom …… ok', other: 'lese {n} Zeilen Genom …… ok' },
-  bootInoculate: { one: 'impfe {n} Art', other: 'impfe {n} Arten' },
-  bootNoSpecies: 'keine Arten — nur Wetter und Futter',
-  bootTuning: 'stimme auf {key}',
-  bootFocus: 'stelle scharf',
-  genomeEdited: { one: '{t} · Genom geändert — {n} Art', other: '{t} · Genom geändert — {n} Arten' },
-  noteAppears: '{name} taucht auf',
-  noteDivides: '{name} teilt sich zum ersten Mal',
-  noteGeneration: '{name} schafft Generation {gen}',
-  noteEngulfs: '{pred} verschlingt {prey}',
-  noteShare: '{a} und {b} teilen Futter',
-  noteToxic: '{name} hat was Giftiges gefressen',
-  noteHatch: 'Sporen von {name} keimen',
-  noteStarves: '{name} verhungert',
-  noteOld: '{name} stirbt an Altersschwäche',
-  notePoisoned: '{name} vergiftet',
-  noteBloom: 'Algenblüte',
-  noteExtinct: '{name} ist ausgestorben',
-  hudCells: { one: '{n} Zelle', other: '{n} Zellen' },
-  hudFood: '{n} Futter',
-  cold: 'kalt',
-  warm: 'warm',
-  extinctSub: 'ausgestorben — vorerst',
-  darkField: '400× · Dunkelfeld',
-  amoeba: 'Amöbe',
-  bacillus: 'Bazillus',
-  coccus: 'Kokke',
-  spirillum: 'Spirille',
-  diatom: 'Kieselalge',
-  ciliate: 'Wimpertier',
-  flagellate: 'Geißeltier',
-  volvox: 'Volvox',
-  grazer: 'Algenfresser',
-  hunter: 'Räuber',
-  photo: 'Lichtfresser',
-  omni: 'Allesfresser',
-  toxic: 'giftig',
-  symbiotic: 'symbiotisch',
-  spores: 'bildet Sporen',
-  colonial: 'in Kolonien',
-  lydian: 'lydisch',
-  dorian: 'dorisch',
-  aeolian: 'äolisch',
-  open: 'offen',
-  hirajoshi: 'hirajoshi',
-  noteNames: ['C', 'Cis', 'D', 'Es', 'E', 'F', 'Fis', 'G', 'As', 'A', 'B', 'H'],
 };
 
-const M: Messages = lang === 'de' ? de : en;
-const plural = new Intl.PluralRules(lang);
-
-type KeysOf<T> = { [K in keyof Messages]: Messages[K] extends T ? K : never }[keyof Messages];
-export type Msg = KeysOf<string>;
-export type PluralMsg = KeysOf<Plural>;
-export type ListMsg = KeysOf<readonly string[]>;
-
-function fill(s: string, vars?: Vars): string {
-  return vars ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : s;
-}
-
-export function t(key: Msg, vars?: Vars): string {
-  const s: unknown = M[key];
-  if (typeof s !== 'string') throw new Error(`i18n: no message "${key}"`); // e.g. a typo in a data-i18n attribute
-  return fill(s, vars);
-}
-
-/** plural message; `{n}` is filled with the count */
-export function tn(key: PluralMsg, n: number, vars?: Vars): string {
-  const p = M[key];
-  return fill(plural.select(n) === 'one' ? p.one : p.other, { n, ...vars });
-}
-
-/** a list of variants, e.g. for picking one at random */
-export function tl(key: ListMsg): readonly string[] { return M[key]; }
+export type Msg = KeysOf<typeof en, string>;
+export const { t } = defineMessages(en, de);

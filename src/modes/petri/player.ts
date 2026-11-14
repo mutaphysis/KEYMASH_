@@ -4,12 +4,12 @@ import { Petri } from './culture';
 import type { CultureEvent } from './culture';
 import { MicroRenderer } from './render';
 import { Ambient } from './ambient';
-import type { AudioEngine } from '../engine/audio';
+import type { AudioEngine } from '../../engine/audio';
 import type { SimEvent } from './sim';
-import { $ } from '../ui/dom';
-import { VERSION_LABEL } from '../version';
-import { t, tn } from '../i18n';
-import { hash } from '../lang/vm';
+import { $ } from '../../ui/dom';
+import { VERSION_LABEL } from '../../version';
+import { t, tn } from './messages';
+import { hash } from '../../lang/rng';
 
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 

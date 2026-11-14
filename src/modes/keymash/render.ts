@@ -1,7 +1,7 @@
 // KEYMASH renderer: canvas 2D, persistent "paint" layer with trails + feedback,
 // sprites/particles on top, view transforms and glitch post-processing.
 
-import type { Color, Point, VMEvent, EventOf, ParticleSpec, ShapeKind, TextStyle, ActorKind } from '../lang/types';
+import type { Color, Point, VMEvent, EventOf, ParticleSpec, ShapeKind, TextStyle, ActorKind } from '../../lang/types';
 
 type Ctx = CanvasRenderingContext2D;
 type PartKind = ParticleSpec['kind'] | 'star' | 'rect' | 'char' | 'bubble';

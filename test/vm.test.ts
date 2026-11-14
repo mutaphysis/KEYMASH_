@@ -1,9 +1,10 @@
 import { test, expect } from 'bun:test';
-import { VM, SPELLS, SPELL_COOLDOWN, BANNER_COOLDOWN, hash, tempoOf } from '../src/lang/vm';
+import { VM, SPELLS, SPELL_COOLDOWN, BANNER_COOLDOWN, tempoOf } from '../src/lang/vm';
+import { hash } from '../src/lang/rng';
 import { graphemes } from '../src/lang/lexer';
 import { lex, evalMath, fmtNum } from '../src/lang/lexer';
 import type { VMEvent } from '../src/lang/types';
-import { t as msg } from '../src/i18n';
+import { t as msg } from '../src/modes/keymash/messages';
 
 const POOL = [
   ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZäöüßÄÖÜ0123456789',

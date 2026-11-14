@@ -1,45 +1,33 @@
-// Edit mode: matrix rain behind the textarea, sparks at the caret, a key bar for
-// phones (symbols, emoji, cursor movement), and a little note for every keystroke.
-import { keyInfo } from '../lang/keys';
-import type { KeyInfo } from '../lang/keys';
+// Edit mode: the textarea, the mode's backdrop behind it (two canvases), and a key bar for
+// phones: cursor keys plus the mode's symbols and emoji.
 import { $, ctx2d } from './dom';
 import { graphemes } from '../lang/lexer';
+import type { Backdrop } from '../modes/types';
 
-const PETRI_KEYS: string[] = ['🌿', '☀️', '💧', '🫧', '🍄', '🦠', '🍬', '❄️', '🔥', '☠️', '💞', '🧫', '.', '~', '*', '!', '&', '+', '#', '@', '(', ')', '-', '?', '"'];
-const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ0123456789#$%&@!?*<>{}[]~^';
-
-interface RainCol { y: number; v: number; step?: number; inject?: string | null }
-interface Spark { x: number; y: number; vx: number; vy: number; life: number; age: number; hue: number }
 type InputLike = { data?: string | null; inputType?: string };
 export interface EditorOpts {
   onChange?: (v: string) => void;
-  onKey?: (ch: string, key: KeyInfo) => void;
   onType?: (ch: string, inputType: string) => void;
 }
 type KeyDef = string | [label: string, action: string];
+const NAV_KEYS: KeyDef[] = [['◀', 'left'], ['▶', 'right'], ['▲', 'up'], ['▼', 'down'], ['⏎', '\n']];
 
 export class Editor {
   ta = $<HTMLTextAreaElement>('code');
   wrap = $('editorWrap');
-  rain = $<HTMLCanvasElement>('rain');
-  sparks = $<HTMLCanvasElement>('sparks');
-  rc = ctx2d(this.rain);
-  sc = ctx2d(this.sparks);
+  back = $<HTMLCanvasElement>('rain');
+  front = $<HTMLCanvasElement>('sparks');
+  bc = ctx2d(this.back);
+  fc = ctx2d(this.front);
   onChange: (v: string) => void;
-  onKey: (ch: string, key: KeyInfo) => void;
   onType: (ch: string, inputType: string) => void;
-  cols: RainCol[] = []; parts: Spark[] = []; typed: string[] = [];
+  backdrop: Backdrop | null = null;
   active = true; last = 0; dpr = 1; w = 0; h = 0;
   mirror: HTMLDivElement | null = null;
-  /** 'keymash': matrix rain and sparks; 'petri': drifting plankton and bubbles */
-  mode: 'keymash' | 'petri' = 'keymash';
-  plankton: { x: number; y: number; r: number; vx: number; vy: number; a: number; hue: number; ph: number }[] = [];
 
   constructor(opts: EditorOpts) {
     this.onChange = opts.onChange || (() => {});
-    this.onKey = opts.onKey || (() => {});
     this.onType = opts.onType || (() => {});
-    this.buildKeybar();
     this.mouseScroll($('keybar'));
     this.ta.addEventListener('input', (e) => this.input(e as InputEvent));
     window.addEventListener('resize', () => this.resize());
@@ -52,14 +40,20 @@ export class Editor {
   get value(): string { return this.ta.value; }
   set value(v: string) { this.ta.value = v; this.onChange(v); }
 
+  /** a mode brings its own backdrop and key bar */
+  configure(backdrop: Backdrop, keys: string[]): void {
+    this.backdrop = backdrop;
+    backdrop.resize(this.w, this.h);
+    for (const c of [this.bc, this.fc]) { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, c.canvas.width, c.canvas.height); }
+    this.buildKeybar(keys);
+  }
+
   resize(): void {
     const r = this.wrap.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    for (const c of [this.rain, this.sparks]) { c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr); }
+    for (const c of [this.back, this.front]) { c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr); }
     this.dpr = dpr; this.w = r.width; this.h = r.height;
-    const fs = 16; const n = Math.ceil(r.width / fs);
-    while (this.cols.length < n) this.cols.push({ y: Math.random() * r.height, v: 40 + Math.random() * 90 });
-    this.cols.length = n;
+    this.backdrop?.resize(r.width, r.height);
   }
 
   input(e?: InputLike): void {
@@ -68,38 +62,9 @@ export class Editor {
     const pos = this.ta.selectionStart;
     const ch = e && e.data ? graphemes(e.data).pop() ?? '' : v.slice(Math.max(0, pos - 1), pos);
     const [x, y] = this.caretXY();
-    this.burst(x, y, ch);
-    this.onType(ch || '', (e && e.inputType) || 'insertText');
-    if (ch && ch.trim()) {
-      this.typed.push(ch); if (this.typed.length > 60) this.typed.shift();
-      // drop the typed char into a rain column
-      const col = this.cols[Math.floor(Math.random() * this.cols.length)];
-      if (col) col.inject = ch;
-      this.onKey(ch, keyInfo(ch));
-    }
+    this.backdrop?.typed(ch, x, y);
+    this.onType(ch, (e && e.inputType) || 'insertText');
     this.wrap.classList.remove('pulse'); void this.wrap.offsetWidth; this.wrap.classList.add('pulse');
-  }
-
-  setMode(m: 'keymash' | 'petri'): void {
-    this.mode = m;
-    this.buildKeybar();
-    this.rc.setTransform(1, 0, 0, 1, 0, 0); this.rc.clearRect(0, 0, this.rain.width, this.rain.height);
-    this.parts = [];
-  }
-
-  burst(x: number, y: number, ch: string): void {
-    const k = keyInfo(ch || 'a');
-    if (this.mode === 'petri') {
-      // a few bubbles rise from the caret
-      for (let i = 0; i < 5; i++) this.parts.push({ x: x + (Math.random() - 0.5) * 10, y, vx: (Math.random() - 0.5) * 20, vy: -30 - Math.random() * 50, life: 0.9 + Math.random() * 0.8, age: 0, hue: 165 + k.col * 6 });
-      return;
-    }
-    const hue = 100 + k.col * 18;
-    for (let i = 0; i < 14; i++) {
-      const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 160;
-      this.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: 0.4 + Math.random() * 0.5, age: 0, hue });
-    }
-    if (this.parts.length > 400) this.parts.splice(0, this.parts.length - 400);
   }
 
   // caret pixel position via a mirror div
@@ -122,61 +87,10 @@ export class Editor {
   }
 
   draw(dt: number): void {
-    if (this.mode === 'petri') { this.drawPetri(dt); return; }
-    const c = this.rc; const d = this.dpr;
-    c.setTransform(d, 0, 0, d, 0, 0);
-    c.fillStyle = 'rgba(0,10,3,0.16)'; c.fillRect(0, 0, this.w, this.h);
-    c.font = '15px "Share Tech Mono", monospace'; c.textAlign = 'center';
-    this.cols.forEach((col, i) => {
-      col.y += col.v * dt;
-      if (col.y > this.h + 40) { col.y = -20 - Math.random() * 200; col.v = 40 + Math.random() * 90; }
-      const step = Math.floor(col.y / 18);
-      if (step !== col.step) {
-        col.step = step;
-        const g = col.inject || (this.typed.length && Math.random() < 0.3 ? this.typed[(Math.random() * this.typed.length) | 0] : GLYPHS[(Math.random() * GLYPHS.length) | 0]);
-        const injected = !!col.inject; col.inject = null;
-        c.fillStyle = injected ? '#ffffff' : 'rgba(57,255,122,0.85)';
-        c.fillText(g, i * 16 + 8, step * 18);
-      }
-    });
-    const s = this.sc;
-    s.setTransform(d, 0, 0, d, 0, 0); s.clearRect(0, 0, this.w, this.h);
-    s.globalCompositeOperation = 'lighter';
-    this.parts = this.parts.filter((p) => (p.age += dt) < p.life);
-    for (const p of this.parts) {
-      p.vy += 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-      const a = 1 - p.age / p.life;
-      s.fillStyle = `hsla(${p.hue},100%,65%,${a})`; s.beginPath(); s.arc(p.x, p.y, 2.2, 0, 6.3); s.fill();
-    }
-    s.globalCompositeOperation = 'source-over';
-  }
-
-  /** PETRI editor backdrop: plankton drifting slowly behind the text, typed glyphs float up as bubbles */
-  drawPetri(dt: number): void {
-    const c = this.rc, d = this.dpr;
-    c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, this.w, this.h);
-    if (this.plankton.length < 34) {
-      for (let i = this.plankton.length; i < 34; i++) this.plankton.push({ x: Math.random() * this.w, y: Math.random() * this.h, r: 1 + Math.random() * (i % 7 === 0 ? 7 : 2.5), vx: 0, vy: 0, a: 0.15 + Math.random() * 0.3, hue: [174, 150, 96, 204, 276][i % 5]!, ph: Math.random() * 6 });
-    }
-    c.globalCompositeOperation = 'lighter';
-    for (const p of this.plankton) {
-      p.vx += ((Math.random() - 0.5) * 12 - p.vx) * dt * 0.6; p.vy += ((Math.random() - 0.5) * 12 - 3 - p.vy) * dt * 0.6;
-      p.x += p.vx * dt; p.y += p.vy * dt; p.ph += dt;
-      if (p.y < -10) p.y = this.h + 10; if (p.x < -10) p.x = this.w + 10; if (p.x > this.w + 10) p.x = -10;
-      const a = p.a * (0.7 + 0.3 * Math.sin(p.ph * 1.3));
-      c.strokeStyle = `hsla(${p.hue},70%,70%,${a})`; c.lineWidth = 1;
-      c.beginPath(); c.arc(p.x, p.y, p.r, 0, 6.3); c.stroke();
-      if (p.r > 3) { c.fillStyle = `hsla(${p.hue},70%,70%,${a * 0.25})`; c.fill(); c.fillStyle = `hsla(${p.hue},60%,80%,${a})`; c.beginPath(); c.arc(p.x - p.r * 0.2, p.y, p.r * 0.3, 0, 6.3); c.fill(); }
-    }
-    const s = this.sc;
-    s.setTransform(d, 0, 0, d, 0, 0); s.clearRect(0, 0, this.w, this.h);
-    this.parts = this.parts.filter((p) => (p.age += dt) < p.life);
-    for (const p of this.parts) {
-      p.vx *= Math.pow(0.3, dt); p.x += (p.vx + Math.sin(p.age * 8) * 6) * dt; p.y += p.vy * dt;
-      const a = 0.8 * (1 - p.age / p.life), r = 1.5 + p.age * 2.5;
-      s.strokeStyle = `hsla(${p.hue},80%,80%,${a})`; s.lineWidth = 1; s.beginPath(); s.arc(p.x, p.y, r, 0, 6.3); s.stroke();
-    }
-    c.globalCompositeOperation = 'source-over';
+    if (!this.backdrop) return;
+    const d = this.dpr;
+    this.bc.setTransform(d, 0, 0, d, 0, 0); this.fc.setTransform(d, 0, 0, d, 0, 0);
+    this.backdrop.draw(this.bc, this.fc, dt);
   }
 
   /** with a mouse the key bar can't be swiped: scroll it with the wheel or by dragging */
@@ -200,16 +114,10 @@ export class Editor {
   }
 
   // ---------- key bar ----------
-  buildKeybar(): void {
+  buildKeybar(keys: string[]): void {
     const bar = $('keybar');
-    const keys: KeyDef[] = [
-      ['◀', 'left'], ['▶', 'right'], ['▲', 'up'], ['▼', 'down'], ['⏎', '\n'],
-      '!', '?', '~', '(', ')', '[', ']', '{', '}', '#', '*', '@', '&', '%', '$', '^', ':', '.', '"', '<', '>', '|', '/', '-', '+', '=',
-      '🐶', '🐾', '💥', '🔥', '🌈', '❤️', '⭐', '✨', '🚀', '👻', '🦄', '🦖', '🎵', '🌀', '💻', '🐿️', '🎾', '🦴', '💩', '🍕',
-    ];
     bar.textContent = '';
-    if (this.mode === 'petri') keys.splice(5, keys.length - 5, ...PETRI_KEYS);
-    for (const k of keys) {
+    for (const k of [...NAV_KEYS, ...keys]) {
       const b = document.createElement('button');
       const [label, val] = Array.isArray(k) ? k : [k, k];
       b.textContent = label; b.type = 'button';
@@ -240,7 +148,7 @@ export class Editor {
       return;
     }
     ta.focus({ preventScroll: true });
-    const [x, y] = this.caretXY(); this.burst(x, y, 'a');
+    const [x, y] = this.caretXY(); this.backdrop?.typed('', x, y);
   }
 
   insert(text: string): void {

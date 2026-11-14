@@ -4,7 +4,7 @@ import { readCulture } from './genome';
 import type { Culture, LineProgram, Act, Species } from './genome';
 import { World, DISH_R, SEED_POP } from './sim';
 import type { SimEvent } from './sim';
-import { hash } from '../lang/vm';
+import { hash } from '../../lang/rng';
 
 /** seconds per beat of the feeder: slow on purpose */
 export const BEAT = 0.75;

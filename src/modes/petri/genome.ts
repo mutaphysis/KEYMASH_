@@ -1,9 +1,9 @@
 // PETRI_ genome reader. Any text is a valid culture: every line is the genome of one species,
 // and the same line is read slowly, token by token, as a feeder that seeds cells, food and weather.
-import { lex } from '../lang/lexer';
-import type { Token } from '../lang/lexer';
-import { keyInfo, stripAccents } from '../lang/keys';
-import { hash, mulberry32 } from '../lang/vm';
+import { lex } from '../../lang/lexer';
+import type { Token } from '../../lang/lexer';
+import { keyInfo, stripAccents } from '../../lang/keys';
+import { hash, mulberry32 } from '../../lang/rng';
 
 export type Body = 'amoeba' | 'bacillus' | 'coccus' | 'spirillum' | 'diatom' | 'ciliate' | 'flagellate' | 'volvox';
 export type Diet = 'grazer' | 'hunter' | 'photo' | 'omni';

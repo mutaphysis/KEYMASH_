@@ -47,7 +47,6 @@ header {
 header .logo { grid-area: logo; }
 .modeicon { grid-area: icon; width: 44px; height: 44px; padding: 4px; border: 0; border-radius: 12px; background: transparent; touch-action: manipulation; cursor: pointer; }
 .modeicon svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0 6px rgba(57,255,122,.6)); }
-.modeicon .ic-cell { display: none; }
 .modeicon:active { transform: scale(.9); }
 header .ver { grid-area: ver; }
 header #status { grid-area: status; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -169,15 +168,17 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 .item.split > * { flex: 1 1 0 !important; min-width: 0; }
 .item.split .name small { white-space: normal; }
 /* language: a native select dressed like the drawer buttons, the arrow drawn on top */
-.langpick { position: relative; display: flex; }
-.langpick::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--g); font-size: 14px; }
-.langpick select {
+.pick { position: relative; display: flex; margin-bottom: 6px; }
+.pick::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--g); font-size: 14px; }
+.item .pick { margin-bottom: 0; }
+#drawer .empty { opacity: .5; font-size: 13px; padding: 6px 2px; }
+.pick select {
   flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; font: 12px var(--mono); letter-spacing: .5px;
   color: var(--g); background: rgba(0,0,0,.6); border: 1px solid rgba(57,255,122,.45); border-radius: 6px;
   padding: 8px 30px 8px 10px; text-shadow: 0 0 6px rgba(57,255,122,.7); cursor: pointer; text-overflow: ellipsis;
 }
-.langpick select:focus-visible { outline: 1px solid var(--g); outline-offset: 2px; }
-.langpick option { background: #010d05; color: var(--g); }
+.pick select:focus-visible { outline: 1px solid var(--g); outline-offset: 2px; }
+.pick option { background: #010d05; color: var(--g); }
 #toast { position: absolute; left: 50%; top: calc(64px + var(--sat)); transform: translateX(-50%); z-index: 70; background: #000; border: 1px solid var(--g); padding: 10px 14px; border-radius: 6px; box-shadow: 0 0 20px rgba(57,255,122,.4); display: flex; gap: 12px; align-items: center; font-size: 14px; white-space: nowrap; }
 #toast[hidden] { display: none; }
 #toast button { background: var(--g); color: #000; border: 0; border-radius: 4px; padding: 6px 10px; font-family: var(--mono); }
@@ -217,8 +218,7 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 #app.petri.crt::after { background: radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,.55) 100%); mix-blend-mode: normal; }
 #app.petri .logo { text-shadow: 0 0 10px rgba(143,245,220,.7), 0 0 26px rgba(143,245,220,.3); letter-spacing: 2px; }
 #app.petri .logo::before, #app.petri .logo::after { display: none; }
-#app.petri .modeicon .ic-key { display: none; }
-#app.petri .modeicon .ic-cell { display: block; filter: drop-shadow(0 0 7px rgba(143,245,220,.6)); animation: breathe 6s ease-in-out infinite; }
+#app.petri .modeicon .ic-cell { filter: drop-shadow(0 0 7px rgba(143,245,220,.6)); animation: breathe 6s ease-in-out infinite; }
 @keyframes breathe { 50% { transform: scale(1.06) rotate(4deg); } }
 #app.petri #status { color: #7fb8b0; }
 #app.petri #status .ok { animation: none; }
@@ -238,8 +238,8 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 /* two-line drawer rows: a pill radius would cut into the text */
 #app.petri #drawer .item button { border-radius: 12px; }
 #app.petri #drawer .item .name { padding: 8px 14px; }
-#app.petri .langpick select { border-radius: 12px; padding-left: 14px; background: rgba(2,22,26,.7); border-color: rgba(143,245,220,.3); color: #bff8ea; text-shadow: none; }
-#app.petri .langpick option { background: #011318; color: #bff8ea; }
+#app.petri .pick select { border-radius: 12px; padding-left: 14px; background: rgba(2,22,26,.7); border-color: rgba(143,245,220,.3); color: #bff8ea; text-shadow: none; }
+#app.petri .pick option { background: #011318; color: #bff8ea; }
 #app.petri #controls > button.primary, #app.petri .playbtns button.primary {
   background: linear-gradient(160deg, #a8fbe6, #5fd6c4); color: #022126; box-shadow: 0 0 24px rgba(95,214,196,.45); }
 #app.petri #stageWrap { background: #010608; border-bottom-color: rgba(143,245,220,.25); }

@@ -1,19 +1,20 @@
+// App shell: layout (phone / split view), the editor, running and stopping, the drawer, mode switching.
+// Everything mode specific comes from the ModeDef registry in src/modes/.
 import './fonts.css';
 import './style.css';
 import { AudioEngine } from './engine/audio';
-import type { TypingKind, VoiceMode } from './engine/audio';
+import type { TypingKind } from './engine/audio';
 import { $, localize } from './ui/dom';
 import { Editor } from './ui/editor';
-import { Player } from './ui/player';
-import { store, DEMOS, PETRI_DEMOS, pawMash } from './ui/storage';
-import type { Mode } from './ui/storage';
-import { MicroPlayer } from './micro/player';
-import { readCulture } from './micro/genome';
-import { lex } from './lang/lexer';
+import { store } from './ui/storage';
+import { pawMash } from './ui/paw';
 import { keyInfo } from './lang/keys';
+import { graphemes } from './lang/lexer';
 import { VERSION_LABEL, BUILD_TIME } from './version';
-import { t, tn, langPref, setLangPref, systemLang, LANG_NAMES } from './i18n';
+import { t, langPref, setLangPref, systemLang, LANG_NAMES } from './i18n';
 import type { LangPref } from './i18n';
+import { MODES, modeById, nextMode } from './modes';
+import type { ModeDef, ModePlayer } from './modes/types';
 
 localize();
 const app = $('app');
@@ -68,26 +69,23 @@ try {
   if ('caches' in window) caches.keys().then((ks) => ks.forEach((k) => void caches.delete(k))).catch(() => {});
 } catch (e) { /* not available here */ }
 
-// ---- status line ----
-function status(src: string): void {
-  if (mode === 'petri') {
-    const c = readCulture(src);
-    $('st-ok').textContent = t('alive');
-    $('st-threads').textContent = String(c.species.length);
-    $('st-unit').textContent = tn('species', c.species.length);
-    $('st-glyphs').textContent = String(c.gs.length);
-    return;
-  }
-  const L = lex(src);
-  const threads = L.lines.filter((t) => t.some((x) => x.t !== 'space')).length;
-  $('st-ok').textContent = t('errors0');
-  $('st-threads').textContent = String(threads);
-  $('st-unit').textContent = t('threads');
-  $('st-glyphs').textContent = String(L.gs.length);
+// ---- the current mode and its player (created on first use) ----
+let mode: ModeDef = modeById(store.mode);
+const players = new Map<string, ModePlayer>();
+function P(): ModePlayer {
+  let p = players.get(mode.id);
+  if (!p) { p = mode.player(audio); players.set(mode.id, p); }
+  return p;
 }
 
-// ---- two modes, two players on the same stage ----
-let mode: Mode = store.mode;
+// ---- status line ----
+function status(src: string): void {
+  const s = mode.status(src);
+  $('st-ok').textContent = s.ok;
+  $('st-threads').textContent = String(s.count);
+  $('st-unit').textContent = s.unit;
+  $('st-glyphs').textContent = String(graphemes(src).length);
+}
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined, swapTimer: ReturnType<typeof setTimeout> | undefined;
 const state = { playing: false };
@@ -113,8 +111,6 @@ const editor = new Editor({
     audio.typing(kind, key.deg, (key.x - 0.5) * 1.4, quiet);
   },
 });
-const players = { keymash: new Player(audio), petri: new MicroPlayer(audio) };
-const P = (): Player | MicroPlayer => players[mode];
 
 function isSplit(): boolean { return app.classList.contains('split'); }
 function layout(): void {
@@ -155,53 +151,49 @@ clearBtn.addEventListener('click', () => {
   armUndo(true);
 });
 
-const demos = () => (mode === 'petri' ? PETRI_DEMOS : DEMOS);
-function applyMode(m: Mode): void {
-  mode = m; store.setMode(m);
-  app.classList.toggle('petri', m === 'petri');
+// ---- modes ----
+function applyMode(m: ModeDef): void {
+  for (const other of MODES) app.classList.remove(other.className);
+  mode = m; store.setMode(m.id);
+  app.classList.add(m.className);
   const logo = document.querySelector<HTMLElement>('header .logo')!;
-  logo.textContent = m === 'petri' ? 'PETRI_' : 'KEYMASH_'; logo.dataset.text = logo.textContent;
-  document.title = m === 'petri' ? `PETRI_ — ${t('tagPetri')}` : `KEYMASH_ — ${t('tagKeymash')}`;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m === 'petri' ? '#010a0d' : '#000800');
-  editor.setMode(m);
+  logo.textContent = m.name; logo.dataset.text = m.name;
+  $('mode-icon').innerHTML = m.icon;
+  document.title = `${m.name} — ${m.tagline}`;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m.themeColor);
+  editor.configure(m.backdrop(), m.keys);
   armUndo(false);
-  audio.typingStyle = m === 'petri' ? 'water' : 'lounge';
+  audio.typingStyle = m.typing;
   const draft = store.draft();
-  editor.value = draft !== null ? draft : demos()[0]!.src;
+  editor.value = draft !== null ? draft : m.demos[0]!.src;
 }
-/** double-tap the icon (or the logo) in the header */
-function switchMode(): void {
+function switchMode(m: ModeDef): void {
+  if (m === mode) return;
   store.setDraft(editor.value);
   if (state.playing) edit();
   audio.padStop();
-  applyMode(mode === 'petri' ? 'keymash' : 'petri');
-  if (mode === 'petri') { app.classList.remove('focusing'); void app.offsetWidth; app.classList.add('focusing'); }
-  else glitchSwitch();
-  toast(mode === 'petri' ? `PETRI_ · ${t('tagPetri')}` : `KEYMASH_ · ${t('tagKeymash')}`);
+  applyMode(m);
+  transition();
+  toast(`${m.name} · ${m.tagline}`);
 }
-let lastTap = 0;
+// tap the icon (or the logo) in the header: the next mode
 for (const el of [$('mode-icon'), document.querySelector<HTMLElement>('header .logo')!]) {
-  el.addEventListener('pointerup', (e) => {
-    const t = e.timeStamp;
-    if (t - lastTap < 450) { lastTap = 0; switchMode(); } else lastTap = t;
-  });
-  el.addEventListener('dblclick', (e) => e.preventDefault());
+  el.addEventListener('click', () => switchMode(nextMode(mode)));
 }
 applyMode(mode);
 
-// ---- mode switching ----
-function glitchSwitch(): void {
-  const cls = mode === 'petri' ? 'focusing' : 'switching';
-  app.classList.remove(cls); void app.offsetWidth; app.classList.add(cls);
+/** the mode's own animation: switching in, starting and stopping a program */
+function transition(): void {
+  app.classList.remove(mode.transition); void app.offsetWidth; app.classList.add(mode.transition);
 }
 
 function run(): void {
   if (state.playing && isSplit()) { edit(); return; }
   let src = editor.value;
-  if (!src.trim()) { src = pawMash(70); editor.value = src; toast(t(mode === 'petri' ? 'emptyPetri' : 'emptyKeymash')); }
+  if (!src.trim()) { src = pawMash(70); editor.value = src; toast(mode.emptyToast); }
   audio.padStop();
   if (!isSplit()) editor.ta.blur();
-  glitchSwitch();
+  transition();
   state.playing = true;
   void keepAwake(true);
   layout();
@@ -209,7 +201,7 @@ function run(): void {
 }
 function edit(): void {
   P().stop();
-  if (!isSplit()) glitchSwitch();
+  if (!isSplit()) transition();
   state.playing = false;
   void keepAwake(false);
   layout();
@@ -256,6 +248,7 @@ $('btn-load').addEventListener('click', openDrawer);
 $('drawer-close').addEventListener('click', () => { $('drawer').hidden = true; });
 $('drawer').addEventListener('click', (e) => { if (e.target === $('drawer')) $('drawer').hidden = true; });
 
+// ---- the program drawer ----
 function item(name: string, sub: string, onLoad: () => void, onDel?: () => void): HTMLDivElement {
   const row = document.createElement('div'); row.className = 'item';
   const b = document.createElement('button'); b.className = 'name';
@@ -266,52 +259,52 @@ function item(name: string, sub: string, onLoad: () => void, onDel?: () => void)
   return row;
 }
 
+/** a native select dressed like the drawer buttons */
+function picker<T extends string>(label: string, options: [T, string][], value: T, onPick: (v: T) => void): HTMLLabelElement {
+  const box = document.createElement('label'); box.className = 'pick';
+  const sel = document.createElement('select'); sel.setAttribute('aria-label', label); sel.title = label;
+  for (const [v, name] of options) {
+    const o = document.createElement('option'); o.value = v; o.textContent = name; o.selected = v === value;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => onPick(sel.value as T));
+  box.appendChild(sel);
+  return box;
+}
+
+function heading(text: string): HTMLHeadingElement {
+  const h = document.createElement('h4'); h.textContent = text; return h;
+}
+
 function openDrawer(): void {
   const body = $('drawer-body'); body.innerHTML = '';
   const load = (src: string) => () => { editor.value = src; $('drawer').hidden = true; toast(t('loaded')); };
-  const h1 = document.createElement('h4'); h1.textContent = t('demos'); body.appendChild(h1);
-  for (const d of demos()) body.appendChild(item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src)));
-  const h2 = document.createElement('h4'); h2.textContent = t('savedHere'); body.appendChild(h2);
+  body.appendChild(heading(t('mode')));
+  body.appendChild(picker(t('switchHint'), MODES.map((m): [string, string] => [m.id, `${m.glyph} ${m.name} — ${m.tagline}`]), mode.id, (id) => {
+    $('drawer').hidden = true; switchMode(modeById(id));
+  }));
+  body.appendChild(heading(t('demos')));
+  for (const d of mode.demos) body.appendChild(item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src)));
+  body.appendChild(heading(t('savedHere')));
   const slots = store.slots();
-  if (!slots.length) { const p = document.createElement('div'); p.style.cssText = 'opacity:.5;font-size:13px;padding:6px 2px'; p.textContent = t('nothingSaved'); body.appendChild(p); }
+  if (!slots.length) { const p = document.createElement('div'); p.className = 'empty'; p.textContent = t('nothingSaved'); body.appendChild(p); }
   slots.forEach((s, i) => body.appendChild(item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => { store.remove(i); openDrawer(); })));
-  const hm = document.createElement('h4'); hm.textContent = t('mode'); body.appendChild(hm);
-  body.appendChild(item(t('switchTo', { app: mode === 'petri' ? 'KEYMASH_' : 'PETRI_' }), t('switchHint'), () => { $('drawer').hidden = true; switchMode(); }));
-  const hv = document.createElement('h4'); hv.textContent = t('voice'); if (mode === 'keymash') body.appendChild(hv);
-  const voices: [VoiceMode, string, string][] = [
-    ['system', t('voiceSystem'), t('voiceSystemSub')],
-    ['babble', t('voiceBabble'), t('voiceBabbleSub')],
-  ];
-  if (mode === 'keymash') for (const [vm, name, sub] of voices) {
-    body.appendChild(item((audio.voice === vm ? '✓ ' : '') + name, sub, () => {
-      audio.setVoice(vm); audio.init();
-      setTimeout(() => audio.speak(t('voiceHello'), 1, 1), 150);
-      openDrawer();
-    }));
+  for (const sec of mode.drawer?.({ audio, item, refresh: openDrawer }) ?? []) {
+    body.appendChild(heading(sec.title));
+    for (const el of sec.items) body.appendChild(el);
   }
-  const h3 = document.createElement('h4'); h3.textContent = t('share'); body.appendChild(h3);
+  body.appendChild(heading(t('share')));
   body.appendChild(item(t('copy'), t('copySub'), async () => {
     try { await navigator.clipboard.writeText(editor.value); toast(t('copied')); } catch (e) { toast(t('copyBlocked')); }
   }));
-  const ha = document.createElement('h4'); ha.textContent = 'APP · ' + VERSION_LABEL; body.appendChild(ha);
+  body.appendChild(heading('APP · ' + VERSION_LABEL));
   // settings share one row: reload on the left, language on the right
   const settings = item(t('reload'), t('reloadSub'), reloadApp); settings.classList.add('split');
-  settings.appendChild(langPicker()); body.appendChild(settings);
+  const langs: [LangPref, string][] = [['auto', '🌐 ' + t('langAuto', { name: LANG_NAMES[systemLang] })], ['en', '🌐 ' + LANG_NAMES.en], ['de', '🌐 ' + LANG_NAMES.de]];
+  // every string is resolved at startup, so a change reloads (the text is kept)
+  settings.appendChild(picker(t('language'), langs, langPref, (p) => { setLangPref(p); reloadApp(); }));
+  body.appendChild(settings);
   $('drawer').hidden = false;
-}
-
-/** auto / English / Deutsch; every string is resolved at startup, so a change reloads (the text is kept) */
-function langPicker(): HTMLLabelElement {
-  const box = document.createElement('label'); box.className = 'langpick';
-  const sel = document.createElement('select'); sel.setAttribute('aria-label', t('language'));
-  const opts: [LangPref, string][] = [['auto', t('langAuto', { name: LANG_NAMES[systemLang] })], ['en', LANG_NAMES.en], ['de', LANG_NAMES.de]];
-  for (const [p, name] of opts) {
-    const o = document.createElement('option'); o.value = p; o.textContent = '🌐 ' + name; o.selected = p === langPref;
-    sel.appendChild(o);
-  }
-  sel.addEventListener('change', () => { setLangPref(sel.value as LangPref); reloadApp(); });
-  box.appendChild(sel);
-  return box;
 }
 
 /** Reload, for the home-screen app that has no reload button. The text survives as the draft. */
@@ -325,12 +318,10 @@ function reloadApp(): void {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-function toast(text: string, action?: string, fn?: () => void): void {
-  const t = $('toast'); t.innerHTML = '';
-  const s = document.createElement('span'); s.textContent = text; t.appendChild(s);
-  if (action) { const b = document.createElement('button'); b.textContent = action; b.addEventListener('click', () => { fn?.(); t.hidden = true; }); t.appendChild(b); }
+function toast(text: string): void {
+  const t = $('toast'); t.textContent = text;
   t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, action ? 4000 : 1800);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 1800);
 }
 
 // pause audio when the page is hidden
@@ -341,7 +332,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // handle for debugging and the browser tests
-const KEYMASH = { editor, players, audio, run, edit, state, switchMode, get player() { return P(); }, get mode() { return mode; } };
+const KEYMASH = { editor, players, audio, run, edit, state, switchMode: (id?: string) => switchMode(id ? modeById(id) : nextMode(mode)), get player() { return P(); }, get mode() { return mode.id; } };
 declare global { interface Window { KEYMASH: typeof KEYMASH } }
 window.KEYMASH = KEYMASH;
 

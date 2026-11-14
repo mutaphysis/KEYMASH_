@@ -1,13 +1,13 @@
 // Play mode: runs the VM against the audio clock, feeds the renderer and the
 // scrolling, highlighted code view.
-import { VM, MAX_BPM } from '../lang/vm';
-import { Renderer } from '../engine/render';
-import type { AudioEngine } from '../engine/audio';
-import { isSound } from '../lang/types';
-import type { VMEvent, EventOf } from '../lang/types';
-import { $ } from './dom';
-import { VERSION_LABEL } from '../version';
-import { t } from '../i18n';
+import { VM, MAX_BPM } from '../../lang/vm';
+import { Renderer } from './render';
+import type { AudioEngine } from '../../engine/audio';
+import { isSound } from '../../lang/types';
+import type { VMEvent, EventOf } from '../../lang/types';
+import { $ } from '../../ui/dom';
+import { VERSION_LABEL } from '../../version';
+import { t } from './messages';
 
 type UIEvent = EventOf<'hl' | 'log' | 'gen' | 'die' | 'say'>;
 const isUI = (e: VMEvent): e is UIEvent => e.type === 'hl' || e.type === 'log' || e.type === 'gen' || e.type === 'die' || e.type === 'say';

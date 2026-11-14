@@ -1,6 +1,6 @@
 // PETRI_ simulation: a little pond in a dish. Pure (no DOM, no audio), seeded, fixed time step.
 import type { Species, FoodKind } from './genome';
-import { mulberry32 } from '../lang/vm';
+import { mulberry32 } from '../../lang/rng';
 
 export const DISH_R = 420;
 export const MAX_CELLS = 70;
