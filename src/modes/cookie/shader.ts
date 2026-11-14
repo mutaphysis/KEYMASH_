@@ -27,7 +27,7 @@ uniform vec3 uCamPos, uCamRight, uCamUp, uCamFwd;
 uniform float uTanFov, uShift;
 uniform mat4 uViewProj;
 uniform float uTime, uGentle, uTopY, uSpot;
-uniform float uLift, uDoughR, uSquash, uPinX, uPinDir, uPin, uPinY, uPinLen, uTBefore, uTAfter, uFlour, uDoughOn;
+uniform float uLift, uDoughR, uRAfter, uSquash, uPinX, uPinDir, uPin, uPinY, uPinLen, uPinW, uTBefore, uTAfter, uFlour, uDoughOn;
 uniform float uCutterY, uCutter, uGap, uEdge, uChipT, uHeat, uBaked, uPuff, uCoatReveal, uPattern, uTopT, uDeco, uErode, uDropH;
 uniform vec4 uCookie[3]; // x, z, gone
 uniform vec2 uRot[3];    // cos, sin of the cookie's turn
@@ -99,12 +99,14 @@ void nearest(vec3 p, out Ck c) {
 
 // ---- shapes ----
 float sdDough(vec3 p) {
-  float h = mix(uTAfter, uTBefore, smoothstep(-.25, .25, (p.x - uPinX) * uPinDir));
+  // behind the pin (and right under it) the dough is pressed and wider; it rises to the full thickness ahead
+  float s = smoothstep(0., uPinW, (p.x - uPinX) * uPinDir);
+  float h = mix(uTAfter, uTBefore, s);
   float sy = 1. - .25 * uSquash;
   float sxz = inversesqrt(sy);
   vec3 q = p - vec3(0., h * sy + uLift, 0.);
   q.y /= sy; q.xz /= sxz;
-  float R = max(uDoughR, h);
+  float R = max(mix(uRAfter, uDoughR, s), h);
   R += .05 * (R - h) * sin(3. * atan(q.z, q.x) + 1.3); // a rolled sheet is never a circle
   vec2 d = vec2(length(q.xz) - R + h, abs(q.y));
   return (min(max(d.x, d.y), 0.) + length(max(d, 0.)) - h) * min(sy, sxz) + uErode;
@@ -130,12 +132,25 @@ float sdRoundCone(vec3 p, float r1, float r2, float h) {
 
 float fixRadius(float kind) { return kind < 1.5 ? uEyeR : kind < 2.5 ? .13 : .2; }
 
+// The main march's ray: an empty cell can then be crossed in one step instead of creeping along its
+// wall, which a ray seen edge-on never leaves (a thin line through the cookie while pieces fall).
+bool gRay = false;
+vec3 gRd = vec3(0.);
+
 // One layer of scattered pieces, one per grid cell at most. L is the point in the cookie's frame
 // (x, height, y). An empty cell answers with the way to its wall, so the march walks on.
 float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float span, float salt, float y0) {
   vec2 cell = floor(L.xz / cs);
   vec2 f = L.xz - (cell + .5) * cs;
   float guard = cs * .5 - max(abs(f.x), abs(f.y)) + .012;
+  if (gRay) {
+    // along the ray to the cell's wall; every piece keeps .012 away from its walls
+    vec2 v = vec2(gRd.x, -gRd.z) / uSize;
+    vec2 r = uRot[ci];
+    vec2 dq = vec2(r.x * v.x + r.y * v.y, -r.y * v.x + r.x * v.y);
+    vec2 e = (cs * .5 - f * sign(dq)) / max(abs(dq), 1e-5);
+    guard = max(guard, min(e.x, e.y) / uSize + .012);
+  }
   vec3 h = h23(cell + salt + float(ci) * 17.);
   if (h.z > keep) return guard;
   vec3 h2 = h23(cell * 1.7 + salt + 5.);
@@ -206,8 +221,9 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
     body = max(body, -bite);
   }
   if (body < res.x) res = vec2(body, 2.);
-  if (body > .3 + uDropH) {
-    // far away: everything that sits on the cookie is within .3 of it, so stop short of that
+  if (!lite && body > .3 + uDropH) {
+    // far away: everything that sits on the cookie is within .3 of it, so stop short of that. Only for
+    // the march: shadows and occlusion need a distance without this jump, or rings show on the tray.
     res.x = min(res.x, body - .25 - uDropH);
     return;
   }
@@ -215,7 +231,7 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
   float base = body;
   float tc = 0.;
   bool covered = false;
-  if (uCoat.x > .5) {
+  if (uCoat.x > .5 && uCoatReveal > 0.) {
     tc = uCoatP.x;
     float region = Rw + uCoatP.y;
     if (uHalf.z > .5) {
@@ -227,7 +243,7 @@ void cookie(vec3 p, Ck c, bool lite, inout vec2 res) {
       region = Rw + .1 - .28 * drip;
       region = max(region, min(H - uThick * (.1 + .9 * drip) - p.y, Rw + .03));
     }
-    region = max(region, (length(c.q) - uCoatReveal * 1.7) * uSize); // poured from the middle
+    region = max(region, (length(c.q) + .05 - uCoatReveal * 1.75) * uSize); // poured from the middle; nothing at all before
     covered = region < 0.;
     float coat = max(smax(body - tc, region, tc * .8), -bite);
     if (coat < res.x) res = vec2(coat, 3.);
@@ -294,7 +310,7 @@ vec2 map(vec3 p, bool lite) {
     if (d < res.x) res = vec2(d, 11.);
   }
   if (uCutter > 0. && c.i >= 0) {
-    float hh = .24 * uCutter;
+    const float hh = .24;
     float Rc = Rw - uErode;
     float d = max(abs(Rc) - .012, abs(p.y - uCutterY - hh) - hh);
     d = min(d, max(abs(Rc) - .03, abs(p.y - uCutterY - 2. * hh + .02) - .02));
@@ -309,8 +325,18 @@ vec3 calcNormal(vec3 p, float t) {
   return normalize(g + vec3(0., 1e-7, 0.)); // never a zero vector
 }
 
+// The pin's shadow in closed form: a march that grazes the dough on its way up runs out of steps
+// before it reaches a pin high above, and the tray would show a lit ring there.
+float pinShadow(vec3 ro, vec3 rd) {
+  vec3 o = ro - vec3(uPinX, uPinY, 0.);
+  float t = max(-dot(o.xy, rd.xy) / max(dot(rd.xy, rd.xy), 1e-6), 0.); // nearest to the pin's axis
+  vec3 p = o + rd * t;
+  float d = length(vec3(p.xy, p.z - clamp(p.z, -uPinLen, uPinLen))) - .28;
+  return 9. * d / max(t, .02);
+}
+
 float shadow(vec3 ro, vec3 rd) {
-  float res = 1., t = .02;
+  float res = uPin > 0. ? pinShadow(ro, rd) : 1., t = .02;
   for (int i = 0; i < 18; i++) {
     vec3 p = ro + rd * t;
     if (p.y > uTopY) break;
@@ -478,6 +504,8 @@ void main() {
   float tEnd = rd.y < -1e-4 ? -ro.y / rd.y : 200.;
   float t = rd.y < -1e-4 ? max((uTopY - ro.y) / rd.y, 0.) : 0.;
   float id = 0.;
+  gRay = true;
+  gRd = rd;
   for (int i = 0; i < 64; i++) {
     vec2 m = map(ro + rd * t, false);
     id = m.y;
@@ -485,6 +513,7 @@ void main() {
     t += m.x * .85;
     if (t >= tEnd) break;
   }
+  gRay = false; // normals, shadows and occlusion sample around points, not along this ray
   if (t >= tEnd) { t = tEnd; id = 0.; }
   vec3 p = ro + rd * t;
   vec3 n = id < .5 ? vec3(0., 1., 0.) : calcNormal(p, t);

@@ -34,20 +34,22 @@ export interface Crumb {
 export interface Look {
   /** centre height of the dough; equals doughT once it has landed */
   ballY: number;
-  /** radius and half-thickness of the dough as a rounded cylinder; R below T is a ball */
+  /** radius ahead of the pin and half-thickness of the dough as a rounded cylinder; R below T is a ball */
   doughR: number;
   doughT: number;
+  /** radius of the part the pin has rolled */
+  rAfter: number;
   /** 0..1 landing wobble */
   squash: number;
   /** rolling pin x, travel direction ±1, presence 0..1 (it lifts in and out) */
   pinX: number;
   pinDir: number;
   pin: number;
-  /** half-thickness ahead of and behind the pin */
+  /** half-thickness ahead of and behind the pin; tAfter is where the pin presses */
   tBefore: number;
   tAfter: number;
   flour: number;
-  /** cutter height above the tray, presence 0..1 */
+  /** cutter height above the tray; presence 0 or 1 (it comes from above the picture and leaves there) */
   cutterY: number;
   cutter: number;
   /** ring cut out of the scrap around each outline; 0 = uncut, > 3 = scrap gone */
@@ -146,6 +148,10 @@ const mix3 = (a: RGB, b: RGB, t: number): RGB => [mix(a[0], b[0], t), mix(a[1], 
 const FALL = 0.7; // seconds the ball falls
 const PIN_LIFT = 0.35;
 const PASS = 1.1;
+/** how far the pin starts and stops beyond the dough's edge */
+const PIN_OFF = 0.5;
+/** above the picture: the cutters come from there and go back (the renderer lifts them further for a far camera) */
+export const CUTTER_UP = 6;
 
 interface ActiveBite {
   cookie: Cookie;
@@ -286,6 +292,7 @@ export class Bakery {
       ballY: 4.2,
       doughR: 0,
       doughT: this.r0,
+      rAfter: 0,
       squash: 0,
       pinX: -(this.sheetR + 1.2),
       pinDir: 1,
@@ -293,7 +300,7 @@ export class Bakery {
       tBefore: this.r0,
       tAfter: this.r0,
       flour: 0,
-      cutterY: 2.6,
+      cutterY: CUTTER_UP,
       cutter: 0,
       gap: 0,
       edge: 0,
@@ -412,24 +419,25 @@ export class Bakery {
       }
       case 'roll': {
         const h = [this.r0, this.r0 * 0.5, mix(this.r0 * 0.5, half, 0.75), half];
-        const R = (hh: number) => Math.min(this.sheetR, Math.sqrt((this.r0 ** 3 * 4) / 3 / (2 * hh)));
+        // the sheet at each thickness keeps the ball's volume; the last one is exactly sheetR
+        const R = h.map((hh) => Math.min(this.sheetR, Math.sqrt((this.r0 ** 3 * 4) / 3 / (2 * hh))));
+        const edge = (j: number) => Math.max(R[j]!, h[j]!);
         const k = clamp(Math.floor((t - PIN_LIFT) / PASS), 0, 2);
         const f = sat((t - PIN_LIFT - k * PASS) / PASS);
         const dir = k % 2 ? -1 : 1;
-        const far = this.sheetR + 1.2;
+        // from just behind the dough to just past the sheet it leaves; the next pass starts where this one stops
+        const x = mix(-(edge(k) + PIN_OFF), edge(k + 1) + PIN_OFF, ss(0, 1, f));
+        // share of the dough the pin has crossed: only what lies behind it is thinner and wider
+        const crossed = sat((x + edge(k)) / (edge(k) + edge(k + 1)));
         L.pinDir = dir;
-        L.pinX = dir * mix(-far, far, ss(0, 1, f));
+        L.pinX = dir * x;
         L.pin = Math.min(ss(0, PIN_LIFT, t), 1 - ss(4 - PIN_LIFT, 4, t));
         L.tBefore = h[k]!;
-        L.tAfter = h[k + 1]!;
-        // the sheet widens under the pin, not ahead of it
-        L.doughR = mix(R(h[k]!), R(h[k + 1]!), ss(0.1, 0.9, f));
-        L.doughT = t >= 4 - PIN_LIFT ? half : h[k + 1]!;
-        if (t >= 4 - PIN_LIFT) {
-          L.tBefore = L.tAfter = half;
-          L.doughR = this.sheetR;
-        }
-        L.ballY = L.doughT;
+        // the pin settles on the dough at its edge, then presses it down to the new thickness
+        L.tAfter = mix(h[k]!, h[k + 1]!, ss(0, 0.25, crossed));
+        L.doughR = R[k]!;
+        L.rAfter = mix(R[k]!, R[k + 1]!, crossed);
+        L.doughT = L.ballY = h[k]!;
         L.squash = 0;
         L.flour = Math.max(L.flour, ss(PIN_LIFT, PIN_LIFT + PASS, t));
         break;
@@ -437,11 +445,11 @@ export class Bakery {
       case 'cut': {
         L.pin = 0;
         L.tBefore = L.tAfter = L.doughT = L.ballY = half;
-        L.doughR = this.sheetR;
+        L.doughR = L.rAfter = this.sheetR;
         L.flour = 1;
         const down = sat(t / 0.7);
-        L.cutterY = t < 1 ? 2.6 * (1 - down * down) : 2.6 * ss(1, 1.7, t);
-        L.cutter = Math.min(ss(0, 0.2, t), 1 - ss(1.3, 1.7, t));
+        L.cutterY = t < 1 ? CUTTER_UP * (1 - down * down) : CUTTER_UP * ss(1, 1.7, t) ** 2;
+        L.cutter = t < 1.7 ? 1 : 0;
         L.gap = t < 0.75 ? 0 : mix(0.03, 4, sat((t - 1.5) / 1.3) ** 2.2);
         L.edge = ss(1.5, 2.8, t);
         break;

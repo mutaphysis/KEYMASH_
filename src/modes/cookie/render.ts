@@ -2,7 +2,7 @@
 // smaller target (its size follows the frame rate), crumbs on top against the scene's depth, then
 // the target stretched over the canvas.
 import type { Bakery } from './bakery';
-import { DOUGH } from './bakery';
+import { CUTTER_UP, DOUGH } from './bakery';
 import { DOUGHS } from './recipe';
 import type { Recipe, RGB, Stage, Topping } from './recipe';
 import { anchors, distanceTransform, FIELD_EXT, FIELD_N } from './shapes';
@@ -371,6 +371,9 @@ export class CookieRenderer {
     const pinY = 2 * L.tAfter + 0.28 + (1 - L.pin) * 6;
     f1('uLift', Math.max(0, L.ballY - L.doughT));
     f1('uDoughR', L.doughR);
+    f1('uRAfter', L.rAfter);
+    // the dough rises from the pressed thickness under the pin to the full one ahead of it; a big step needs room
+    f1('uPinW', 0.3 + 1.2 * Math.max(0, L.tBefore - L.tAfter));
     f1('uSquash', L.squash);
     f1('uPinX', L.pinX);
     f1('uPinDir', L.pinDir);
@@ -381,7 +384,9 @@ export class CookieRenderer {
     f1('uTAfter', L.tAfter);
     f1('uFlour', L.flour);
     f1('uDoughOn', L.gap < 3.9 && L.erode < 1.99 ? 1 : 0);
-    f1('uCutterY', L.cutterY);
+    // the bakery lifts the cutters to CUTTER_UP; a far camera (portrait, three cookies) needs them higher to be out of sight
+    const cutterY = L.cutterY * Math.max(1, (cam.pos[1] + 0.5) / CUTTER_UP);
+    f1('uCutterY', cutterY);
     f1('uCutter', L.cutter);
     f1('uGap', L.gap);
     f1('uEdge', L.edge);
@@ -402,7 +407,7 @@ export class CookieRenderer {
     // nothing is higher than this: the march starts there
     let top = L.ballY + L.doughT * 1.2 + 0.05;
     if (L.pin > 0) top = Math.max(top, pinY + 0.3);
-    if (L.cutter > 0) top = Math.max(top, L.cutterY + 0.5);
+    if (L.cutter > 0) top = Math.max(top, cutterY + 0.5);
     if (L.gap > 0) top = Math.max(top, b.top + 0.32 + dropH);
     f1('uTopY', top);
 
