@@ -162,7 +162,7 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 .phead button { flex: 0 0 auto !important; width: 46px; }
 #drawer h4 { margin: 14px 0 6px; font-weight: normal; color: #6fbf87; font-size: 12px; letter-spacing: 2px; }
 .item { display: flex; gap: 6px; align-items: stretch; margin-bottom: 6px; }
-.item .name { flex: 1; text-align: left; padding: 8px 10px; height: auto !important; white-space: normal !important; }
+#drawer .item .name { flex: 1; text-align: left; padding: 8px 10px; height: auto !important; white-space: normal !important; }
 .item .name small { display: block; color: rgba(57,255,122,.5); font-size: 11px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: none; }
 .item .del { flex: 0 0 46px !important; color: var(--pink) !important; border-color: rgba(255,46,136,.5) !important; }
 #toast { position: absolute; left: 50%; top: calc(64px + var(--sat)); transform: translateX(-50%); z-index: 70; background: #000; border: 1px solid var(--g); padding: 10px 14px; border-radius: 6px; box-shadow: 0 0 20px rgba(57,255,122,.4); display: flex; gap: 12px; align-items: center; font-size: 14px; white-space: nowrap; }
@@ -222,6 +222,9 @@ header .ver { font-size: 10px; color: rgba(57,255,122,.45); letter-spacing: .5px
 #app.petri #keybar button:active { background: #8ff5dc; color: #01161a; box-shadow: 0 0 16px rgba(143,245,220,.7); }
 #app.petri #controls > button, #app.petri .playbtns button, #app.petri #drawer button {
   border-radius: 18px; background: rgba(2,22,26,.7); border-color: rgba(143,245,220,.3); color: #bff8ea; text-shadow: none; }
+/* two-line drawer rows: a pill radius would cut into the text */
+#app.petri #drawer .item button { border-radius: 12px; }
+#app.petri #drawer .item .name { padding: 8px 14px; }
 #app.petri #controls > button.primary, #app.petri .playbtns button.primary {
   background: linear-gradient(160deg, #a8fbe6, #5fd6c4); color: #022126; box-shadow: 0 0 24px rgba(95,214,196,.45); }
 #app.petri #stageWrap { background: #010608; border-bottom-color: rgba(143,245,220,.25); }
