@@ -17,8 +17,8 @@ TypeScript (strict) + Vite, with bun as package manager and test runner.
 ```sh
 bun install
 bun run dev           # Vite dev server with hot reload; TypeScript, oxlint and oxfmt problems show in the terminal and an in-page overlay
-bun run build         # tsc typecheck + vite build -> dist/index.html (one self-contained file)
-bun run preview       # serve the production build
+bun run build         # tsc typecheck + vite build -> dist/ (index.html, a main chunk, one chunk per mode)
+bun run preview       # serve the production build (it needs http, opening dist/index.html from disk won't work)
 bun test              # fuzz + unit tests for the interpreter and the culture
 bun run lint          # oxlint
 bun run format        # oxfmt (format:check in CI)
@@ -34,8 +34,9 @@ Git hooks ([lefthook](https://lefthook.dev), installed by `bun install`): every 
 formats the staged files with oxfmt (and re-stages them) and lints them with oxlint;
 every push runs the tests. `LEFTHOOK=0` skips them once.
 
-The build is a single HTML file with everything inlined (vite-plugin-singlefile),
-so it also works opened straight from disk or as a Claude artifact.
+The build is what GitHub Pages serves: a small `index.html` and main chunk with the shell,
+and every mode as a chunk of its own, fetched when the mode is first used (the one you start
+in right away). Cheat-sheet pictures load when the sheet opens.
 
 It is an installable web app (`public/manifest.webmanifest`) with the fonts baked in (no
 external requests at all) and it respects the system's "reduce motion" setting: on iOS use Share → Add to
@@ -84,15 +85,15 @@ The cards behind 📖 are listed in `src/modes/<id>/sheet.ts` (snippet, short na
 before the picture is taken). `bun scripts/sheet.ts` plays every snippet through the real
 interpreter and renderer in headless Chromium, in simulated time with seeded randomness, and
 saves the last frame as `src/modes/<id>/sheet/<card>.webp`; it also rewrites the picture
-table in the mode's README. The pictures are committed and inlined into the build
-(about 165 kB of WebP, ~220 kB as base64). Twelve cards per mode: the sheet shows them in
+table in the mode's README. The pictures are committed and served as files (about 165 kB of
+WebP for both modes), loaded when the sheet opens. Twelve cards per mode: the sheet shows them in
 2, 3, 4 or 6 columns depending on the width, so every row is full.
 
 ## Architecture
 
 ```
 src/main.ts              app shell: layout (phone / split view), run / edit, live hot-swap, drawer, mode switching
-src/modes/types.ts       ModeDef: everything a mode brings (see "Adding a mode")
+src/modes/types.ts       ModeDef (what the shell needs up front) + ModeCode (the rest, loaded on first use)
 src/modes/index.ts       the registry: MODES in header-cycle order
 src/modes/keymash/       KEYMASH_: interpreter (vm.ts), event protocol (types.ts), emoji powers, player, renderer,
                          backdrop, demos, cheat sheet, messages, theme, README (the language)
@@ -146,20 +147,25 @@ in every language.
 
 ### Adding a mode
 
-1. Make `src/modes/<id>/` with an `index.ts` exporting a `ModeDef` (`src/modes/types.ts`
-   documents every field): name, emoji, header icon (inline SVG), tagline, demos,
-   key bar symbols, typing sound, status line, a `Backdrop` for the editor and a
-   `ModePlayer` for the stage (`#stage`, `#hud`, `#log`, `#boot`, `#codeview`). Read the text
-   with `lex()` (`src/lang/lexer.ts`), place keys with `keyInfo()`, seed with `hash()` /
-   `mulberry32()`, play `Sound`s through the shared `AudioEngine`; everything else (the
-   interpreter, its events, its effects) lives in the mode's folder.
+1. Make `src/modes/<id>/` with
+   - `index.ts` exporting a small `ModeDef` (`src/modes/types.ts` documents every field):
+     name, emoji, header icon (inline SVG), tagline, theme, transition, and
+     `load: () => import('./mode').then((m) => m.mode)`. It goes into the main bundle, so keep
+     it free of anything heavy.
+   - `mode.ts` exporting `mode: ModeCode`: demos, key bar symbols, typing sound, status line,
+     a `Backdrop` for the editor and a `ModePlayer` for the stage (`#stage`, `#hud`, `#log`,
+     `#boot`, `#codeview`). This and everything it imports become the mode's own chunk.
+
+   Read the text with `lex()` (`src/lang/lexer.ts`), place keys with `keyInfo()`, seed with
+   `hash()` / `mulberry32()`, play `Sound`s through the shared `AudioEngine`; everything else
+   (the interpreter, its events, its effects) lives in the mode's folder.
 2. `messages.ts`: `defineMessages(en, de)` for its text.
 3. `theme.css.ts`: `createTheme(vars, {...})` plus a `style()` with the animation
    for switching in and starting / stopping (`transition`).
 4. `sheet.ts`: the cheat-sheet cards (`SHEET`), and a capture function for the mode in
    `scripts/sheet/shoot.ts`; then `bun scripts/sheet.ts`. `README.md` documents the mode's
    language, with the `sheet:start` / `sheet:end` markers for the picture table.
-5. Optional: `drawer(ctx)` returns extra drawer sections (KEYMASH_ adds VOICE).
+5. Optional: `drawer(ctx)` in `ModeCode` returns extra drawer sections (KEYMASH_ adds VOICE).
 6. Add it to `MODES` in `src/modes/index.ts`. The header icon, the mode select,
    storage (`keymash.slots.<id>.v1`, `keymash.draft.<id>.v1`) and the theme switch pick it up.
 

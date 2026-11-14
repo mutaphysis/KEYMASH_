@@ -1,5 +1,6 @@
 // App shell: layout (phone / split view), the editor, running and stopping, the drawer, mode switching.
-// Everything mode specific comes from the ModeDef registry in src/modes/.
+// Everything mode specific comes from the mode registry in src/modes/: a small ModeDef up front,
+// the mode's code (ModeCode) as its own chunk when the mode is first used.
 import './fonts.css';
 import './styles/global.css';
 import { AudioEngine } from './engine/audio';
@@ -14,7 +15,7 @@ import { VERSION_LABEL, BUILD_TIME } from './version';
 import { t, langPref, setLangPref, systemLang, LANG_NAMES } from './i18n';
 import type { LangPref } from './i18n';
 import { MODES, modeById, nextMode } from './modes';
-import type { ModeDef, ModePlayer } from './modes/types';
+import type { ModeDef, ModeCode, ModePlayer } from './modes/types';
 import { KmMute, KmItem, KmSelect, KmDrawer, KmCard } from './ui/components';
 import type { KmButton, KmModeIcon, KmToast } from './ui/components';
 
@@ -95,13 +96,15 @@ try {
   /* not available here */
 }
 
-// ---- the current mode and its player (created on first use) ----
+// ---- the current mode, its code (a chunk of its own, fetched on first use) and its player ----
 let mode: ModeDef = modeById(store.mode);
+const firstLoad = mode.load(); // start fetching now; applyMode() below waits for it
+let code!: ModeCode;
 const players = new Map<string, ModePlayer>();
 function P(): ModePlayer {
   let p = players.get(mode.id);
   if (!p) {
-    p = mode.player(audio);
+    p = code.player(audio);
     players.set(mode.id, p);
   }
   return p;
@@ -109,7 +112,8 @@ function P(): ModePlayer {
 
 // ---- status line ----
 function status(src: string): void {
-  const s = mode.status(src);
+  if (!code) return; // typed before the first mode's code arrived: applyMode() runs this again
+  const s = code.status(src);
   $('st-ok').textContent = s.ok;
   $('st-threads').textContent = String(s.count);
   $('st-unit').textContent = s.unit;
@@ -195,10 +199,11 @@ clearBtn.addEventListener('click', () => {
 });
 
 // ---- modes ----
-function applyMode(m: ModeDef): void {
+function applyMode(m: ModeDef, c: ModeCode): void {
   const root = document.documentElement;
   for (const other of MODES) root.classList.remove(other.theme);
   mode = m;
+  code = c;
   store.setMode(m.id);
   root.classList.add(m.theme);
   const logo = document.querySelector<HTMLElement>('header .logo')!;
@@ -207,25 +212,41 @@ function applyMode(m: ModeDef): void {
   $<KmModeIcon>('mode-icon').mode = m;
   document.title = `${m.name} — ${m.tagline}`;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m.themeColor);
-  editor.configure(m.backdrop(), m.keys);
+  editor.configure(c.backdrop(), c.keys);
   armUndo(false);
-  audio.typingStyle = m.typing;
+  audio.typingStyle = c.typing;
   const draft = store.draft();
-  editor.value = draft !== null ? draft : m.demos[0]!.src;
+  editor.value = draft !== null ? draft : c.demos[0]!.src;
 }
-function switchMode(m: ModeDef): void {
+let switching = 0;
+/** where the header icon goes next: the mode being loaded, else the current one */
+let target: ModeDef = mode;
+async function switchMode(m: ModeDef): Promise<void> {
+  const ticket = ++switching;
+  target = m;
   if (m === mode) return;
+  let c: ModeCode;
+  try {
+    c = await m.load();
+  } catch (e) {
+    // offline, or a newer version was deployed and this page's chunks are gone
+    if (ticket !== switching) return;
+    target = mode;
+    toast(t('modeLoadFailed', { name: m.name }));
+    return;
+  }
+  if (ticket !== switching) return; // switched again while loading: the newer switch wins
   store.setDraft(editor.value);
   if (state.playing) edit();
   audio.padStop();
-  applyMode(m);
+  applyMode(m, c);
   transition();
   toast(`${m.name} · ${m.tagline}`);
 }
 // tap the icon (or the logo) in the header: the next mode
-$('mode-icon').addEventListener('next', () => switchMode(nextMode(mode)));
-document.querySelector<HTMLElement>('header .logo')!.addEventListener('click', () => switchMode(nextMode(mode)));
-applyMode(mode);
+$('mode-icon').addEventListener('next', () => void switchMode(nextMode(target)));
+document.querySelector<HTMLElement>('header .logo')!.addEventListener('click', () => void switchMode(nextMode(target)));
+applyMode(mode, await firstLoad);
 
 /** the mode's own animation: switching in, starting and stopping a program */
 function transition(): void {
@@ -244,7 +265,7 @@ function run(): void {
   if (!src.trim()) {
     src = pawMash(70);
     editor.value = src;
-    toast(mode.emptyToast);
+    toast(code.emptyToast);
   }
   audio.padStop();
   if (!isSplit()) editor.ta.blur();
@@ -313,17 +334,17 @@ $('btn-load').addEventListener('click', openDrawer);
 
 // ---- the cheat sheet (📖 next to the sound button): the current mode's cards ----
 // A tap adds the card's snippet as a new last line; the sheet stays open for more.
-function addLine(code: string): void {
+function addLine(snippet: string): void {
   const ta = editor.ta,
     end = ta.value.length;
-  const add = (ta.value && !ta.value.endsWith('\n') ? '\n' : '') + code;
+  const add = (ta.value && !ta.value.endsWith('\n') ? '\n' : '') + snippet;
   ta.setRangeText(add, end, end, 'end'); // no focus: on a phone that would open the keyboard over the sheet
   editor.input({ data: add });
   ta.scrollTop = ta.scrollHeight;
-  toast(t('added', { code }));
+  toast(t('added', { code: snippet }));
 }
 $('btn-sheet').addEventListener('click', () => {
-  $<KmDrawer>('sheet').open([KmCard.intro(mode.sheet.intro), KmCard.grid(mode.sheet.cards, addLine)]);
+  $<KmDrawer>('sheet').open([KmCard.intro(code.sheet.intro), KmCard.grid(code.sheet.cards, addLine)]);
 });
 
 // ---- the program drawer ----
@@ -348,7 +369,7 @@ function openDrawer(): void {
       },
     }),
     KmDrawer.heading(t('demos')),
-    ...mode.demos.map((d) => item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src))),
+    ...code.demos.map((d) => item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src))),
     KmDrawer.heading(t('savedHere')),
   ];
   const slots = store.slots();
@@ -361,7 +382,7 @@ function openDrawer(): void {
       }),
     ),
   );
-  for (const sec of mode.drawer?.({ audio, item, refresh: openDrawer }) ?? []) nodes.push(KmDrawer.heading(sec.title), ...sec.items);
+  for (const sec of code.drawer?.({ audio, item, refresh: openDrawer }) ?? []) nodes.push(KmDrawer.heading(sec.title), ...sec.items);
   nodes.push(
     KmDrawer.heading(t('share')),
     item(t('copy'), t('copySub'), async () => {
@@ -431,7 +452,7 @@ const KEYMASH = {
   run,
   edit,
   state,
-  switchMode: (id?: string) => switchMode(id ? modeById(id) : nextMode(mode)),
+  switchMode: (id?: string) => switchMode(id ? modeById(id) : nextMode(target)),
   get player() {
     return P();
   },

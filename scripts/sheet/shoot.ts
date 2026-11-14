@@ -95,7 +95,7 @@ async function shots(): Promise<Shot[]> {
   await document.fonts.ready;
   const out: Shot[] = [];
   for (const m of MODES) {
-    for (const card of m.sheet.cards) {
+    for (const card of (await m.load()).sheet.cards) {
       Math.random = mulberry32(hash(m.id + ':' + card.id));
       const cv = document.createElement('canvas');
       document.body.replaceChildren(cv); // in the document, so fonts and emoji resolve like in the app

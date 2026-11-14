@@ -9,7 +9,7 @@ lives in `src/modes/<id>/README.md`. Read them before larger changes.
 
 ```sh
 bun run dev          # Vite dev server; tsc + oxlint + oxfmt problems show in terminal and in-page overlay
-bun run build        # tsc + vite build -> dist/index.html (single self-contained file)
+bun run build        # tsc + vite build -> dist/ (index.html, main chunk, one chunk per mode; served by GitHub Pages, needs http)
 bun test             # test/vm.test.ts (fuzz: the VM must never throw), test/petri.test.ts
 bun run typecheck    # tsc (TypeScript 7, strict, noUnusedLocals, noImplicitOverride)
 bun run lint         # oxlint (scripts/ is ignored)
@@ -27,11 +27,11 @@ Git hooks (lefthook): pre-commit formats + lints staged files, pre-push runs tes
 ## Layout
 
 - `index.html` — all markup (edit section with header/editor/keybar/controls, play section with stage/hud/log/boot/codeview, the program drawer, the cheat-sheet drawer, toast).
-- `src/main.ts` — app shell: layout (phone vs. split view ≥820px), run/edit, hot-swap, drawer, cheat sheet, mode switching. `window.KEYMASH` is the debug/browser-test handle.
-- `src/modes/types.ts` — `ModeDef`, `ModePlayer`, `Backdrop`, `Sheet`/`SheetCard`. `src/modes/index.ts` — `MODES` registry.
+- `src/main.ts` — app shell: layout (phone vs. split view ≥820px), run/edit, hot-swap, drawer, cheat sheet, mode switching. Holds `mode` (the `ModeDef`) and `code` (its loaded `ModeCode`); `switchMode()` is async (awaits `load()`, newest tap wins via a ticket, a failed load toasts and stays). The first mode is awaited with top-level await before the UI wires up. `window.KEYMASH` is the debug/browser-test handle.
+- `src/modes/types.ts` — `ModeDef` (eager: name, icon, tagline, theme, transition, `load()`), `ModeCode` (lazy: demos, keys, sheet, backdrop, status, player, drawer), `ModePlayer`, `Backdrop`, `Sheet`/`SheetCard`. `src/modes/index.ts` — `MODES` registry. Each mode: `index.ts` (its `ModeDef`, in the main bundle) + `mode.ts` (its `ModeCode`, dynamic `import()` → own chunk).
 - `src/modes/keymash/` — `vm.ts` (the interpreter: `VM.tick()` returns timed `VMEvent`s), `types.ts` (`VMEvent` union, ops, shapes), `powers.ts` (emoji → op), `Player` (VM on the audio clock, 0.12 s lookahead) + `Renderer` (canvas 2D, world coords ±hw/±hh with `s` px per unit, `handle(VMEvent)`, `frame(dt, level, bass)`).
 - `src/modes/petri/` — `genome.ts` (`readCulture`), `culture.ts` (`Petri`: feeder + `World`, fixed 30 Hz steps), `sim.ts` (`World`, `DISH_R = 420`), `render.ts` (`MicroRenderer`: `cx/cy/R/k` camera, `frame(dt, world, activity)`), `ambient.ts` (music).
-- `src/modes/<id>/sheet.ts` — `SHEET` (the 📖 cheat sheet: a one-sentence intro + exactly 12 `SheetCard`s per mode — the grid in `card.css.ts` uses 2/3/4/6 columns so rows stay full, 6 × 2 on desktop — with snippet, short name — no explanations, the user wants it terse —, capture time `at`, camera `zoom`; one-line snippets only); pictures in `sheet/<card>.webp`, loaded via `import.meta.glob` and inlined into the build. `src/modes/<id>/README.md` — the mode's language reference.
+- `src/modes/<id>/sheet.ts` — `SHEET` (the 📖 cheat sheet: a one-sentence intro + exactly 12 `SheetCard`s per mode — the grid in `card.css.ts` uses 2/3/4/6 columns so rows stay full, 6 × 2 on desktop — with snippet, short name — no explanations, the user wants it terse —, capture time `at`, camera `zoom`; one-line snippets only); pictures in `sheet/<card>.webp`, loaded via `import.meta.glob` (URLs; the files load lazily when the sheet opens). `src/modes/<id>/README.md` — the mode's language reference.
 - `src/lang/` — shared by every mode, pure and DOM-free: `lexer.ts` (syntax only: graphemes, words, numbers, runs, quotes, math; meaning is per mode), `keys.ts` (QWERTZ geometry), `rng.ts` (seeded hash + PRNG).
 - `src/engine/sound.ts` — the `Sound` vocabulary (`note`/`drum`/`sfx`/`dtmf`, instruments, sfx kinds); `src/engine/audio.ts` — the shared WebAudio engine (`play(Panned)`), speech, typing sounds. Neither knows any mode.
 - `src/ui/components/` — light-DOM custom elements (`km-button`, `km-mute`, `km-mode-icon`, `km-item`, `km-select`, `km-toast`, `km-drawer`, `km-card`), each registered with `customElements.define` + `HTMLElementTagNameMap`, re-exported from `index.ts`. The cheat sheet is a second `<km-drawer id="sheet">` filled with `KmCard.intro()` + `KmCard.grid(cards, onPick)`; a card is a button, `main.ts` `addLine()` appends its snippet as a new last line (no focus, so no phone keyboard) and the sheet stays open.
@@ -44,7 +44,8 @@ Git hooks (lefthook): pre-commit formats + lints staged files, pre-push runs tes
 
 - Styles: vanilla-extract only (`*.css.ts`), components keep their styles next to them. Colours via theme tokens (`vars.*`, `rgba(vars.rgb.fg, a)`), never hardcoded per mode in shared UI.
 - Text: every string goes through `defineMessages(en, de)` — shared UI in `src/i18n.ts`, mode text in `src/modes/<id>/messages.ts`. `de` must mirror `en` exactly (tsc enforces). Markup uses `data-i18n`, `data-i18n-title`, `-aria-label`, `-placeholder`. `km-button` `label`/`title-key` are shared message ids. German is casual "du", short.
-- Shared code (`src/lang/`, `src/engine/`, `src/ui/`, `src/main.ts`, `src/i18n.ts`) never imports from `src/modes/<id>/`; a mode's interpreter, events and effects live in its folder. Several more modes are planned — keep it that way.
+- Shared code (`src/lang/`, `src/engine/`, `src/ui/`, `src/main.ts`, `src/i18n.ts`) never imports from `src/modes/<id>/` (only the registry `src/modes/index.ts`); a mode's interpreter, events and effects live in its folder. Several more modes are planned — keep it that way.
+- A mode's `index.ts` is in the main bundle: only light imports there (messages, theme). Anything heavy belongs behind `mode.ts`. Check the build output: each mode should be one `mode-*.js` chunk.
 - Adding a KEYMASH_ effect = new `VMEvent` variant in `src/modes/keymash/types.ts`; the compiler points at every handler. A new sound kind goes into `src/engine/sound.ts`.
 - The interpreter must stay total: any input (emoji, lone surrogates, NUL) must not throw — the fuzz test guards this.
 - The stage canvas is shared by both players; only the `active` one sizes it.

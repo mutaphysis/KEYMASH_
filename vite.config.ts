@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite';
-import { viteSingleFile } from 'vite-plugin-singlefile';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import checker from 'vite-plugin-checker';
 import { execSync } from 'node:child_process';
@@ -18,7 +17,8 @@ function gitSha(): string {
   }
 }
 
-// One self-contained index.html: works as a Claude artifact, on GitHub Pages, or opened from disk.
+// Built for GitHub Pages: a small index.html + main chunk, every mode a chunk of its own (fetched
+// on first use), pictures and fonts as files. Needs to be served over http(s), not opened from disk.
 // `bun run dev` checks as you type: TypeScript, oxlint and oxfmt (scripts/checker-lint.ts merges
 // both into one report) show in the terminal and the in-page overlay. CI runs them separately,
 // so the build skips them. Vite DevTools (dock on Shift+Alt+D, /__devtools/) has a checker panel too.
@@ -27,7 +27,6 @@ export default defineConfig(({ command, mode }) => ({
   base: './',
   plugins: [
     vanillaExtractPlugin(),
-    viteSingleFile(),
     checker({
       enableBuild: false,
       typescript: true,

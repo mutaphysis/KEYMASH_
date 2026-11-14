@@ -65,6 +65,10 @@ export interface Sheet {
   cards: SheetCard[];
 }
 
+/**
+ * What the shell knows about a mode before its code has loaded: enough for the header, the theme
+ * and the mode select. Lives in the main bundle, so keep it small.
+ */
 export interface ModeDef {
   /** storage keys, the mode select, window.KEYMASH */
   id: string;
@@ -75,14 +79,20 @@ export interface ModeDef {
   /** header icon, inline SVG markup */
   icon: string;
   tagline: string;
-  /** toast when RUN gets an empty text and a paw fills it */
-  emptyToast: string;
   /** <meta name="theme-color"> */
   themeColor: string;
   /** theme class (createTheme in the mode's theme.css.ts), set on <html> */
   theme: string;
   /** class on #app that animates switching into the mode and in/out of play */
   transition: string;
+  /** the rest of the mode, a separate chunk fetched on first use: `() => import('./mode').then((m) => m.mode)` */
+  load(): Promise<ModeCode>;
+}
+
+/** A mode's code: the editor backdrop, the player, the cheat sheet, … */
+export interface ModeCode {
+  /** toast when RUN gets an empty text and a paw fills it */
+  emptyToast: string;
   /** typing sounds in the editor */
   typing: TypingStyle;
   demos: Demo[];
