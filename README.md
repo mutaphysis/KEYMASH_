@@ -14,10 +14,13 @@ TypeScript (strict) + Vite, with bun as package manager and test runner.
 
 ```sh
 bun install
-bun run dev        # Vite dev server with hot reload
-bun run build      # tsc typecheck + vite build -> dist/index.html (one self-contained file)
-bun run preview    # serve the production build
-bun test           # fuzz + unit tests for the interpreter
+bun run dev           # Vite dev server with hot reload; TypeScript, oxlint and oxfmt problems show in the terminal and an in-page overlay
+bun run build         # tsc typecheck + vite build -> dist/index.html (one self-contained file)
+bun run preview       # serve the production build
+bun test              # fuzz + unit tests for the interpreter and the culture
+bun run lint          # oxlint
+bun run format        # oxfmt (format:check in CI)
+bun run analyze       # build, then open the bundle analyzer (DevTools for Rolldown) on :9999
 ```
 
 The build is a single HTML file with everything inlined (vite-plugin-singlefile),
@@ -133,7 +136,7 @@ warm pad breathes in while you type. Fast typing gets quieter, not louder.
 
 ## PETRI_ — the second mode
 
-**Double-tap the icon in the header** (or the logo, or use 📂 LOAD → MODE) to switch.
+**Tap the icon in the header** (or the logo) for the next mode, or pick one in 📂 LOAD → MODE.
 KEYMASH_ is loud and fast; PETRI_ is a quiet culture of cells under a dark-field
 microscope. Each mode keeps its own draft and its own saves.
 
@@ -214,21 +217,23 @@ at once. Typing in the editor drips water.
 ## Architecture
 
 ```
-src/lang/types.ts    the event protocol (discriminated union) + op / sound / shape kinds
-src/lang/lexer.ts    total tokenizer (graphemes -> tokens), math evaluator
-src/lang/keys.ts     QWERTZ geometry (position, pitch, adjacency), emoji powers
-src/lang/vm.ts       the interpreter: threads, loops, forks, emits events
-src/engine/audio.ts  WebAudio synth, drums, sfx, reverb/delay, typing lounge, speech
-src/engine/render.ts canvas renderer: trails, feedback, sprites, glitch
-src/ui/*.ts          matrix editor, key bar, play mode, storage
-src/micro/genome.ts  PETRI_: line -> species genome + feeder steps, binomial names
-src/micro/sim.ts     PETRI_: seeded ecosystem simulation (pure, fixed step)
-src/micro/culture.ts PETRI_: reads the lines beat by beat, drives the world
-src/micro/render.ts  PETRI_: dark-field microscope renderer, per-body anatomy
-src/micro/ambient.ts PETRI_: pad, water bed, quantised interaction voices
-src/micro/player.ts  PETRI_: play mode, census, field notes
-src/i18n.ts          UI language (drawer select: auto / English / Deutsch; auto: German if the system prefers it); all user-facing text
-src/main.ts          wiring, layout (phone / split view), live hot-swap; mode switching
+src/main.ts              app shell: layout (phone / split view), run / edit, live hot-swap, drawer, mode switching
+src/modes/types.ts       ModeDef: everything a mode brings (see "Adding a mode")
+src/modes/index.ts       the registry: MODES in header-cycle order
+src/modes/keymash/       KEYMASH_: mode definition, player, renderer, backdrop, demos, messages, theme
+src/modes/petri/         PETRI_: genome, sim, culture, renderer, ambient, player, backdrop, demos, messages, theme
+src/lang/types.ts        the event protocol (discriminated union) + op / sound / shape kinds
+src/lang/lexer.ts        total tokenizer (graphemes -> tokens), math evaluator
+src/lang/keys.ts         QWERTZ geometry (position, pitch, adjacency), emoji powers
+src/lang/rng.ts          seeded hash + PRNG shared by every mode
+src/lang/vm.ts           the KEYMASH interpreter: threads, loops, forks, emits events
+src/engine/audio.ts      WebAudio synth, drums, sfx, reverb/delay, typing sounds, speech
+src/ui/editor.ts         textarea, the mode's backdrop canvases, key bar
+src/ui/components/       light-DOM custom elements: km-button, km-mute, km-mode-icon, km-item, km-select, km-toast, km-drawer
+src/ui/storage.ts        per-mode draft and save slots in localStorage
+src/styles/theme.css.ts  the theme contract (design tokens every mode fills in)
+src/styles/global.css.ts the app shell's styles
+src/i18n.ts              language detection + defineMessages(); the shared UI's text
 ```
 
 The VM is pure (no DOM): `vm.tick()` returns a list of timed `VMEvent`s that the
@@ -236,10 +241,40 @@ audio engine schedules and the renderer replays at the right moment. Adding an
 effect means adding a variant to `VMEvent` — the compiler then points at every
 place that has to handle it.
 
-All translatable text lives in `src/i18n.ts`: `en` is the reference, and `tsc`
-fails if `de` is missing an id. The markup is translated through `data-i18n`
-(text) and `data-i18n-title` / `-aria-label` / `-placeholder` attributes. Program
-keywords (`dog`, `hack`, …) stay the same in every language.
+**Styles** are TypeScript, compiled to plain CSS at build time by
+[vanilla-extract](https://vanilla-extract.style). `src/styles/theme.css.ts` is a
+theme contract (colours as RGB triplets for `rgba(${vars.rgb.fg}, .45)`, glows,
+corner radii); each mode's `theme.css.ts` fills it with `createTheme`, and `tsc`
+fails when a token is missing. The theme class sits on `<html>`. What a token
+can't express (no scanlines, a breathing icon) goes in the same file as
+`` globalStyle(`${theme} …`) ``. Components keep their styles next to them.
+
+**Components** are light-DOM custom elements (no shadow root, so the theme
+variables and classes reach them): `<km-button icon="▶" label="run" variant="control" primary>`
+takes message ids for `label` / `title-key`; rows and selects are built with
+`KmItem.create()` / `KmSelect.create()`.
+
+**Text**: every part defines its own messages with `defineMessages(en, de)` — the
+shared UI in `src/i18n.ts`, each mode in `src/modes/<id>/messages.ts`. `en` is the
+reference; `tsc` fails if `de` is missing an id or has a different shape (string,
+`{ one, other }` plural, or a list to pick from). The language comes from the
+drawer setting or, on auto, the system (German if preferred, else English).
+Markup is translated through `data-i18n` (text) and `data-i18n-title` /
+`-aria-label` / `-placeholder`. Program keywords (`dog`, `hack`, …) stay the same
+in every language.
+
+### Adding a mode
+
+1. Make `src/modes/<id>/` with an `index.ts` exporting a `ModeDef` (`src/modes/types.ts`
+   documents every field): name, emoji, header icon (inline SVG), tagline, demos,
+   key bar symbols, typing sound, status line, a `Backdrop` for the editor and a
+   `ModePlayer` for the stage (`#stage`, `#hud`, `#log`, `#boot`, `#codeview`).
+2. `messages.ts`: `defineMessages(en, de)` for its text.
+3. `theme.css.ts`: `createTheme(vars, {...})` plus a `style()` with the animation
+   for switching in and starting / stopping (`transition`).
+4. Optional: `drawer(ctx)` returns extra drawer sections (KEYMASH_ adds VOICE).
+5. Add it to `MODES` in `src/modes/index.ts`. The header icon, the mode select,
+   storage (`keymash.slots.<id>.v1`, `keymash.draft.<id>.v1`) and the theme switch pick it up.
 
 ## License
 
