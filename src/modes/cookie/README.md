@@ -72,7 +72,8 @@ piped straight on.
 The dough ball drops and is rolled out in three passes, the cutters come down, the scrap goes,
 chips land, the oven glows while the timer runs (the HUD shows it), the cookies rise and brown,
 then coating, pattern, toppings and the finishing touches, each only if the recipe has them.
-The code view lights up the words that decide the stage at work. At the end the message appears.
+The code view lights up the words that decide the stage at work. At the end the message appears
+under the cookies: big round letters in the cookie's colours, hopping a little.
 
 The cookies of a batch differ a little in outline and turn. With `prefers-reduced-motion` the
 camera stands still, the dough does not bounce and the oven air does not shimmer.

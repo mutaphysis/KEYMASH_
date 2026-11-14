@@ -10,6 +10,7 @@ import type { Field } from './shapes';
 import { program, uniforms, target, freeTarget, perspective, lookAt, mul } from './gl';
 import type { GL, Target, Uniforms, Vec3 } from './gl';
 import { FULL_VS, SCENE_FS, CRUMB_VS, CRUMB_FS, BLIT_FS } from './shader';
+import { ROUNDED } from './theme.css';
 
 const FOV = (38 * Math.PI) / 180;
 const TAN = Math.tan(FOV / 2);
@@ -57,6 +58,9 @@ export class CookieRenderer {
   gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** CSS pixels at the bottom of the stage covered by the play buttons */
   reserveBottom = 0;
+  /** CSS pixels above the play buttons taken by the greeting while it shows; the camera eases into the space left */
+  reserveGreet = 0;
+  private greetPx = 0;
   /** 1; the sheet pictures set it */
   zoom = 1;
 
@@ -185,7 +189,7 @@ export class CookieRenderer {
     const sheet = L.gap < 2;
     const X = sheet ? b.sheetR : Math.max(...b.cookies.map((c) => Math.abs(c.x)), 0) + rim;
     const Z = sheet ? b.sheetR : Math.max(...b.cookies.map((c) => Math.abs(c.z)), 0) + rim;
-    const usable = Math.max(0.3, (this.H - this.reserveBottom) / this.H);
+    const usable = Math.max(0.3, (this.H - this.reserve()) / this.H);
     const tall = Z * Math.sin(el) + (b.stage === 'drop' ? 3 * Math.cos(el) : 0.3);
     const dist = Math.max(X / (TAN * (this.W / this.H)), tall / (TAN * usable)) + Z * Math.cos(el) * 0.6;
     return [el, (dist * 1.08) / Math.max(0.1, this.zoom)];
@@ -193,7 +197,12 @@ export class CookieRenderer {
 
   /** jump the camera to where it wants to be (first frame, sheet pictures) */
   snap(b: Bakery): void {
+    this.greetPx = this.reserveGreet;
     [this.el, this.dist] = this.aim(b);
+  }
+
+  private reserve(): number {
+    return this.reserveBottom + this.greetPx;
   }
 
   private camera(): Cam {
@@ -202,7 +211,7 @@ export class CookieRenderer {
     const ce = Math.cos(this.el);
     const pos: Vec3 = [at[0] + this.dist * Math.sin(az) * ce, at[1] + this.dist * Math.sin(this.el), at[2] + this.dist * Math.cos(az) * ce];
     const view = lookAt(pos, at, [0, 1, 0]);
-    const shift = this.reserveBottom / this.H;
+    const shift = this.reserve() / this.H;
     const proj = perspective(FOV, this.W / this.H, 0.1, 200);
     // the look-at point sits in the middle of what the play buttons leave free
     const vp = mul(proj, view);
@@ -254,7 +263,7 @@ export class CookieRenderer {
     g.fillStyle = g.strokeStyle = '#fff';
     if (r.letters.length) {
       const text = r.letters.join('');
-      const font = (size: number) => `900 ${size}px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif`;
+      const font = (size: number) => `900 ${size}px ${ROUNDED}`;
       let size = a.letterH / 0.72 / TEXEL;
       g.font = font(size);
       const wide = g.measureText(text).width;
@@ -306,6 +315,7 @@ export class CookieRenderer {
     this.time += dt;
     const [el, dist] = this.aim(b);
     const f = 1 - Math.exp(-2.5 * dt);
+    this.greetPx += (this.reserveGreet - this.greetPx) * f;
     this.el += (el - this.el) * f;
     this.dist += (dist - this.dist) * f;
     const cam = (this.cam = this.camera());

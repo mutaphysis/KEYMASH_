@@ -50,23 +50,45 @@ export const stage3d = style({
   selectors: { '&.on': { display: 'block' } },
 });
 
-/** the message on the finished cookies */
+/** the round, heavy face the piped letters on the cookies use too */
+export const ROUNDED =
+  'ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Varela Round", Nunito, "Comic Sans MS", system-ui, sans-serif';
+
+/** the message on the finished cookies: big, round and outlined in the cookie's own colours (the player sets --fill, --line, --size) */
 export const greeting = style({
   position: 'absolute',
-  left: 16,
-  right: 16,
-  top: '12%',
+  left: 12,
+  right: 12,
+  bottom: 84, // just above the play buttons
   textAlign: 'center',
-  fontFamily: layout.serif,
-  fontStyle: 'italic',
-  fontSize: 26,
-  color: '#fff4e2',
-  textShadow: '0 2px 18px rgba(0,0,0,.6)',
+  fontFamily: ROUNDED,
+  fontWeight: 900,
+  fontSize: 'var(--size, 56px)',
+  lineHeight: 1.08,
+  color: 'var(--fill, #fff4e2)',
+  WebkitTextStroke: '.15em var(--line, #4a2810)',
+  paintOrder: 'stroke fill', // the outline goes around the letters, not into them
+  textShadow: '0 .08em 0 var(--line, #4a2810), 0 .16em .3em rgba(0,0,0,.45)',
   pointerEvents: 'none',
   opacity: 0,
-  letterSpacing: 6,
-  transition: 'opacity 1.2s ease, letter-spacing 1.6s ease',
-  selectors: { '&.on': { opacity: 1, letterSpacing: 1 } },
+  transform: 'scale(.6) translateY(.4em)',
+  transformOrigin: '50% 100%',
+  transition: 'opacity .45s ease, transform .75s cubic-bezier(.3, 1.7, .5, 1)',
+  selectors: { '&.on': { opacity: 1, transform: 'none' } },
+  '@media': { '(prefers-reduced-motion: reduce)': { transform: 'none', transition: 'opacity .8s ease' } },
+});
+
+export const greetWord = style({ display: 'inline-block', whiteSpace: 'nowrap' });
+
+const hop = keyframes({
+  '0%, 100%': { transform: 'translateY(0) rotate(-2deg)' },
+  '50%': { transform: 'translateY(-.08em) rotate(2deg)' },
+});
+/** each letter hops a little, a wave running along the line */
+export const greetLetter = style({
+  display: 'inline-block',
+  animation: `${hop} 1.4s ease-in-out infinite`,
+  '@media': { '(prefers-reduced-motion: reduce)': { animation: 'none' } },
 });
 
 const p = (sel: string) => `${cookieTheme} ${sel}`;
@@ -89,7 +111,16 @@ globalStyle(p('#codeview span.on'), { boxShadow: '0 0 14px var(--c)', borderRadi
 // the baker's notes
 globalStyle(p('#hud'), { color: 'rgba(255,240,220,.9)', lineHeight: 1.55, letterSpacing: 0.3 });
 globalStyle(p('#hud .meta'), { color: 'rgba(255,214,165,.65)', fontSize: 10.5 });
-globalStyle(p('#log'), { fontFamily: layout.serif, fontStyle: 'italic', fontSize: 12.5, color: 'rgba(255,240,220,.82)', bottom: 76 });
+globalStyle(p('#log'), {
+  fontFamily: layout.serif,
+  fontStyle: 'italic',
+  fontSize: 12.5,
+  color: 'rgba(255,240,220,.82)',
+  bottom: 76,
+  transition: 'opacity .5s ease',
+});
+// the greeting takes the bottom of the stage; the notes step aside meanwhile
+globalStyle(p(`#log:has(~ .${greeting}.on)`), { opacity: 0 });
 globalStyle(p('#log div:last-child::after'), { content: '""' });
 globalStyle(p('#boot'), {
   background: 'radial-gradient(circle at 50% 45%, #3a2212, #140c08 75%)',
