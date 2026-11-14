@@ -4,6 +4,8 @@ import type { Token, WordTok, SymTok } from './lexer';
 import { keyInfo, adjacent, EMOJI_POWERS, stripAccents } from './keys';
 import type { KeyInfo } from './keys';
 import type { Color, Point, Op, Instrument, DrumKind, SfxKind, ShapeKind, ParticleKind, TextStyle, VMEvent, EvInput, EvBase } from './types';
+import { t, tl } from '../i18n';
+import type { Msg } from '../i18n';
 
 export type ScaleName = 'penta' | 'major' | 'minor' | 'blues' | 'spooky' | 'japan';
 
@@ -45,13 +47,9 @@ const INSTRUMENTS: Instrument[] = ['pluck', 'bass', 'bell', 'chip', 'lead', 'pad
 const MAX_THREADS = 12;
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
-const HACK_LINES = [
-  'ACCESS GRANTED', 'MAINFRAME BREACHED', 'FIREWALL: LOL', 'DOWNLOADING MORE RAM',
-  'ROOT ACCESS: GOOD BOY', 'HACKING THE PLANET', 'BYPASSING CAT DEFENSES', 'ENCRYPTING BONES',
-  'I\'M IN.', 'SNIFFING PACKETS 🐽', 'TREAT.EXE INSTALLED', 'PASSWORD: ********',
-  'SUDO MAKE ME A SANDWICH', 'TRACE BLOCKED', 'UPLOADING BARK.MP3', 'NEURAL LINK ESTABLISHED',
-  'COMPILING… 0 ERRORS', 'KERNEL PANIC (JUST KIDDING)', 'ENHANCE!', 'SQUIRREL.DLL LOADED',
-];
+const SCALE_LABEL: Record<Exclude<ScaleName, 'penta'>, Msg> = {
+  major: 'scaleMajor', minor: 'scaleMinor', blues: 'scaleBlues', spooky: 'scaleSpooky', japan: 'scaleJapan',
+};
 const FORMULAS: { f: (x: number, A: number, k: number) => number; s: (A: number, k: number) => string }[] = [
   { f: (x, A, k) => A * Math.sin(k * x), s: (A, k) => `y = ${A}·sin(${k}x)` },
   { f: (x, A, k) => A * Math.cos(k * x) * Math.sin(x / 90), s: (A, k) => `y = ${A}·cos(${k}x)·sin(x/90)` },
@@ -189,7 +187,7 @@ export class VM {
         // the language has no errors. if the VM trips, the thread just glitches and moves on.
         th.pc++; th.sub = 0;
         this.emit({ type: 'glitch', amt: 0.6, dur: 0.3 }, th);
-        this.emit({ type: 'log', text: `!! SEGFAULT IN THREAD ${th.id} — IGNORED LIKE A PRO` }, th);
+        this.emit({ type: 'log', text: t('segfault', { id: th.id }) }, th);
       }
     }
     this.threads = this.threads.filter((t) => t.alive || !t.child);
@@ -200,7 +198,7 @@ export class VM {
   }
 
   boot() {
-    this.emit({ type: 'log', text: `KEYMASH :: ${this.gs.length} glyphs :: ${this.threads.length} thread(s) :: 0 errors` });
+    this.emit({ type: 'log', text: 'KEYMASH :: ' + t('runSummary', { glyphs: this.gs.length, threads: this.threads.length }) });
   }
 
   emit<E extends EvInput>(e: E, th?: Thread): E & EvBase {
@@ -352,8 +350,8 @@ export class VM {
         this.doOp(th, () => {
           this.emit({ type: 'math', s: label, x: th.x, y: th.y, color: this.col(th, 15) }, th);
           this.emit({ type: 'dtmf', digits: fmtNum(v).replace(/\D/g, '').slice(0, 10) || '0' }, th);
-          if (v === 42 && this.cast('answer')) { this.emit({ type: 'banner', text: 'THE ANSWER.' }, th); this.particles(th, 'stars', 60); }
-          if (!Number.isFinite(v) && this.cast('crash')) { this.emit({ type: 'glitch', amt: 1, dur: 0.8 }, th); this.emit({ type: 'banner', text: 'MATH.EXE HAS STOPPED' }, th); }
+          if (v === 42 && this.cast('answer')) { this.emit({ type: 'banner', text: t('answer') }, th); this.particles(th, 'stars', 60); }
+          if (!Number.isFinite(v) && this.cast('crash')) { this.emit({ type: 'glitch', amt: 1, dur: 0.8 }, th); this.emit({ type: 'banner', text: t('mathCrash') }, th); }
         });
         th.arg = Number.isFinite(v) ? v : null;
         th.pc++; return true;
@@ -479,7 +477,7 @@ export class VM {
     const op = SPELLS[h % SPELLS.length];
     if ((len >= 5 || (len >= 3 && h % 3 === 0)) && this.cast(op)) {
       this.keyword(th, op, Math.min(3, 1 + Math.floor(len / 8)));
-      this.emit({ type: 'log', text: `SPELL ${tok.text.slice(0, 16)} -> ${op.toUpperCase()} :: t${th.id} :: 0x${(h & 0xffff).toString(16).toUpperCase().padStart(4, '0')}` }, th);
+      this.emit({ type: 'log', text: t('spell', { word: tok.text.slice(0, 16), op: op.toUpperCase(), th: th.id, hex: (h & 0xffff).toString(16).toUpperCase().padStart(4, '0') }) }, th);
     } else if (len >= 5 || (len >= 3 && h % 5 === 1)) {
       // spell still cooling down (or no spell): the chunk just floats away
       this.text(th, tok.text, { style: 'float', size: 30 + len * 3 });
@@ -530,7 +528,7 @@ export class VM {
         });
         this.threads.push(c);
         this.sfx(th, 'spawn', 0.4);
-        this.emit({ type: 'log', text: `SPAWN thread ${c.id} ×${runs}` }, th);
+        this.emit({ type: 'log', text: t('spawnLog', { id: c.id, runs }) }, th);
         th.pc = Math.min(close + 1, th.end);
         return true;
       }
@@ -919,7 +917,7 @@ export class VM {
         this.emit({ type: 'view', shake: 30 * b, zoom: 0.2 }, th);
         this.emit({ type: 'glitch', amt: 0.6, dur: 0.4 }, th);
         this.sfx(th, 'explode', 1); this.drum(th, 'kick', 1);
-        this.text(th, 'BOOM', { style: 'big', size: 90 }); break;
+        this.text(th, t('boom'), { style: 'big', size: 90 }); break;
       case 'fireworks':
         for (let i = 0; i < 2 + b; i++) this.emit({ type: 'actor', kind: 'firework', x: (R() - 0.5) * this.hw * 1.6, y: this.hh, color: { h: R() * 360, s: 100, l: 65 }, delay: i * 0.3 }, th);
         this.sfx(th, 'whistle', 0.6); break;
@@ -968,14 +966,14 @@ export class VM {
         th.inst = op.slice(2) as Instrument;
         this.note(th, 0, { dur: 1 }); this.note(th, 4, { dur: 1 }).at = this.tickDur * 0.5;
         this.text(th, `♪ ${th.inst}`, { size: 26 });
-        if (op === 'i_robot') { this.creature(th, '🤖', 'robot', 'BEEP BOOP', { kind: 'pop' }); th.voicePitch = 0.1; }
+        if (op === 'i_robot') { this.creature(th, '🤖', 'robot', t('robotWord'), { kind: 'pop' }); th.voicePitch = 0.1; }
         break;
       }
       // ---------- music ----------
       case 'fast': this.bpm = Math.min(MAX_BPM, this.bpm * 1.12); th.speed = Math.min(4, th.speed * 2); this.sfx(th, 'sweep', 0.4, 2); this.particles(th, 'warp', 20); break;
       case 'slow': this.bpm = Math.max(60, this.bpm * 0.88); th.speed = Math.max(0.25, th.speed / 2); this.sfx(th, 'sweep', 0.4, 0.4); break;
       case 'major': case 'minor': case 'blues': case 'spooky': case 'japan':
-        this.scale = op; this.text(th, `♫ ${op.toUpperCase()}`, { size: 34 });
+        this.scale = op; this.text(th, `♫ ${t(SCALE_LABEL[op])}`, { size: 34 });
         for (const d of [0, 2, 4]) this.note(th, d, { inst: 'pad', dur: 4, vel: 0.35 });
         if (op === 'spooky') { this.emit({ type: 'bg', h: 280, l: 3 }, th); this.particles(th, 'emoji', 8, { ch: '👻🦇🎃' }); }
         if (op === 'japan') this.particles(th, 'emoji', 12, { ch: '🌸' });
@@ -983,12 +981,12 @@ export class VM {
       // ---------- hacker ----------
       case 'hack': case 'access': case 'mainframe': case 'virus': case 'download': case 'matrix': {
         const bannerText = {
-          access: this.pick(['ACCESS GRANTED', 'ROOT ACCESS: GOOD BOY', 'PASSWORD: ********', 'I\'M IN.']),
-          mainframe: this.pick(['MAINFRAME BREACHED', 'FIREWALL: LOL', 'TRACE BLOCKED', 'PROXY: 127.0.0.1']),
-          virus: this.pick(['VIRUS DETECTED: IT\'S FRIENDLY', 'WORM.EXE IS WIGGLING', 'ANTIVIRUS ON VACATION']),
-          download: 'DOWNLOADING MORE RAM',
-          matrix: this.pick(['WAKE UP, NEO…', 'FOLLOW THE WHITE RABBIT 🐇', 'THERE IS NO SPOON']),
-          hack: this.pick(HACK_LINES),
+          access: this.pick(tl('accessLines')),
+          mainframe: this.pick(tl('mainframeLines')),
+          virus: this.pick(tl('virusLines')),
+          download: t('download'),
+          matrix: this.pick(tl('matrixLines')),
+          hack: this.pick(tl('hackLines')),
         }[op];
         this.emit({ type: 'banner', text: bannerText, progress: op === 'download' }, th);
         this.emit({ type: 'glitch', amt: 0.5, dur: 0.4 }, th);
@@ -996,42 +994,42 @@ export class VM {
         this.emit({ type: 'bg', h: 130 }, th);
         this.sfx(th, 'data', 0.8); this.sfx(th, op === 'access' ? 'granted' : 'computer', 0.6);
         if (op === 'virus') this.emit({ type: 'invert', dur: 0.6 }, th);
-        for (let i = 0; i < 2; i++) this.emit({ type: 'log', text: this.pick(HACK_LINES) + ' ' + '█'.repeat(1 + (R() * 12 | 0)) }, th);
+        for (let i = 0; i < 2; i++) this.emit({ type: 'log', text: this.pick(tl('hackLines')) + ' ' + '█'.repeat(1 + (R() * 12 | 0)) }, th);
         break;
       }
       // ---------- creatures ----------
-      case 'dog': this.creature(th, this.pick(['🐶', '🐕', '🐩']), 'bark', this.pick(['WOOF', 'WUFF', 'BORK', 'ARF']), { kind: 'run' }); this.particles(th, 'emoji', 10, { ch: '🐾' }); break;
+      case 'dog': this.creature(th, this.pick(['🐶', '🐕', '🐩']), 'bark', this.pick(tl('dogWords')), { kind: 'run' }); this.particles(th, 'emoji', 10, { ch: '🐾' }); break;
       case 'paws': this.particles(th, 'paws', 14 * b, { ch: '🐾' }); this.drum(th, 'tom', 0.5); this.drum(th, 'hat', 0.5); break;
-      case 'cat': this.creature(th, '🐱', 'meow', this.pick(['MEOW', 'MIAU', 'NYA']), { kind: 'pop' }); this.particles(th, 'emoji', 6, { ch: '🧶' }); break;
-      case 'cow': this.creature(th, '🐮', 'moo', 'MOOO', { kind: 'pop' }); this.emit({ type: 'actor', kind: 'ufo', ch: '🛸', x: th.x, y: th.y - 200 }, th); break;
-      case 'duck': this.creature(th, '🦆', 'quack', 'QUACK', { kind: 'run' }); break;
-      case 'pig': this.creature(th, '🐷', 'oink', 'OINK', { kind: 'pop' }); break;
-      case 'bird': this.creature(th, this.pick(['🐦', '🐤', '🦜']), 'chirp', 'tweet', { kind: 'fly' }); break;
+      case 'cat': this.creature(th, '🐱', 'meow', this.pick(tl('catWords')), { kind: 'pop' }); this.particles(th, 'emoji', 6, { ch: '🧶' }); break;
+      case 'cow': this.creature(th, '🐮', 'moo', t('cowWord'), { kind: 'pop' }); this.emit({ type: 'actor', kind: 'ufo', ch: '🛸', x: th.x, y: th.y - 200 }, th); break;
+      case 'duck': this.creature(th, '🦆', 'quack', t('duckWord'), { kind: 'run' }); break;
+      case 'pig': this.creature(th, '🐷', 'oink', t('pigWord'), { kind: 'pop' }); break;
+      case 'bird': this.creature(th, this.pick(['🐦', '🐤', '🦜']), 'chirp', t('birdWord'), { kind: 'fly' }); break;
       case 'fish': this.creature(th, this.pick(['🐟', '🐠', '🐡']), 'bubbles', null, { kind: 'swim' }); this.particles(th, 'bubbles', 15); break;
       case 'dino': this.creature(th, this.pick(['🦖', '🦕']), 'roar', 'RAWR', { kind: 'stomp', size: 110 }); this.emit({ type: 'view', shake: 20 }, th); break;
       case 'dragon': this.creature(th, '🐉', 'roar', null, { kind: 'fly', size: 100 }); this.particles(th, 'fire', 90); this.emit({ type: 'bg', h: 10 }, th); break;
       case 'unicorn': this.creature(th, '🦄', 'chime', null, { kind: 'run' }); th.rainbow = true; this.emit({ type: 'rainbow' }, th); this.particles(th, 'sparkle', 50); break;
-      case 'ghost': this.creature(th, '👻', 'ghost', 'BOO', { kind: 'float' }); this.emit({ type: 'invert', dur: 0.4 }, th); break;
+      case 'ghost': this.creature(th, '👻', 'ghost', t('ghostWord'), { kind: 'float' }); this.emit({ type: 'invert', dur: 0.4 }, th); break;
       case 'alien': this.creature(th, this.pick(['👽', '🛸', '👾']), 'ufo', null, { kind: 'ufo' }); this.particles(th, 'warp', 40); break;
-      case 'robot': this.creature(th, '🤖', 'robot', 'BEEP BOOP', { kind: 'pop' }); break;
+      case 'robot': this.creature(th, '🤖', 'robot', t('robotWord'), { kind: 'pop' }); break;
       case 'rocket': this.emit({ type: 'actor', kind: 'rocket', ch: '🚀', x: th.x, y: this.hh, ang: -90 }, th); this.sfx(th, 'rocket', 0.8); this.text(th, '3… 2… 1…', { size: 40 }); break;
-      case 'ball': this.emit({ type: 'actor', kind: 'ball', ch: this.pick(['🎾', '⚽', '🏀']), x: th.x, y: th.y }, th); this.sfx(th, 'boing', 0.8); this.say(th, this.pick(['ball!', 'fetch!', 'get it!'])); break;
-      case 'bone': this.particles(th, 'emoji', 24 * b, { ch: '🦴' }); this.sfx(th, 'chime', 0.7); this.text(th, '+1 BONE', { style: 'big', size: 50 }); break;
+      case 'ball': this.emit({ type: 'actor', kind: 'ball', ch: this.pick(['🎾', '⚽', '🏀']), x: th.x, y: th.y }, th); this.sfx(th, 'boing', 0.8); this.say(th, this.pick(tl('ballSay'))); break;
+      case 'bone': this.particles(th, 'emoji', 24 * b, { ch: '🦴' }); this.sfx(th, 'chime', 0.7); this.text(th, t('bone'), { style: 'big', size: 50 }); break;
       case 'squirrel':
-        this.creature(th, '🐿️', 'chirp', 'SQUIRREL!!!', { kind: 'run' });
+        this.creature(th, '🐿️', 'chirp', t('squirrelWord'), { kind: 'run' });
         for (const t of this.threads) t.speed = Math.min(4, t.speed * 1.5);
         this.emit({ type: 'view', shake: 20, spin: 30 }, th); this.emit({ type: 'glitch', amt: 0.5, dur: 0.5 }, th); break;
-      case 'poop': this.creature(th, '💩', 'fart', this.pick(['PFFRT', 'OOPS', 'LOL']), { kind: 'pop' }); this.particles(th, 'smoke', 20, { color: { h: 80, s: 40, l: 40 } }); break;
-      case 'pizza': this.particles(th, 'emoji', 20 * b, { ch: '🍕' }); this.sfx(th, 'bloop', 0.6); this.say(th, 'yum'); break;
+      case 'poop': this.creature(th, '💩', 'fart', this.pick(tl('poopWords')), { kind: 'pop' }); this.particles(th, 'smoke', 20, { color: { h: 80, s: 40, l: 40 } }); break;
+      case 'pizza': this.particles(th, 'emoji', 20 * b, { ch: '🍕' }); this.sfx(th, 'bloop', 0.6); this.say(th, t('yum')); break;
       case 'cake': this.creature(th, '🎂', 'party', null, { kind: 'pop' }); this.particles(th, 'confetti', 60); break;
       case 'banana': this.particles(th, 'emoji', 16 * b, { ch: '🍌' }); this.sfx(th, 'boing', 0.6, 1.5); break;
-      case 'car': this.creature(th, this.pick(['🚗', '🏎️', '🚙']), 'vroom', 'VROOM', { kind: 'drive' }); break;
-      case 'train': this.creature(th, '🚂', 'train', 'CHOO CHOO', { kind: 'drive' }); this.particles(th, 'smoke', 20); break;
+      case 'car': this.creature(th, this.pick(['🚗', '🏎️', '🚙']), 'vroom', t('carWord'), { kind: 'drive' }); break;
+      case 'train': this.creature(th, '🚂', 'train', t('trainWord'), { kind: 'drive' }); this.particles(th, 'smoke', 20); break;
       case 'chime': this.sfx(th, 'chime', 0.8); this.particles(th, 'sparkle', 12); break;
-      case 'bark': this.sfx(th, 'bark', 0.8, 0.8 + R() * 0.4); this.text(th, tok ? tok.text.toUpperCase() : 'WOOF', { style: 'big', size: 60 }); break;
-      case 'meow': this.sfx(th, 'meow', 0.8); this.text(th, 'MEOW', { size: 50 }); break;
-      case 'moo': this.sfx(th, 'moo', 0.8); this.text(th, 'MOO', { size: 50 }); break;
-      case 'quack': this.sfx(th, 'quack', 0.8); this.text(th, 'QUACK', { size: 50 }); break;
+      case 'bark': this.sfx(th, 'bark', 0.8, 0.8 + R() * 0.4); this.text(th, tok ? tok.text.toUpperCase() : t('bark'), { style: 'big', size: 60 }); break;
+      case 'meow': this.sfx(th, 'meow', 0.8); this.text(th, t('meow'), { size: 50 }); break;
+      case 'moo': this.sfx(th, 'moo', 0.8); this.text(th, t('moo'), { size: 50 }); break;
+      case 'quack': this.sfx(th, 'quack', 0.8); this.text(th, t('quack'), { size: 50 }); break;
       case 'oink': this.sfx(th, 'oink', 0.8); break;
       case 'roar': this.sfx(th, 'roar', 0.9); this.emit({ type: 'view', shake: 18 }, th); this.text(th, 'RAWR', { style: 'big', size: 70 }); break;
       case 'fart': this.sfx(th, 'fart', 0.9); this.particles(th, 'smoke', 12, { color: { h: 80, s: 40, l: 40 } }); break;
@@ -1075,7 +1073,7 @@ export class VM {
           this.note(th, (i * 2) % 9, { inst: 'bell', vel: 0.4, dur: 3, echo: 1 }).at = i * 0.12;
         });
         this.emit({ type: 'stroke', pts, w: 1.5, dur: n * 0.12, color: { h: 200, s: 50, l: 75 } }, th);
-        this.text(th, this.pick(['CANIS MAJOR', 'CANIS MINOR', 'URSA WOOFER', 'THE GREAT PAW', 'LEPUS', 'VULPECULA', 'SQUIRREL NEBULA']), { x: pts[0]![0], y: pts[0]![1] - 40, size: 24 });
+        this.text(th, this.pick(tl('constellations')), { x: pts[0]![0], y: pts[0]![1] - 40, size: 24 });
         this.emit({ type: 'bg', h: 230, l: 2 }, th); break;
       }
       case 'meteor': {
@@ -1198,14 +1196,14 @@ export class VM {
           this.shape(th, 'circle', 9, { x: Math.cos(a) * d, y: Math.sin(a) * d, fill: true, life: 1.4, grow: 1, color: { h: 130, s: 100, l: 80 } }).at = k * 0.035;
           this.note(th, 12, { inst: 'chip', dur: 0.4, vel: 0.5, echo: 1 }).at = k * 0.035;
         }
-        this.text(th, this.pick(['SCANNING…', 'SQUIRREL DETECTED', 'TREAT AT 3 O\'CLOCK', 'CAT ON RADAR']), { x: 0, y: Rr + 30, size: 26 }); this.emit({ type: 'bg', h: 130 }, th); break;
+        this.text(th, this.pick(tl('radarLines')), { x: 0, y: Rr + 30, size: 26 }); this.emit({ type: 'bg', h: 130 }, th); break;
       }
       case 'barcode': {
         let x = -190; let i = 0; const y = th.y * 0.4;
         while (x < 190) { const w = 2 + (R() * 4 | 0) * 2; this.emit({ type: 'stroke', pts: [[x, y - 70], [x, y + 70]], w, dur: 0.04, delay: i++ * 0.015, color: { h: 0, s: 0, l: 92 } }, th); x += w + 4 + (R() * 3 | 0) * 3; }
         this.emit({ type: 'stroke', pts: [[-230, y], [230, y]], w: 2.5, dur: 0.35, delay: 0.7, color: { h: 0, s: 100, l: 60 } }, th);
         this.note(th, 14, { inst: 'chip', dur: 0.6, vel: 0.6 }).at = 1.05;
-        this.text(th, this.pick(['1× GOOD BOY', '1× TENNIS BALL', '3× TREATS', '1× KEYBOARD (CHEWED)']) + '  ' + (R() * 9 + 1).toFixed(2) + ' €', { x: 0, y: y + 160, size: 26 }).at = 1.05; break;
+        this.text(th, this.pick(tl('receiptLines')) + '  ' + (R() * 9 + 1).toFixed(2) + ' €', { x: 0, y: y + 160, size: 26 }).at = 1.05; break;
       }
       // ---------- little set pieces ----------
       case 'disco': {
@@ -1236,14 +1234,14 @@ export class VM {
         this.emit({ type: 'view', shake: 22, zoom: 0.15 }, th).at = 12 * s; this.particles(th, 'burst', 50).at = 12 * s; break;
       }
       case 'bluescreen':
-        this.emit({ type: 'banner', text: this.pick([':( DOG.SYS HAS CRASHED', ':( YOUR PC RAN INTO A SQUIRREL', 'STOP 0x000000WOOF', 'GURU MEDITATION #00000004']) }, th);
+        this.emit({ type: 'banner', text: this.pick(tl('bluescreenLines')) }, th);
         this.emit({ type: 'flash', color: { h: 225, s: 100, l: 45 }, a: 0.7 }, th); this.emit({ type: 'bg', h: 225, l: 8 }, th);
         this.emit({ type: 'glitch', amt: 0.8, dur: 0.5 }, th); this.sfx(th, 'crunch', 0.8); this.sfx(th, 'bloop', 0.6, 0.4).at = 0.3;
-        this.emit({ type: 'log', text: 'collecting error info… 0% (it will stay at 0%)' }, th); break;
+        this.emit({ type: 'log', text: t('errorInfo') }, th); break;
       // ---------- more creatures ----------
       case 'bee': this.particles(th, 'emoji', 10 * b, { ch: '🐝' }); this.sfx(th, 'buzz', 0.7); this.text(th, 'BZZZ', { size: 44 }); this.keyword(th, 'scribble', 1); break;
-      case 'frog': this.creature(th, '🐸', 'ribbit', 'RIBBIT', { kind: 'pop' }); this.shape(th, 'ring', 20, { grow: 5, life: 1.2, color: { h: 190, s: 80, l: 60 } }); break;
-      case 'owl': this.creature(th, '🦉', 'hoot', 'HOO HOO', { kind: 'float' }); this.emit({ type: 'bg', h: 240, l: 2 }, th); this.particles(th, 'stars', 20, { spread: 3 }); break;
+      case 'frog': this.creature(th, '🐸', 'ribbit', t('frogWord'), { kind: 'pop' }); this.shape(th, 'ring', 20, { grow: 5, life: 1.2, color: { h: 190, s: 80, l: 60 } }); break;
+      case 'owl': this.creature(th, '🦉', 'hoot', t('owlWord'), { kind: 'float' }); this.emit({ type: 'bg', h: 240, l: 2 }, th); this.particles(th, 'stars', 20, { spread: 3 }); break;
       case 'whale': this.creature(th, '🐋', 'whalesong', null, { kind: 'swim', size: 130 }); this.particles(th, 'bubbles', 25); this.emit({ type: 'bg', h: 205, l: 5 }, th); this.emit({ type: 'view', wobble: 1.2 }, th); break;
       case 'snake': {
         this.creature(th, '🐍', 'hiss', 'SSSSS', { kind: 'run' });

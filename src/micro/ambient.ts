@@ -6,11 +6,12 @@ import type { SimEvent } from './sim';
 import { DISH_R, DIVIDE_TIME } from './sim';
 import type { Species, Body } from './genome';
 import { mulberry32 } from '../lang/vm';
+import { t, tl } from '../i18n';
 
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 interface Chord { pad: number[]; tones: number[] }
-interface Palette { name: string; wave: OscillatorType; cutoff: number; detune: number; chords: Chord[] }
+interface Palette { name: 'lydian' | 'dorian' | 'aeolian' | 'open' | 'hirajoshi'; wave: OscillatorType; cutoff: number; detune: number; chords: Chord[] }
 /**
  * Five moods, all intervals relative to the culture's root. Which one a culture gets, its key,
  * tempo, feel and chord length all come from the hash of its text: the same culture always
@@ -104,7 +105,7 @@ export class Ambient {
   }
   private get bar(): number { return 60 / this.bpm * 4; }
   private get chordNow(): Chord { return this.palette.chords[this.chord % this.palette.chords.length]!; }
-  describe(): string { const names = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B']; return `${names[this.root % 12]} ${this.palette.name} · ${this.bpm} bpm`; }
+  describe(): string { return `${tl('noteNames')[this.root % 12]} ${t(this.palette.name)} · ${this.bpm} bpm`; }
 
   start(): void {
     if (!this.build() || !this.e.ctx || !this.bus) return;

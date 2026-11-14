@@ -2,7 +2,7 @@ import './fonts.css';
 import './style.css';
 import { AudioEngine } from './engine/audio';
 import type { TypingKind, VoiceMode } from './engine/audio';
-import { $ } from './ui/dom';
+import { $, localize } from './ui/dom';
 import { Editor } from './ui/editor';
 import { Player } from './ui/player';
 import { store, DEMOS, PETRI_DEMOS, pawMash } from './ui/storage';
@@ -12,13 +12,15 @@ import { readCulture } from './micro/genome';
 import { lex } from './lang/lexer';
 import { keyInfo } from './lang/keys';
 import { VERSION_LABEL, BUILD_TIME } from './version';
+import { t, tn } from './i18n';
 
+localize();
 const app = $('app');
 const audio = new AudioEngine();
 
 const ver = $('version');
 ver.textContent = VERSION_LABEL;
-ver.title = `built ${BUILD_TIME}`;
+ver.title = t('built', { time: BUILD_TIME });
 
 // ---- keep the layout above the on-screen keyboard ----
 // The app normally fills the screen via CSS (inset: 0), which is what an installed iOS web app
@@ -69,17 +71,17 @@ try {
 function status(src: string): void {
   if (mode === 'petri') {
     const c = readCulture(src);
-    $('st-ok').textContent = 'ALIVE';
+    $('st-ok').textContent = t('alive');
     $('st-threads').textContent = String(c.species.length);
-    $('st-unit').textContent = c.species.length === 1 ? 'SPECIES' : 'SPECIES';
+    $('st-unit').textContent = tn('species', c.species.length);
     $('st-glyphs').textContent = String(c.gs.length);
     return;
   }
   const L = lex(src);
   const threads = L.lines.filter((t) => t.some((x) => x.t !== 'space')).length;
-  $('st-ok').textContent = '0 ERRORS';
+  $('st-ok').textContent = t('errors0');
   $('st-threads').textContent = String(threads);
-  $('st-unit').textContent = 'THREADS';
+  $('st-unit').textContent = t('threads');
   $('st-glyphs').textContent = String(L.gs.length);
 }
 
@@ -124,7 +126,7 @@ function layout(): void {
   editor.active = !$('edit').hidden;
   const rb = $('btn-run');
   rb.querySelector('i')!.textContent = split && state.playing ? '■' : '▶';
-  rb.querySelector('span')!.textContent = split && state.playing ? 'STOP' : 'RUN';
+  rb.querySelector('span')!.textContent = t(split && state.playing ? 'stop' : 'run');
   requestAnimationFrame(() => { editor.resize(); P().fit(); });
 }
 window.addEventListener('resize', layout);
@@ -137,7 +139,7 @@ function armUndo(on: boolean): void {
   clearTimeout(undoTimer);
   clearBtn.classList.remove('undo');
   clearBtn.querySelector('i')!.textContent = on ? '↶' : '✖';
-  clearBtn.querySelector('span')!.textContent = on ? 'UNDO' : 'CLEAR';
+  clearBtn.querySelector('span')!.textContent = t(on ? 'undo' : 'clear');
   if (!on) return;
   void clearBtn.offsetWidth; // restart the countdown animation
   clearBtn.style.setProperty('--undo-ms', UNDO_MS + 'ms');
@@ -158,7 +160,7 @@ function applyMode(m: Mode): void {
   app.classList.toggle('petri', m === 'petri');
   const logo = document.querySelector<HTMLElement>('header .logo')!;
   logo.textContent = m === 'petri' ? 'PETRI_' : 'KEYMASH_'; logo.dataset.text = logo.textContent;
-  document.title = m === 'petri' ? 'PETRI_ — a quiet culture of cells' : 'KEYMASH_ — every keystroke compiles';
+  document.title = m === 'petri' ? `PETRI_ — ${t('tagPetri')}` : `KEYMASH_ — ${t('tagKeymash')}`;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m === 'petri' ? '#010a0d' : '#000800');
   editor.setMode(m);
   armUndo(false);
@@ -174,7 +176,7 @@ function switchMode(): void {
   applyMode(mode === 'petri' ? 'keymash' : 'petri');
   if (mode === 'petri') { app.classList.remove('focusing'); void app.offsetWidth; app.classList.add('focusing'); }
   else glitchSwitch();
-  toast(mode === 'petri' ? 'PETRI_ · a quiet culture of cells' : 'KEYMASH_ · every keystroke compiles');
+  toast(mode === 'petri' ? `PETRI_ · ${t('tagPetri')}` : `KEYMASH_ · ${t('tagKeymash')}`);
 }
 let lastTap = 0;
 for (const el of [$('mode-icon'), document.querySelector<HTMLElement>('header .logo')!]) {
@@ -195,7 +197,7 @@ function glitchSwitch(): void {
 function run(): void {
   if (state.playing && isSplit()) { edit(); return; }
   let src = editor.value;
-  if (!src.trim()) { src = pawMash(70); editor.value = src; toast(mode === 'petri' ? 'EMPTY DISH? A PAW SEEDED IT 🐾' : 'EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾'); }
+  if (!src.trim()) { src = pawMash(70); editor.value = src; toast(t(mode === 'petri' ? 'emptyPetri' : 'emptyKeymash')); }
   audio.padStop();
   if (!isSplit()) editor.ta.blur();
   glitchSwitch();
@@ -247,7 +249,7 @@ $('btn-mash').addEventListener('click', () => {
 
 $('btn-save').addEventListener('click', () => {
   const n = store.save(editor.value);
-  toast(n ? `SAVED · SLOT ${String(n).padStart(2, '0')}` : 'STORAGE BLOCKED — COPY IT INSTEAD');
+  toast(n ? t('saved', { n: String(n).padStart(2, '0') }) : t('storageBlocked'));
 });
 $('btn-load').addEventListener('click', openDrawer);
 $('drawer-close').addEventListener('click', () => { $('drawer').hidden = true; });
@@ -265,33 +267,33 @@ function item(name: string, sub: string, onLoad: () => void, onDel?: () => void)
 
 function openDrawer(): void {
   const body = $('drawer-body'); body.innerHTML = '';
-  const load = (src: string) => () => { editor.value = src; $('drawer').hidden = true; toast('LOADED'); };
-  const h1 = document.createElement('h4'); h1.textContent = 'DEMOS'; body.appendChild(h1);
+  const load = (src: string) => () => { editor.value = src; $('drawer').hidden = true; toast(t('loaded')); };
+  const h1 = document.createElement('h4'); h1.textContent = t('demos'); body.appendChild(h1);
   for (const d of demos()) body.appendChild(item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src)));
-  const h2 = document.createElement('h4'); h2.textContent = 'SAVED ON THIS DEVICE'; body.appendChild(h2);
+  const h2 = document.createElement('h4'); h2.textContent = t('savedHere'); body.appendChild(h2);
   const slots = store.slots();
-  if (!slots.length) { const p = document.createElement('div'); p.style.cssText = 'opacity:.5;font-size:13px;padding:6px 2px'; p.textContent = 'nothing yet. press 💾 SAVE.'; body.appendChild(p); }
+  if (!slots.length) { const p = document.createElement('div'); p.style.cssText = 'opacity:.5;font-size:13px;padding:6px 2px'; p.textContent = t('nothingSaved'); body.appendChild(p); }
   slots.forEach((s, i) => body.appendChild(item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => { store.remove(i); openDrawer(); })));
-  const hm = document.createElement('h4'); hm.textContent = 'MODE'; body.appendChild(hm);
-  body.appendChild(item(mode === 'petri' ? '⇄ switch to KEYMASH_' : '⇄ switch to PETRI_', 'or double-tap the icon in the header', () => { $('drawer').hidden = true; switchMode(); }));
-  const hv = document.createElement('h4'); hv.textContent = 'VOICE'; if (mode === 'keymash') body.appendChild(hv);
+  const hm = document.createElement('h4'); hm.textContent = t('mode'); body.appendChild(hm);
+  body.appendChild(item(t('switchTo', { app: mode === 'petri' ? 'KEYMASH_' : 'PETRI_' }), t('switchHint'), () => { $('drawer').hidden = true; switchMode(); }));
+  const hv = document.createElement('h4'); hv.textContent = t('voice'); if (mode === 'keymash') body.appendChild(hv);
   const voices: [VoiceMode, string, string][] = [
-    ['system', '🗣 system speech', 'real words from your device — Firefox on macOS may click'],
-    ['babble', '🤖 keymash babble', 'made right here, sounds the same everywhere, never clicks'],
+    ['system', t('voiceSystem'), t('voiceSystemSub')],
+    ['babble', t('voiceBabble'), t('voiceBabbleSub')],
   ];
   if (mode === 'keymash') for (const [vm, name, sub] of voices) {
     body.appendChild(item((audio.voice === vm ? '✓ ' : '') + name, sub, () => {
       audio.setVoice(vm); audio.init();
-      setTimeout(() => audio.speak('hello, i am keymash!', 1, 1), 150);
+      setTimeout(() => audio.speak(t('voiceHello'), 1, 1), 150);
       openDrawer();
     }));
   }
-  const h3 = document.createElement('h4'); h3.textContent = 'SHARE'; body.appendChild(h3);
-  body.appendChild(item('📋 copy program text', 'paste it anywhere — any text is a program', async () => {
-    try { await navigator.clipboard.writeText(editor.value); toast('COPIED'); } catch (e) { toast('COPY BLOCKED'); }
+  const h3 = document.createElement('h4'); h3.textContent = t('share'); body.appendChild(h3);
+  body.appendChild(item(t('copy'), t('copySub'), async () => {
+    try { await navigator.clipboard.writeText(editor.value); toast(t('copied')); } catch (e) { toast(t('copyBlocked')); }
   }));
   const ha = document.createElement('h4'); ha.textContent = 'APP · ' + VERSION_LABEL; body.appendChild(ha);
-  body.appendChild(item('⟳ reload app', 'fetch the newest version — your text is kept', reloadApp));
+  body.appendChild(item(t('reload'), t('reloadSub'), reloadApp));
   $('drawer').hidden = false;
 }
 

@@ -7,6 +7,7 @@ import { isSound } from '../lang/types';
 import type { VMEvent, EventOf } from '../lang/types';
 import { $ } from './dom';
 import { VERSION_LABEL } from '../version';
+import { t } from '../i18n';
 
 type UIEvent = EventOf<'hl' | 'log' | 'gen' | 'die' | 'say'>;
 const isUI = (e: VMEvent): e is UIEvent => e.type === 'hl' || e.type === 'log' || e.type === 'gen' || e.type === 'die' || e.type === 'say';
@@ -81,7 +82,7 @@ export class Player {
     this.hlPrev.clear(); this.hlLast = null; this.restartAt = 0;
     if (this.tapBpm) this.vm.baseBpm = this.vm.bpm = this.tapBpm; // a tapped tempo survives edits
     this.audio.setBpm(this.vm.bpm);
-    this.log(`HOT-SWAP :: ${this.vm.gs.length} glyphs :: ${this.vm.threads.length} thread(s) :: 0 errors`);
+    this.log('HOT-SWAP :: ' + t('runSummary', { glyphs: this.vm.gs.length, threads: this.vm.threads.length }));
     this.r.handle({ type: 'glitch', dt: 0, amt: 0.25, dur: 0.12 });
   }
 
@@ -111,10 +112,10 @@ export class Player {
     const vm = this.vm!;
     const lines = [
       `> keymash ${VERSION_LABEL} --run program.mash`,
-      `> lexing ${vm.gs.length} glyphs ......... ok`,
-      `> spawning ${vm.threads.length || 0} thread(s) ....... ok`,
-      '> syntax errors: 0 (there are never errors)',
-      '> ACCESS GRANTED',
+      t('bootLex', { n: vm.gs.length }),
+      t('bootSpawn', { n: vm.threads.length || 0 }),
+      t('bootErrors'),
+      t('bootGranted'),
     ];
     this.boot.classList.add('on'); this.boot.textContent = '';
     return new Promise<void>((res) => {
@@ -176,7 +177,7 @@ export class Player {
     this.tapBpm = Math.min(MAX_BPM, Math.round(60 / mean));
     this.vm.baseBpm = this.vm.bpm = this.tapBpm;
     this.audio.setBpm(this.tapBpm);
-    this.log(`TAP TEMPO :: ${this.tapBpm} BPM`);
+    this.log(t('tapTempo', { bpm: this.tapBpm }));
     this.taps = [];
   }
 
@@ -227,8 +228,8 @@ export class Player {
       case 'hl': this.highlight(e); break;
       case 'log': this.log(e.text); break;
       case 'say': this.audio.speak(e.text, e.pitch, e.rate, e.pan ?? 0); break;
-      case 'gen': if (e.gen % 4 === 0) this.log(`t${e.th} :: generation ${e.gen} :: mutating…`); break;
-      case 'die': this.log(`t${e.th} :: exited (0)`); break;
+      case 'gen': if (e.gen % 4 === 0) this.log(t('generation', { th: String(e.th), gen: e.gen })); break;
+      case 'die': this.log(t('exited', { th: String(e.th) })); break;
     }
   }
 

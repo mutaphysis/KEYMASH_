@@ -227,6 +227,7 @@ src/micro/culture.ts PETRI_: reads the lines beat by beat, drives the world
 src/micro/render.ts  PETRI_: dark-field microscope renderer, per-body anatomy
 src/micro/ambient.ts PETRI_: pad, water bed, quantised interaction voices
 src/micro/player.ts  PETRI_: play mode, census, field notes
+src/i18n.ts          UI language (German if the system prefers it, else English); all user-facing text
 src/main.ts          wiring, layout (phone / split view), live hot-swap; mode switching
 ```
 
@@ -234,6 +235,11 @@ The VM is pure (no DOM): `vm.tick()` returns a list of timed `VMEvent`s that the
 audio engine schedules and the renderer replays at the right moment. Adding an
 effect means adding a variant to `VMEvent` — the compiler then points at every
 place that has to handle it.
+
+All translatable text lives in `src/i18n.ts`: `en` is the reference, and `tsc`
+fails if `de` is missing an id. The markup is translated through `data-i18n`
+(text) and `data-i18n-title` / `-aria-label` / `-placeholder` attributes. Program
+keywords (`dog`, `hack`, …) stay the same in every language.
 
 ## License
 

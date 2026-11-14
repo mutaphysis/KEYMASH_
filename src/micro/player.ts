@@ -8,6 +8,7 @@ import type { AudioEngine } from '../engine/audio';
 import type { SimEvent } from './sim';
 import { $ } from '../ui/dom';
 import { VERSION_LABEL } from '../version';
+import { t, tn } from '../i18n';
 import { hash } from '../lang/vm';
 
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -87,11 +88,11 @@ export class MicroPlayer {
     const sp = p.species.length;
     const lines = [
       `petri ${VERSION_LABEL}`,
-      'preparing culture medium …… ok',
-      `reading ${p.culture.lines.length} line${p.culture.lines.length === 1 ? '' : 's'} of genome …… ok`,
-      sp ? `inoculating ${sp} species` : 'no species — just weather and food',
-      `tuning to ${this.amb.describe()}`,
-      'focusing',
+      t('bootPrep'),
+      tn('bootGenome', p.culture.lines.length),
+      sp ? tn('bootInoculate', sp) : t('bootNoSpecies'),
+      t('bootTuning', { key: this.amb.describe() }),
+      t('bootFocus'),
     ];
     this.boot.classList.add('on'); this.boot.textContent = '';
     return new Promise<void>((res) => {
@@ -121,7 +122,7 @@ export class MicroPlayer {
     this.petri.swap(src);
     this.buildCode(this.petri.culture.gs, true);
     this.hlPrev.clear(); this.hlLast = null;
-    this.note(`${clock(this.petri.world.time)} · genome edited — ${this.petri.species.length} species`, true);
+    this.note(tn('genomeEdited', this.petri.species.length, { t: clock(this.petri.world.time) }), true);
   }
 
   tap(e: PointerEvent): void {
@@ -158,21 +159,21 @@ export class MicroPlayer {
 
   /** a few interesting moments become field notes; most of life goes unrecorded */
   private fieldNote(ev: SimEvent): void {
-    const t = clock(this.petri!.world.time);
-    const once = (key: string, text: string) => { if (!this.firsts.has(key)) { this.firsts.add(key); this.note(`${t} · ${text}`, true); } };
+    const at = clock(this.petri!.world.time);
+    const once = (key: string, text: string) => { if (!this.firsts.has(key)) { this.firsts.add(key); this.note(`${at} · ${text}`, true); } };
     switch (ev.type) {
-      case 'first': this.note(`${t} · ${ev.sp.name} appears`, true); break;
+      case 'first': this.note(`${at} · ${t('noteAppears', { name: ev.sp.name })}`, true); break;
       case 'divide':
-        once('divide:' + ev.sp.seed, `${ev.sp.name} divides for the first time`);
-        if (ev.gen > this.records.gen && ev.gen % 3 === 0) { this.records.gen = ev.gen; this.note(`${t} · ${ev.sp.name} reaches generation ${ev.gen}`); }
+        once('divide:' + ev.sp.seed, t('noteDivides', { name: ev.sp.name }));
+        if (ev.gen > this.records.gen && ev.gen % 3 === 0) { this.records.gen = ev.gen; this.note(`${at} · ${t('noteGeneration', { name: ev.sp.name, gen: ev.gen })}`); }
         break;
-      case 'engulf': once('engulf:' + ev.pred.seed + ':' + ev.prey.seed, `${ev.pred.name} engulfs ${ev.prey.name}`); break;
-      case 'bond': once('bond:' + ev.a.seed + ':' + ev.b.seed, `${ev.a.name} and ${ev.b.name} share food`); break;
-      case 'toxic': once('toxic:' + ev.sp.seed, `${ev.sp.name} ate something toxic`); break;
-      case 'hatch': once('hatch:' + ev.sp.seed, `spores of ${ev.sp.name} hatch`); break;
-      case 'die': if (ev.cause === 'starved') once('starve:' + ev.sp.seed, `${ev.sp.name} starves`); else if (ev.cause === 'old') once('old:' + ev.sp.seed, `${ev.sp.name} dies of old age`); else if (ev.cause === 'toxin') once('toxin:' + ev.sp.seed, `${ev.sp.name} poisoned`); break;
-      case 'bloom': if (this.petri!.world.time - this.lastNote > 6) this.note(`${t} · algae bloom`); break;
-      case 'extinct': this.note(`${t} · ${ev.sp.name} is extinct`, true); break;
+      case 'engulf': once('engulf:' + ev.pred.seed + ':' + ev.prey.seed, t('noteEngulfs', { pred: ev.pred.name, prey: ev.prey.name })); break;
+      case 'bond': once('bond:' + ev.a.seed + ':' + ev.b.seed, t('noteShare', { a: ev.a.name, b: ev.b.name })); break;
+      case 'toxic': once('toxic:' + ev.sp.seed, t('noteToxic', { name: ev.sp.name })); break;
+      case 'hatch': once('hatch:' + ev.sp.seed, t('noteHatch', { name: ev.sp.name })); break;
+      case 'die': if (ev.cause === 'starved') once('starve:' + ev.sp.seed, t('noteStarves', { name: ev.sp.name })); else if (ev.cause === 'old') once('old:' + ev.sp.seed, t('noteOld', { name: ev.sp.name })); else if (ev.cause === 'toxin') once('toxin:' + ev.sp.seed, t('notePoisoned', { name: ev.sp.name })); break;
+      case 'bloom': if (this.petri!.world.time - this.lastNote > 6) this.note(`${at} · ${t('noteBloom')}`); break;
+      case 'extinct': this.note(`${at} · ${t('noteExtinct', { name: ev.sp.name })}`, true); break;
       default: break;
     }
   }
@@ -210,6 +211,7 @@ export class MicroPlayer {
     const rows = p.species.map((sp) => ({ sp, n: W.population(sp) })).sort((a, b) => b.n - a.n).slice(0, 5);
     const html = rows.map(({ sp, n }) =>
       `<div class="sp${n ? '' : ' gone'}"><span class="dot" style="background:hsl(${sp.hue | 0} 70% 62%)"></span><i>${sp.name.replace(/</g, '')}</i> <b>${n}</b></div>`).join('');
-    this.hud.innerHTML = `${html}<div class="meta">${clock(W.time)} · ${W.cells.length} cells · ${W.food.length} food${W.temp < 0.85 ? ' · cold' : W.temp > 1.15 ? ' · warm' : ''}</div>`;
+    const temp = W.temp < 0.85 ? ' · ' + t('cold') : W.temp > 1.15 ? ' · ' + t('warm') : '';
+    this.hud.innerHTML = `${html}<div class="meta">${clock(W.time)} · ${tn('hudCells', W.cells.length)} · ${t('hudFood', { n: W.food.length })}${temp}</div>`;
   }
 }

@@ -3,6 +3,7 @@ import { VM, SPELLS, SPELL_COOLDOWN, BANNER_COOLDOWN, hash, tempoOf } from '../s
 import { graphemes } from '../src/lang/lexer';
 import { lex, evalMath, fmtNum } from '../src/lang/lexer';
 import type { VMEvent } from '../src/lang/types';
+import { t as msg } from '../src/i18n';
 
 const POOL = [
   ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZäöüßÄÖÜ0123456789',
@@ -147,7 +148,7 @@ test('hacker banners from mashing respect the 4 s cooldown', () => {
 test('the answer (42) shows at most every 4 s', () => {
   const vm = new VM('6*7=\n6*7=\n42-0=\n21+21=');
   const shown: number[] = [];
-  for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text === 'THE ANSWER.') shown.push(vm.time);
+  for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text === msg('answer')) shown.push(vm.time);
   expect(shown.length).toBeGreaterThan(10);
   for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(BANNER_COOLDOWN - 0.13);
 });
@@ -155,7 +156,7 @@ test('the answer (42) shows at most every 4 s', () => {
 test('MATH.EXE crash banner (division by zero) shows at most every 4 s', () => {
   const vm = new VM('1/0=\n0/0=\n9^9^9^9=');
   const shown: number[] = [];
-  for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text.startsWith('MATH.EXE')) shown.push(vm.time);
+  for (let t = 0; t < 480; t++) for (const e of vm.tick()) if (e.type === 'banner' && e.text === msg('mathCrash')) shown.push(vm.time);
   expect(shown.length).toBeGreaterThan(10);
   for (let i = 1; i < shown.length; i++) expect(shown[i]! - shown[i - 1]!).toBeGreaterThanOrEqual(BANNER_COOLDOWN - 0.13);
 });

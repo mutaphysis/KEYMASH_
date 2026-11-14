@@ -29,7 +29,7 @@
   <!-- ================= EDIT MODE ================= -->
   <section id="edit">
     <header>
-      <button id="mode-icon" class="modeicon" type="button" aria-label="switch mode (double-tap)" title="double-tap to switch mode">
+      <button id="mode-icon" class="modeicon" type="button" aria-label="switch mode (double-tap)" title="double-tap to switch mode" data-i18n-aria-label="modeAria" data-i18n-title="modeTitle">
         <svg class="ic-key" viewBox="0 0 64 64" aria-hidden="true"><g fill="rgba(57,255,122,.18)" stroke="#39ff7a" stroke-width="3">
           <rect x="6" y="20" width="12" height="15" rx="4" transform="rotate(-22 12 27)"/><rect x="19" y="8" width="12" height="15" rx="4" transform="rotate(-8 25 15)"/>
           <rect x="33" y="8" width="12" height="15" rx="4" transform="rotate(8 39 15)"/><rect x="46" y="20" width="12" height="15" rx="4" transform="rotate(22 52 27)"/>
@@ -41,21 +41,21 @@
       </button>
       <div class="logo" data-text="KEYMASH_">KEYMASH_</div>
       <span id="version" class="ver"></span>
-      <div id="status"><b class="ok" id="st-ok">0 ERRORS</b> · <span id="st-threads">0</span> <span id="st-unit">THREADS</span> · <span id="st-glyphs">0</span> GLYPHS<b id="st-live"> · LIVE</b></div>
-      <button id="btn-mute-edit" class="hbtn" title="sound on/off">🔊</button>
+      <div id="status"><b class="ok" id="st-ok">0 ERRORS</b> · <span id="st-threads">0</span> <span id="st-unit">THREADS</span> · <span id="st-glyphs">0</span> <span data-i18n="glyphs">GLYPHS</span><b id="st-live"> · LIVE</b></div>
+      <button id="btn-mute-edit" class="hbtn" title="sound on/off" data-i18n-title="soundToggle">🔊</button>
     </header>
     <div id="editorWrap">
       <canvas id="rain"></canvas>
       <canvas id="sparks"></canvas>
-      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" placeholder="type anything.&#10;mash the keys.&#10;let the dog walk over it.&#10;&#10;there are no errors."></textarea>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" placeholder="type anything.&#10;mash the keys.&#10;let the dog walk over it.&#10;&#10;there are no errors." data-i18n-placeholder="placeholder"></textarea>
     </div>
-    <div id="keybar" role="toolbar" aria-label="extra keys"></div>
+    <div id="keybar" role="toolbar" aria-label="extra keys" data-i18n-aria-label="extraKeys"></div>
     <nav id="controls">
       <button id="btn-run" class="primary"><i>▶</i><span>RUN</span></button>
-      <button id="btn-mash" title="let a virtual paw type"><i>🐾</i><span>MASH</span></button>
+      <button id="btn-mash" title="let a virtual paw type" data-i18n-title="mashTitle"><i>🐾</i><span data-i18n="mash">MASH</span></button>
       <button id="btn-clear"><i>✖</i><span>CLEAR</span></button>
-      <button id="btn-save"><i>💾</i><span>SAVE</span></button>
-      <button id="btn-load"><i>📂</i><span>LOAD</span></button>
+      <button id="btn-save"><i>💾</i><span data-i18n="save">SAVE</span></button>
+      <button id="btn-load"><i>📂</i><span data-i18n="load">LOAD</span></button>
     </nav>
   </section>
 
@@ -66,11 +66,11 @@
       <div id="hud"></div>
       <div id="log"></div>
       <div id="boot"></div>
-      <div id="idle"><button id="btn-idle-run">▶ RUN</button><p>edit on the left — changes go live while it runs</p></div>
+      <div id="idle"><button id="btn-idle-run">▶ <span data-i18n="run">RUN</span></button><p data-i18n="idleHint">edit on the left — changes go live while it runs</p></div>
       <div class="playbtns">
-        <button id="btn-mute" title="sound on/off">🔊</button>
-        <button id="btn-restart" title="restart">⟲</button>
-        <button id="btn-stop" class="primary">■ EDIT</button>
+        <button id="btn-mute" title="sound on/off" data-i18n-title="soundToggle">🔊</button>
+        <button id="btn-restart" title="restart" data-i18n-title="restart">⟲</button>
+        <button id="btn-stop" class="primary">■ <span data-i18n="edit">EDIT</span></button>
       </div>
     </div>
     <div id="codeview"></div>
@@ -79,7 +79,7 @@
   <!-- ================= DRAWER ================= -->
   <div id="drawer" hidden>
     <div class="panel">
-      <div class="phead"><span>// PROGRAMS</span><button id="drawer-close">✖</button></div>
+      <div class="phead"><span data-i18n="programs">// PROGRAMS</span><button id="drawer-close">✖</button></div>
       <div id="drawer-body"></div>
     </div>
   </div>

@@ -5,6 +5,7 @@ import { DISH_R, DIVIDE_TIME, DIVIDE_GAP, TRANSVERSE } from './sim';
 import type { Species } from './genome';
 import type { Note } from './culture';
 import { ctx2d } from '../ui/dom';
+import { t } from '../i18n';
 
 type Ctx = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
@@ -94,15 +95,14 @@ export class MicroRenderer {
       case 'bloom': this.ripple(ev.x, ev.y, 10, 90, 2.2, 60, 0.35); break;
       case 'zone': if (ev.zone.kind !== 'light') this.ripple(ev.zone.x, ev.zone.y, 10, ev.zone.r, 2, ev.zone.kind === 'toxin' ? 290 : ev.zone.kind === 'garden' ? 110 : 190, 0.2); break;
       case 'first': this.introduce(ev.sp); break;
-      case 'extinct': this.captions.push({ title: '† ' + ev.sp.name, sub: 'extinct — for now', hue: ev.sp.hue, t: 0, life: 4.5 }); break;
+      case 'extinct': this.captions.push({ title: '† ' + ev.sp.name, sub: t('extinctSub'), hue: ev.sp.hue, t: 0, life: 4.5 }); break;
     }
     if (this.ripples.length > 60) this.ripples.splice(0, this.ripples.length - 60);
     if (this.frags.length > 160) this.frags.splice(0, this.frags.length - 160);
   }
 
   introduce(sp: Species): void {
-    const diet = { grazer: 'grazer', hunter: 'predator', photo: 'photosynthetic', omni: 'omnivore' }[sp.diet];
-    const traits = [sp.body, diet, sp.toxic > 0.2 ? 'toxic' : '', sp.symbiosis ? 'symbiotic' : '', sp.spores ? 'spore-forming' : '', sp.colony > 0.6 ? 'colonial' : ''].filter(Boolean);
+    const traits = [t(sp.body), t(sp.diet), sp.toxic > 0.2 ? t('toxic') : '', sp.symbiosis ? t('symbiotic') : '', sp.spores ? t('spores') : '', sp.colony > 0.6 ? t('colonial') : ''].filter(Boolean);
     this.captions.push({ title: sp.name, sub: traits.join(' · '), hue: sp.hue, t: 0, life: 5 });
   }
 
@@ -617,7 +617,7 @@ export class MicroRenderer {
     c.beginPath(); c.moveTo(x, y); c.lineTo(x + len, y); c.moveTo(x, y - 3 * d); c.lineTo(x, y + 3 * d); c.moveTo(x + len, y - 3 * d); c.lineTo(x + len, y + 3 * d); c.stroke();
     c.font = `${10 * d}px ${MONO}`; c.fillStyle = 'rgba(190,255,235,0.5)'; c.textAlign = 'left'; c.textBaseline = 'bottom';
     c.fillText('50 µm', x, y - 5 * d);
-    c.textAlign = 'right'; c.fillText('400× · dark field', this.cx + this.R * 0.62, y - 5 * d);
+    c.textAlign = 'right'; c.fillText(t('darkField'), this.cx + this.R * 0.62, y - 5 * d);
   }
 
   private drawCaption(c: Ctx, dt: number): void {

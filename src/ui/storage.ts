@@ -1,4 +1,5 @@
 // Save slots in localStorage (best-effort) + demo programs.
+import { t } from '../i18n';
 
 export type Mode = 'keymash' | 'petri';
 const KEYS: Record<Mode, { slots: string; draft: string }> = {
@@ -30,13 +31,13 @@ export const store = {
 };
 
 export const DEMOS: { name: string; src: string }[] = [
-  { name: '🐶 dog on keyboard', src: 'jfkdlsöä asdfghjkl JJJJJJJJJ 🐶\nkkkkk  ddddd h h hhhh\nWOOF!!! ölkjhg 🐾🐾🐾 qqqqqqqq' },
-  { name: '🥁 paw drum machine', src: 'd..h.dk.h.d..h.k.\nh h h h h h h hhhh\nb . . b . . b . b . . b . bb .\nqwertzuiop . poiuztrewq . asdf ~' },
-  { name: '🧒 kid\'s first program', src: 'hallo ich bin 6 und kann programmieren!!!\n2+2= 7*6= 100-1=\nMAMA PAPA 🦄🌈🐶\nlalala ~~~ 🎵🎵' },
-  { name: '💻 hack the planet', src: 'HACK THE PLANET ### 💻\n[asdf] & 3(qwer) {{{ ~~~\nsudo rm -rf / !!! 😎\n1337 * 42 = 🕶️ %' },
-  { name: '📈 math mode', src: '3+4*2= 12/0= 2^10= 9^9^9=\n~~~ % ~ @@ 🧮 📈\n1 2 3 4 5 6 7 8 9 0' },
-  { name: '🩰 paw ballet', src: '🐾 ölkjhgfdsa ~ asdfghjklö ~ 🐾\n{ yxcvbnm } { mnbvcxy } mmmm %\n...ooooooooooo... 🫧 ✨' },
-  { name: '🌀 tunnel vision', src: 'eeeeeeee 🌀 rrrrrr\n@@@ %% ~~~~~~\n💫 zzzz ZZZZ zzzz !!!!' },
+  { name: t('demoDog'), src: 'jfkdlsöä asdfghjkl JJJJJJJJJ 🐶\nkkkkk  ddddd h h hhhh\nWOOF!!! ölkjhg 🐾🐾🐾 qqqqqqqq' },
+  { name: t('demoDrum'), src: 'd..h.dk.h.d..h.k.\nh h h h h h h hhhh\nb . . b . . b . b . . b . bb .\nqwertzuiop . poiuztrewq . asdf ~' },
+  { name: t('demoKid'), src: 'hallo ich bin 6 und kann programmieren!!!\n2+2= 7*6= 100-1=\nMAMA PAPA 🦄🌈🐶\nlalala ~~~ 🎵🎵' },
+  { name: t('demoHack'), src: 'HACK THE PLANET ### 💻\n[asdf] & 3(qwer) {{{ ~~~\nsudo rm -rf / !!! 😎\n1337 * 42 = 🕶️ %' },
+  { name: t('demoMath'), src: '3+4*2= 12/0= 2^10= 9^9^9=\n~~~ % ~ @@ 🧮 📈\n1 2 3 4 5 6 7 8 9 0' },
+  { name: t('demoBallet'), src: '🐾 ölkjhgfdsa ~ asdfghjklö ~ 🐾\n{ yxcvbnm } { mnbvcxy } mmmm %\n...ooooooooooo... 🫧 ✨' },
+  { name: t('demoTunnel'), src: 'eeeeeeee 🌀 rrrrrr\n@@@ %% ~~~~~~\n💫 zzzz ZZZZ zzzz !!!!' },
 ];
 
 // a virtual paw: clusters of neighbouring keys, held keys, the odd caps lock and emoji
@@ -68,12 +69,12 @@ export function pawMash(len = 60): string {
 }
 
 export const PETRI_DEMOS: { name: string; src: string }[] = [
-  { name: '🌱 first culture', src: 'asdf jkl ölk 🌿\nqwert zuiop . 5 . 5\n☀️ * 🌱 7 . 7' },
-  { name: '🦠 hunters and grazers', src: 'mmm nnn bbb yyy xxx ccc vvv 🌿\nHUNTER GRRR >>\n🌿 9 . 9 . 9 ☀️' },
-  { name: '💞 symbiosis', src: 'aaa sss & ddd 🌱\nooo ppp & iii\n☀️ 4 . 4 . 4 💞' },
-  { name: '🍄 spores and decay', src: 'fungi . . . . 🍄\nxcvb !!! ☠️\n🌿 6 . 6 #' },
-  { name: '🌀 the swirl', src: 'sss @@ sss ~~~\n💧 ~ 💧 ~ 🌿 3\nvolvox ((( ooo ))) ☀️' },
-  { name: '❄️ winter pond', src: 'qwqwqw ~ erer 🌿\n❄️ . . . 3 . . .\nlkjh gfds ☀️' },
-  { name: '🐶 dog under the microscope', src: 'jfkdlsöä asdfghjkl JJJJJJJJJ\nkkkkk ddddd h h hhhh 🌿 5\nWOOF!!! ölkjhg 🐾 qqqqqqqq ☀️' },
-  { name: '🧮 math garden', src: '3*7= 12+30= 🌿\nasdf * jklö * ☀️\n"look, it grows"' },
+  { name: t('petriFirst'), src: 'asdf jkl ölk 🌿\nqwert zuiop . 5 . 5\n☀️ * 🌱 7 . 7' },
+  { name: t('petriHunters'), src: 'mmm nnn bbb yyy xxx ccc vvv 🌿\nHUNTER GRRR >>\n🌿 9 . 9 . 9 ☀️' },
+  { name: t('petriSymbiosis'), src: 'aaa sss & ddd 🌱\nooo ppp & iii\n☀️ 4 . 4 . 4 💞' },
+  { name: t('petriSpores'), src: 'fungi . . . . 🍄\nxcvb !!! ☠️\n🌿 6 . 6 #' },
+  { name: t('petriSwirl'), src: 'sss @@ sss ~~~\n💧 ~ 💧 ~ 🌿 3\nvolvox ((( ooo ))) ☀️' },
+  { name: t('petriWinter'), src: 'qwqwqw ~ erer 🌿\n❄️ . . . 3 . . .\nlkjh gfds ☀️' },
+  { name: t('petriDog'), src: 'jfkdlsöä asdfghjkl JJJJJJJJJ\nkkkkk ddddd h h hhhh 🌿 5\nWOOF!!! ölkjhg 🐾 qqqqqqqq ☀️' },
+  { name: t('petriMath'), src: '3*7= 12+30= 🌿\nasdf * jklö * ☀️\n"look, it grows"' },
 ];
