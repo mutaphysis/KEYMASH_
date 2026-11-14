@@ -5,6 +5,7 @@ import type { Translation } from '../../i18n';
 const en = {
   tagline: 'every keystroke compiles',
   emptyToast: 'EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾',
+  runHint: 'run the program',
   errors0: '0 ERRORS',
   threads: 'THREADS',
   voice: 'VOICE',
@@ -114,6 +115,7 @@ const en = {
 const de: Translation<typeof en> = {
   tagline: 'jeder Tastendruck kompiliert',
   emptyToast: 'LEER? EINE PFOTE HAT WAS FÜR DICH GETIPPT 🐾',
+  runHint: 'Programm starten',
   errors0: '0 FEHLER',
   threads: 'THREADS',
   voice: 'STIMME',

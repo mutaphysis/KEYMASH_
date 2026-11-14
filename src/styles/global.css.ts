@@ -310,6 +310,9 @@ globalStyle('#idle', {
 });
 globalStyle('#idle p', { color: rgba(fg, 0.6), fontSize: 13, margin: 0, letterSpacing: 1 });
 globalStyle('#app.split:not(.playing) #idle', { display: 'flex' });
+// only the stage: there is no editor on the left to talk about, the mode says what ▶ does instead
+globalStyle('#idle #idle-run, #app.stageonly #idle [data-i18n="idleHint"]', { display: 'none' });
+globalStyle('#app.stageonly #idle #idle-run', { display: 'block' });
 globalStyle('.playbtns', { position: 'absolute', right: padR(10), bottom: 10, display: 'flex', gap: 6 });
 globalStyle('#codeview', {
   position: 'relative',

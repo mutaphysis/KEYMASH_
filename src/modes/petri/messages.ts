@@ -5,6 +5,7 @@ import type { Translation } from '../../i18n';
 const en = {
   tagline: 'a quiet culture of cells',
   emptyToast: 'EMPTY DISH? A PAW SEEDED IT 🐾',
+  runHint: 'grow the culture',
   alive: 'ALIVE',
   species: { one: 'SPECIES', other: 'SPECIES' },
   // ---- demo names ----
@@ -75,6 +76,7 @@ const en = {
 const de: Translation<typeof en> = {
   tagline: 'eine entspannte Zellkultur',
   emptyToast: 'SCHALE LEER? DIE PFOTE KANN SIE FÜLLEN 🐾',
+  runHint: 'Kultur wachsen lassen',
   alive: 'LEBT',
   species: { one: 'ART', other: 'ARTEN' },
   petriFirst: '🌱 Erste Kultur',

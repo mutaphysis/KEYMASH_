@@ -97,6 +97,8 @@ export interface ModeDef {
 export interface ModeCode {
   /** toast when RUN gets an empty text and a paw fills it */
   emptyToast: string;
+  /** under ▶ when only the stage shows: what RUN does here, e.g. "bake the cookies" */
+  runHint: string;
   /** typing sounds in the editor */
   typing: TypingStyle;
   demos: Demo[];

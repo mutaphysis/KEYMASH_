@@ -59,6 +59,7 @@ const KEYS = [
 
 export const mode: ModeCode = {
   emptyToast: t('emptyToast'),
+  runHint: t('runHint'),
   typing: 'lounge',
   demos: DEMOS,
   keys: KEYS,

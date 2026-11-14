@@ -37,6 +37,7 @@ const KEYS = [
 
 export const mode: ModeCode = {
   emptyToast: t('emptyToast'),
+  runHint: t('runHint'),
   typing: 'water',
   demos: DEMOS,
   keys: KEYS,

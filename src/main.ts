@@ -219,6 +219,7 @@ function applyMode(m: ModeDef, c: ModeCode): void {
   editor.configure(c.backdrop(), c.keys);
   armUndo(false);
   audio.typingStyle = c.typing;
+  $('idle-run').textContent = c.runHint;
   const draft = store.draft();
   editor.value = draft !== null ? draft : c.demos[0]!.src;
 }
