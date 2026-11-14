@@ -21,13 +21,20 @@ export class KmButton extends HTMLElement {
     const label = this.getAttribute('label');
     this.textEl.textContent = label ? t(label as Msg) : '';
     const title = this.getAttribute('title-key');
-    if (title) { this.button.title = t(title as Msg); this.button.setAttribute('aria-label', this.button.title); }
+    if (title) {
+      this.button.title = t(title as Msg);
+      this.button.setAttribute('aria-label', this.button.title);
+    }
     this.button.append(this.iconEl, this.textEl);
     this.appendChild(this.button);
   }
 
-  set icon(s: string) { this.iconEl.textContent = s; }
-  set text(s: string) { this.textEl.textContent = s; }
+  set icon(s: string) {
+    this.iconEl.textContent = s;
+  }
+  set text(s: string) {
+    this.textEl.textContent = s;
+  }
 
   /** a fill drains from right to left over `ms`, then calls `done`; 0 cancels */
   countdown(ms: number, done?: () => void): void {
@@ -37,9 +44,18 @@ export class KmButton extends HTMLElement {
     void this.button.offsetWidth; // restart the animation
     this.style.setProperty('--countdown', ms + 'ms');
     this.setAttribute('counting', '');
-    this.countdownTimer = setTimeout(() => { this.removeAttribute('counting'); done?.(); }, ms);
+    this.countdownTimer = setTimeout(() => {
+      this.removeAttribute('counting');
+      done?.();
+    }, ms);
   }
-  get counting(): boolean { return this.hasAttribute('counting'); }
+  get counting(): boolean {
+    return this.hasAttribute('counting');
+  }
 }
 customElements.define('km-button', KmButton);
-declare global { interface HTMLElementTagNameMap { 'km-button': KmButton } }
+declare global {
+  interface HTMLElementTagNameMap {
+    'km-button': KmButton;
+  }
+}

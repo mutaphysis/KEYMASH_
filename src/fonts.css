@@ -1,9 +1,15 @@
 /* Fonts are baked into the single-file build (woff2, latin subset) — no request to Google Fonts. */
 @font-face {
-  font-family: 'Share Tech Mono'; font-style: normal; font-weight: 400; font-display: swap;
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
   src: url('../node_modules/@fontsource/share-tech-mono/files/share-tech-mono-latin-400-normal.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Major Mono Display'; font-style: normal; font-weight: 400; font-display: swap;
+  font-family: 'Major Mono Display';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
   src: url('../node_modules/@fontsource/major-mono-display/files/major-mono-display-latin-400-normal.woff2') format('woff2');
 }

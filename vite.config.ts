@@ -8,7 +8,13 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 
 function gitSha(): string {
   if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
-  try { return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return 'nogit'; }
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+  } catch {
+    return 'nogit';
+  }
 }
 
 // One self-contained index.html: works as a Claude artifact, on GitHub Pages, or opened from disk.

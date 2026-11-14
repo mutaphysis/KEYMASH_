@@ -12,7 +12,33 @@ const ICON = `<svg class="ic-cell" viewBox="0 0 64 64" aria-hidden="true"><g fil
   <circle cx="27" cy="31" r="8" fill="rgba(200,160,255,.35)" stroke="#d2b8ff"/><circle cx="29" cy="29" r="2" fill="#efe2ff" stroke="none"/>
   <circle cx="44" cy="22" r="2.5" fill="#8ff5dc" stroke="none"/><circle cx="42" cy="42" r="2" fill="#8ff5dc" stroke="none"/><circle cx="18" cy="45" r="1.8" fill="#8ff5dc" stroke="none"/></g></svg>`;
 
-const KEYS = ['🌿', '☀️', '💧', '🫧', '🍄', '🦠', '🍬', '❄️', '🔥', '☠️', '💞', '🧫', '.', '~', '*', '!', '&', '+', '#', '@', '(', ')', '-', '?', '"'];
+const KEYS = [
+  '🌿',
+  '☀️',
+  '💧',
+  '🫧',
+  '🍄',
+  '🦠',
+  '🍬',
+  '❄️',
+  '🔥',
+  '☠️',
+  '💞',
+  '🧫',
+  '.',
+  '~',
+  '*',
+  '!',
+  '&',
+  '+',
+  '#',
+  '@',
+  '(',
+  ')',
+  '-',
+  '?',
+  '"',
+];
 
 export const petri: ModeDef = {
   id: 'petri',

@@ -11,8 +11,10 @@ export function pawMash(len = 60): string {
     const r = Math.random();
     if (r < 0.62) {
       // a paw press: 2-7 keys around a centre
-      const row = 1 + ((Math.random() * 3) | 0); const keys = ROWS[row]!;
-      let col = (Math.random() * keys.length) | 0; const n = 2 + ((Math.random() * 6) | 0);
+      const row = 1 + ((Math.random() * 3) | 0);
+      const keys = ROWS[row]!;
+      let col = (Math.random() * keys.length) | 0;
+      const n = 2 + ((Math.random() * 6) | 0);
       const caps = Math.random() < 0.12;
       for (let i = 0; i < n; i++) {
         col = Math.max(0, Math.min(keys.length - 1, col + ((Math.random() * 3) | 0) - 1));

@@ -9,11 +9,25 @@ import { hash } from '../../lang/rng';
 /** seconds per beat of the feeder: slow on purpose */
 export const BEAT = 0.75;
 
-export interface Read { line: number; g0: number; g1: number; hue: number }
-export interface Note { text: string; x: number; y: number; hue: number }
+export interface Read {
+  line: number;
+  g0: number;
+  g1: number;
+  hue: number;
+}
+export interface Note {
+  text: string;
+  x: number;
+  y: number;
+  hue: number;
+}
 export type CultureEvent = SimEvent | { type: 'read'; read: Read } | { type: 'note'; note: Note };
 
-interface Clock { next: number; i: number; gen: number }
+interface Clock {
+  next: number;
+  i: number;
+  gen: number;
+}
 
 export class Petri {
   world: World;
@@ -28,7 +42,8 @@ export class Petri {
     this.resetClocks();
     // the medium starts with a little food, so the first cells have something to find
     for (let i = 0; i < 6; i++) {
-      const a = this.world.rng() * Math.PI * 2, d = Math.sqrt(this.world.rng()) * DISH_R * 0.75;
+      const a = this.world.rng() * Math.PI * 2,
+        d = Math.sqrt(this.world.rng()) * DISH_R * 0.75;
       this.world.addFood(Math.cos(a) * d, Math.sin(a) * d, 6, 'algae', 50);
     }
   }
@@ -43,12 +58,15 @@ export class Petri {
     this.resetClocks();
   }
 
-  get species(): Species[] { return this.culture.species; }
+  get species(): Species[] {
+    return this.culture.species;
+  }
 
   /** where a keyboard position (u, v in 0..1) of a line lands in the dish */
   place(lp: LineProgram, gen: number, u: number, v: number): [number, number] {
     const a = lp.line * 2.4 + gen * 0.35;
-    const x0 = (u - 0.5) * 2, y0 = (v - 0.5) * 1.7;
+    const x0 = (u - 0.5) * 2,
+      y0 = (v - 0.5) * 1.7;
     const k = DISH_R * 0.72;
     return this.world.inside((x0 * Math.cos(a) - y0 * Math.sin(a)) * k, (x0 * Math.sin(a) + y0 * Math.cos(a)) * k, 30);
   }
@@ -62,15 +80,27 @@ export class Petri {
         const [x, y] = at(act.u, act.v);
         let made = 0;
         // the code inoculates; growth after that is up to the culture
-        if (sp && W.population(sp) < SEED_POP && W.crowd < 1) for (let i = 0; i < act.n; i++) {
-          const c = W.spawnCell(sp, x + (W.rng() - 0.5) * 30, y + (W.rng() - 0.5) * 30);
-          if (c) { made++; out.push({ type: 'spawn', x: c.x, y: c.y, sp }); }
-        }
+        if (sp && W.population(sp) < SEED_POP && W.crowd < 1)
+          for (let i = 0; i < act.n; i++) {
+            const c = W.spawnCell(sp, x + (W.rng() - 0.5) * 30, y + (W.rng() - 0.5) * 30);
+            if (c) {
+              made++;
+              out.push({ type: 'spawn', x: c.x, y: c.y, sp });
+            }
+          }
         if (!made) W.addFood(x, y, 1, 'crumb', 10); // dish full: the code feeds instead
         break;
       }
-      case 'food': { const [x, y] = at(act.u, act.v); W.addFood(x, y, act.n, act.kind, 22 + act.n * 4); break; }
-      case 'light': { const [x, y] = at(act.u, act.v); W.addZone('light', x, y, { r: 150, dur: 14 }); break; }
+      case 'food': {
+        const [x, y] = at(act.u, act.v);
+        W.addFood(x, y, act.n, act.kind, 22 + act.n * 4);
+        break;
+      }
+      case 'light': {
+        const [x, y] = at(act.u, act.v);
+        W.addZone('light', x, y, { r: 150, dur: 14 });
+        break;
+      }
       case 'current': {
         const [x, y] = at(act.u, act.v);
         W.addZone('current', x, y, { r: 190, dur: 8, swirl: act.swirl, angle: act.angle + lp.line * 2.4 + gen * 0.35 });
@@ -83,20 +113,36 @@ export class Petri {
         out.push({ type: 'bloom', x, y });
         break;
       }
-      case 'garden': { const [x, y] = at(act.u, act.v); W.addZone('garden', x, y, { r: 75, dur: 14 }); break; }
-      case 'toxin': { const [x, y] = at(act.u, act.v); W.addZone('toxin', x, y, { r: 95, dur: 12 }); break; }
-      case 'spores': {
+      case 'garden': {
         const [x, y] = at(act.u, act.v);
-        if (lp.species) W.addSpores(lp.species, x, y, act.n); else W.addFood(x, y, 4, 'debris', 30);
+        W.addZone('garden', x, y, { r: 75, dur: 14 });
         break;
       }
-      case 'temp': W.temp = act.t; break;
-      case 'note': { const [x, y] = at(act.u, act.v); out.push({ type: 'note', note: { text: act.text, x, y, hue: lp.hue } }); break; }
+      case 'toxin': {
+        const [x, y] = at(act.u, act.v);
+        W.addZone('toxin', x, y, { r: 95, dur: 12 });
+        break;
+      }
+      case 'spores': {
+        const [x, y] = at(act.u, act.v);
+        if (lp.species) W.addSpores(lp.species, x, y, act.n);
+        else W.addFood(x, y, 4, 'debris', 30);
+        break;
+      }
+      case 'temp':
+        W.temp = act.t;
+        break;
+      case 'note': {
+        const [x, y] = at(act.u, act.v);
+        out.push({ type: 'note', note: { text: act.text, x, y, hue: lp.hue } });
+        break;
+      }
       case 'bond':
         for (const c of W.cells) if (c.sp.symbiosis) c.think = 0;
         W.addZone('light', 0, 0, { r: 110, dur: 6, strength: 0.6 });
         break;
-      case 'rest': break;
+      case 'rest':
+        break;
     }
   }
 
@@ -117,7 +163,11 @@ export class Petri {
         this.act(lp, ck.gen, st.act, out);
         ck.next += st.beats * BEAT;
         ck.i++;
-        if (ck.i >= lp.steps.length) { ck.i = 0; ck.gen++; ck.next += BEAT * 2; } // a breath between loops
+        if (ck.i >= lp.steps.length) {
+          ck.i = 0;
+          ck.gen++;
+          ck.next += BEAT * 2;
+        } // a breath between loops
       });
       for (const e of W.step(STEP)) out.push(e);
     }

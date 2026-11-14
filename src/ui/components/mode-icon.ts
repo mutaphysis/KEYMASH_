@@ -17,7 +17,13 @@ export class KmModeIcon extends HTMLElement {
     this.appendChild(this.button);
   }
 
-  set mode(m: ModeDef) { this.button.innerHTML = m.icon; }
+  set mode(m: ModeDef) {
+    this.button.innerHTML = m.icon;
+  }
 }
 customElements.define('km-mode-icon', KmModeIcon);
-declare global { interface HTMLElementTagNameMap { 'km-mode-icon': KmModeIcon } }
+declare global {
+  interface HTMLElementTagNameMap {
+    'km-mode-icon': KmModeIcon;
+  }
+}

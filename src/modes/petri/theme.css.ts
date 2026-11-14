@@ -7,8 +7,17 @@ import { variant } from '../../ui/components/button.css';
 export const petriTheme = createTheme(vars, {
   rgb: { fg: '143, 245, 220', accent: '255, 168, 207', accent2: '168, 220, 255' },
   color: {
-    bg: '#010a0d', dim: '#7fb8b0', text: '#bff8ea', code: '#cdfaf0', surface: 'rgba(2,22,26,.7)', panel: '#011318',
-    editorBg: 'rgba(1,16,20,.88)', border: 'rgba(143,245,220,.3)', line: 'rgba(143,245,220,.26)', stageBg: '#010608', primaryFg: '#022126',
+    bg: '#010a0d',
+    dim: '#7fb8b0',
+    text: '#bff8ea',
+    code: '#cdfaf0',
+    surface: 'rgba(2,22,26,.7)',
+    panel: '#011318',
+    editorBg: 'rgba(1,16,20,.88)',
+    border: 'rgba(143,245,220,.3)',
+    line: 'rgba(143,245,220,.26)',
+    stageBg: '#010608',
+    primaryFg: '#022126',
   },
   bg: {
     app: 'radial-gradient(ellipse at 50% 20%, #06222a, #010a0d 70%)',
@@ -37,7 +46,10 @@ const p = (sel: string) => `${petriTheme} ${sel}`;
 
 // calm: no scanlines, no flicker, no glitching logo, nothing blinks
 globalStyle(p('.crt::before'), { display: 'none' });
-globalStyle(p('.crt::after'), { background: 'radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,.55) 100%)', mixBlendMode: 'normal' });
+globalStyle(p('.crt::after'), {
+  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,.55) 100%)',
+  mixBlendMode: 'normal',
+});
 globalStyle(p('.logo'), { textShadow: '0 0 10px rgba(143,245,220,.7), 0 0 26px rgba(143,245,220,.3)', letterSpacing: 2 });
 globalStyle(p('.logo::before, .logo::after'), { display: 'none' });
 globalStyle(p(`${icon} svg`), { filter: 'drop-shadow(0 0 7px rgba(143,245,220,.6))', animation: `${breathe} 6s ease-in-out infinite` });
@@ -61,5 +73,8 @@ globalStyle(p('#hud .meta'), { marginTop: 3, color: 'rgba(143,245,220,.55)', fon
 globalStyle(p('#log'), { fontFamily: layout.serif, fontStyle: 'italic', fontSize: 12.5, color: 'rgba(205,250,240,.78)', bottom: 76 });
 globalStyle(p('#log div:last-child::after'), { content: '""' });
 globalStyle(p('#boot'), {
-  background: 'radial-gradient(circle at 50% 45%, #06262d, #010a0d 75%)', color: '#a8fbe6', textShadow: '0 0 10px rgba(143,245,220,.6)', fontSize: 14,
+  background: 'radial-gradient(circle at 50% 45%, #06262d, #010a0d 75%)',
+  color: '#a8fbe6',
+  textShadow: '0 0 10px rgba(143,245,220,.6)',
+  fontSize: 14,
 });

@@ -13,8 +13,15 @@ export class KmToast extends HTMLElement {
   show(text: string, ms = 1800): void {
     this.textContent = text;
     this.hidden = false;
-    clearTimeout(this.timer); this.timer = setTimeout(() => { this.hidden = true; }, ms);
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.hidden = true;
+    }, ms);
   }
 }
 customElements.define('km-toast', KmToast);
-declare global { interface HTMLElementTagNameMap { 'km-toast': KmToast } }
+declare global {
+  interface HTMLElementTagNameMap {
+    'km-toast': KmToast;
+  }
+}

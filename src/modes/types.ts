@@ -27,10 +27,17 @@ export interface Backdrop {
 }
 
 /** the status line in the header: "<ok> · <count> <unit> · <glyphs> GLYPHS" */
-export interface Status { ok: string; count: number; unit: string }
+export interface Status {
+  ok: string;
+  count: number;
+  unit: string;
+}
 
 /** extra sections a mode adds to the program drawer */
-export interface DrawerSection { title: string; items: HTMLElement[] }
+export interface DrawerSection {
+  title: string;
+  items: HTMLElement[];
+}
 export interface DrawerContext {
   audio: AudioEngine;
   /** a drawer row: name, a smaller line underneath, an action */

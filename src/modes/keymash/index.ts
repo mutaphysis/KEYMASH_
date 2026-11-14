@@ -14,8 +14,52 @@ const ICON = `<svg class="ic-key" viewBox="0 0 64 64" aria-hidden="true"><g fill
   <path d="M32 31c10 0 19 9 20 18 1 8-6 11-12 9-4-1-6-2-8-2s-4 1-8 2c-6 2-13-1-12-9 1-9 10-18 20-18z"/></g></svg>`;
 
 const KEYS = [
-  '!', '?', '~', '(', ')', '[', ']', '{', '}', '#', '*', '@', '&', '%', '$', '^', ':', '.', '"', '<', '>', '|', '/', '-', '+', '=',
-  '🐶', '🐾', '💥', '🔥', '🌈', '❤️', '⭐', '✨', '🚀', '👻', '🦄', '🦖', '🎵', '🌀', '💻', '🐿️', '🎾', '🦴', '💩', '🍕',
+  '!',
+  '?',
+  '~',
+  '(',
+  ')',
+  '[',
+  ']',
+  '{',
+  '}',
+  '#',
+  '*',
+  '@',
+  '&',
+  '%',
+  '$',
+  '^',
+  ':',
+  '.',
+  '"',
+  '<',
+  '>',
+  '|',
+  '/',
+  '-',
+  '+',
+  '=',
+  '🐶',
+  '🐾',
+  '💥',
+  '🔥',
+  '🌈',
+  '❤️',
+  '⭐',
+  '✨',
+  '🚀',
+  '👻',
+  '🦄',
+  '🦖',
+  '🎵',
+  '🌀',
+  '💻',
+  '🐿️',
+  '🎾',
+  '🦴',
+  '💩',
+  '🍕',
 ];
 
 export const keymash: ModeDef = {
@@ -42,13 +86,18 @@ export const keymash: ModeDef = {
       ['system', t('voiceSystem'), t('voiceSystemSub')],
       ['babble', t('voiceBabble'), t('voiceBabbleSub')],
     ];
-    return [{
-      title: t('voice'),
-      items: voices.map(([vm, name, sub]) => item((audio.voice === vm ? '✓ ' : '') + name, sub, () => {
-        audio.setVoice(vm); audio.init();
-        setTimeout(() => audio.speak(t('voiceHello'), 1, 1), 150);
-        refresh();
-      })),
-    }];
+    return [
+      {
+        title: t('voice'),
+        items: voices.map(([vm, name, sub]) =>
+          item((audio.voice === vm ? '✓ ' : '') + name, sub, () => {
+            audio.setVoice(vm);
+            audio.init();
+            setTimeout(() => audio.speak(t('voiceHello'), 1, 1), 150);
+            refresh();
+          }),
+        ),
+      },
+    ];
   },
 };

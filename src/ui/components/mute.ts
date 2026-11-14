@@ -14,14 +14,22 @@ export class KmMute extends KmButton {
     super.connectedCallback();
     this.show();
     this.button.addEventListener('click', () => {
-      const a = KmMute.audio; if (!a) return;
-      a.init(); a.setMuted(!a.muted);
+      const a = KmMute.audio;
+      if (!a) return;
+      a.init();
+      a.setMuted(!a.muted);
       document.dispatchEvent(new Event(CHANGED));
     });
     document.addEventListener(CHANGED, () => this.show());
   }
 
-  private show(): void { this.icon = KmMute.audio?.muted ? '🔇' : '🔊'; }
+  private show(): void {
+    this.icon = KmMute.audio?.muted ? '🔇' : '🔊';
+  }
 }
 customElements.define('km-mute', KmMute);
-declare global { interface HTMLElementTagNameMap { 'km-mute': KmMute } }
+declare global {
+  interface HTMLElementTagNameMap {
+    'km-mute': KmMute;
+  }
+}

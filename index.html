@@ -1,75 +1,101 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#000800">
-<meta name="description" content="A live-coding toy where any text is a valid program — let the dog, the kid or you mash the keys.">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" type="image/svg+xml" href="/icon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="KEYMASH_">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>KEYMASH_ — every keystroke compiles</title>
-</head>
-<body>
-<!-- Shown until the script starts (it removes this). Covers JavaScript being off or blocked, and a failed load. -->
-<!-- JavaScript switched off in the browser: show it at once, no one-second wait -->
-<noscript><style>#nojs { opacity: 1; animation: none; }</style></noscript>
-<div id="nojs">
-  <div class="logo">KEYMASH_</div>
-  <p>&gt; waiting for JavaScript …</p>
-  <p>This is a little programming language that runs in your browser, so it needs JavaScript.
-  If it is switched off or blocked (browser setting, NoScript, a content blocker), allow it for this page and reload.</p>
-</div>
-<div id="app" class="crt">
-  <!-- ================= EDIT MODE ================= -->
-  <section id="edit">
-    <header>
-      <km-mode-icon id="mode-icon"></km-mode-icon>
-      <div class="logo" data-text="KEYMASH_">KEYMASH_</div>
-      <span id="version" class="ver"></span>
-      <div id="status"><b class="ok" id="st-ok">0 ERRORS</b> · <span id="st-threads">0</span> <span id="st-unit">THREADS</span> · <span id="st-glyphs">0</span> <span data-i18n="glyphs">GLYPHS</span><b id="st-live"> · LIVE</b></div>
-      <km-mute id="btn-mute-edit" variant="header"></km-mute>
-    </header>
-    <div id="editorWrap">
-      <canvas id="rain"></canvas>
-      <canvas id="sparks"></canvas>
-      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" placeholder="type anything.&#10;mash the keys.&#10;let the dog walk over it.&#10;&#10;there are no errors." data-i18n-placeholder="placeholder"></textarea>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#000800" />
+    <meta name="description" content="A live-coding toy where any text is a valid program — let the dog, the kid or you mash the keys." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="KEYMASH_" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>KEYMASH_ — every keystroke compiles</title>
+  </head>
+  <body>
+    <!-- Shown until the script starts (it removes this). Covers JavaScript being off or blocked, and a failed load. -->
+    <!-- JavaScript switched off in the browser: show it at once, no one-second wait -->
+    <noscript
+      ><style>
+        #nojs {
+          opacity: 1;
+          animation: none;
+        }
+      </style></noscript
+    >
+    <div id="nojs">
+      <div class="logo">KEYMASH_</div>
+      <p>&gt; waiting for JavaScript …</p>
+      <p>
+        This is a little programming language that runs in your browser, so it needs JavaScript. If it is switched off or blocked (browser
+        setting, NoScript, a content blocker), allow it for this page and reload.
+      </p>
     </div>
-    <div id="keybar" role="toolbar" aria-label="extra keys" data-i18n-aria-label="extraKeys"></div>
-    <nav id="controls">
-      <km-button id="btn-run" icon="▶" label="run" primary></km-button>
-      <km-button id="btn-mash" icon="🐾" label="mash" title-key="mashTitle"></km-button>
-      <km-button id="btn-clear" icon="✖" label="clear"></km-button>
-      <km-button id="btn-save" icon="💾" label="save"></km-button>
-      <km-button id="btn-load" icon="📂" label="load"></km-button>
-    </nav>
-  </section>
+    <div id="app" class="crt">
+      <!-- ================= EDIT MODE ================= -->
+      <section id="edit">
+        <header>
+          <km-mode-icon id="mode-icon"></km-mode-icon>
+          <div class="logo" data-text="KEYMASH_">KEYMASH_</div>
+          <span id="version" class="ver"></span>
+          <div id="status">
+            <b class="ok" id="st-ok">0 ERRORS</b> · <span id="st-threads">0</span> <span id="st-unit">THREADS</span> ·
+            <span id="st-glyphs">0</span> <span data-i18n="glyphs">GLYPHS</span><b id="st-live"> · LIVE</b>
+          </div>
+          <km-mute id="btn-mute-edit" variant="header"></km-mute>
+        </header>
+        <div id="editorWrap">
+          <canvas id="rain"></canvas>
+          <canvas id="sparks"></canvas>
+          <textarea
+            id="code"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+            autocorrect="off"
+            placeholder="type anything.&#10;mash the keys.&#10;let the dog walk over it.&#10;&#10;there are no errors."
+            data-i18n-placeholder="placeholder"
+          ></textarea>
+        </div>
+        <div id="keybar" role="toolbar" aria-label="extra keys" data-i18n-aria-label="extraKeys"></div>
+        <nav id="controls">
+          <km-button id="btn-run" icon="▶" label="run" primary></km-button>
+          <km-button id="btn-mash" icon="🐾" label="mash" title-key="mashTitle"></km-button>
+          <km-button id="btn-clear" icon="✖" label="clear"></km-button>
+          <km-button id="btn-save" icon="💾" label="save"></km-button>
+          <km-button id="btn-load" icon="📂" label="load"></km-button>
+        </nav>
+      </section>
 
-  <!-- ================= PLAY MODE ================= -->
-  <section id="play" hidden>
-    <div id="stageWrap">
-      <canvas id="stage"></canvas>
-      <div id="hud"></div>
-      <div id="log"></div>
-      <div id="boot"></div>
-      <div id="idle"><km-button id="btn-idle-run" variant="idle" icon="▶" label="run" primary></km-button><p data-i18n="idleHint">edit on the left — changes go live while it runs</p></div>
-      <div class="playbtns">
-        <km-mute id="btn-mute" variant="play"></km-mute>
-        <km-button id="btn-restart" variant="play" icon="⟲" title-key="restart"></km-button>
-        <km-button id="btn-stop" variant="play" icon="■" label="edit" primary></km-button>
-      </div>
+      <!-- ================= PLAY MODE ================= -->
+      <section id="play" hidden>
+        <div id="stageWrap">
+          <canvas id="stage"></canvas>
+          <div id="hud"></div>
+          <div id="log"></div>
+          <div id="boot"></div>
+          <div id="idle">
+            <km-button id="btn-idle-run" variant="idle" icon="▶" label="run" primary></km-button>
+            <p data-i18n="idleHint">edit on the left — changes go live while it runs</p>
+          </div>
+          <div class="playbtns">
+            <km-mute id="btn-mute" variant="play"></km-mute>
+            <km-button id="btn-restart" variant="play" icon="⟲" title-key="restart"></km-button>
+            <km-button id="btn-stop" variant="play" icon="■" label="edit" primary></km-button>
+          </div>
+        </div>
+        <div id="codeview"></div>
+      </section>
+
+      <km-drawer id="drawer" title-key="programs"></km-drawer>
+      <km-toast id="toast"></km-toast>
     </div>
-    <div id="codeview"></div>
-  </section>
-
-  <km-drawer id="drawer" title-key="programs"></km-drawer>
-  <km-toast id="toast"></km-toast>
-</div>
-<script type="module" src="/src/main.ts"></script>
-</body>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

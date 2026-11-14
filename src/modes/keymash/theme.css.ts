@@ -5,8 +5,17 @@ import { vars } from '../../styles/theme.css';
 export const keymashTheme = createTheme(vars, {
   rgb: { fg: '57, 255, 122', accent: '255, 46, 136', accent2: '41, 243, 255' },
   color: {
-    bg: '#000800', dim: '#6fbf87', text: '#39ff7a', code: '#b6ffcc', surface: 'rgba(0,0,0,.6)', panel: '#010d05',
-    editorBg: 'rgba(0,12,4,.9)', border: 'rgba(57,255,122,.45)', line: 'rgba(57,255,122,.35)', stageBg: '#000', primaryFg: '#000',
+    bg: '#000800',
+    dim: '#6fbf87',
+    text: '#39ff7a',
+    code: '#b6ffcc',
+    surface: 'rgba(0,0,0,.6)',
+    panel: '#010d05',
+    editorBg: 'rgba(0,12,4,.9)',
+    border: 'rgba(57,255,122,.45)',
+    line: 'rgba(57,255,122,.35)',
+    stageBg: '#000',
+    primaryFg: '#000',
   },
   bg: { app: 'transparent', primary: '#39ff7a', codeview: 'linear-gradient(#000a03, #000)' },
   shadow: {

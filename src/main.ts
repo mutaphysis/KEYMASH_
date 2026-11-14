@@ -29,12 +29,16 @@ ver.title = t('built', { time: BUILD_TIME });
 // ---- keep the layout above the on-screen keyboard ----
 // The app normally fills the screen via CSS (inset: 0), which is what an installed iOS web app
 // reports most reliably. Only while the keyboard covers part of it do we pin it to the visible area.
-let fullH = 0, fullW = 0;
+let fullH = 0,
+  fullW = 0;
 function fitViewport(): void {
   const vv = window.visualViewport;
   const h = vv ? vv.height : window.innerHeight;
   const w = vv ? vv.width : window.innerWidth;
-  if (w !== fullW) { fullW = w; fullH = 0; } // rotated: forget the old height
+  if (w !== fullW) {
+    fullW = w;
+    fullH = 0;
+  } // rotated: forget the old height
   fullH = Math.max(fullH, h);
   const kbd = h < fullH - 120;
   const root = document.documentElement.style;
@@ -48,11 +52,16 @@ function fitViewport(): void {
 window.visualViewport?.addEventListener('resize', fitViewport);
 window.visualViewport?.addEventListener('scroll', fitViewport);
 window.addEventListener('resize', fitViewport);
-window.addEventListener('orientationchange', () => { fullH = 0; setTimeout(fitViewport, 300); });
+window.addEventListener('orientationchange', () => {
+  fullH = 0;
+  setTimeout(fitViewport, 300);
+});
 fitViewport();
 
 // the first touch unlocks audio; later touches revive it (iOS suspends it after calls, Siri, app switches)
-const unlock = () => { audio.init(); };
+const unlock = () => {
+  audio.init();
+};
 window.addEventListener('pointerdown', unlock, { capture: true });
 window.addEventListener('keydown', unlock, { capture: true });
 
@@ -61,22 +70,40 @@ let wake: { release(): Promise<void> } | null = null;
 async function keepAwake(on: boolean): Promise<void> {
   try {
     if (on && !wake && 'wakeLock' in navigator) wake = await navigator.wakeLock.request('screen');
-    if (!on && wake) { const w = wake; wake = null; await w.release(); }
-  } catch (e) { wake = null; /* not allowed or not supported */ }
+    if (!on && wake) {
+      const w = wake;
+      wake = null;
+      await w.release();
+    }
+  } catch (e) {
+    wake = null; /* not allowed or not supported */
+  }
 }
 
 // v0.2.0 registered a caching service worker; it is gone again. Clean up after it.
 try {
-  navigator.serviceWorker?.getRegistrations().then((rs) => rs.forEach((r) => void r.unregister())).catch(() => {});
-  if ('caches' in window) caches.keys().then((ks) => ks.forEach((k) => void caches.delete(k))).catch(() => {});
-} catch (e) { /* not available here */ }
+  navigator.serviceWorker
+    ?.getRegistrations()
+    .then((rs) => rs.forEach((r) => void r.unregister()))
+    .catch(() => {});
+  if ('caches' in window)
+    caches
+      .keys()
+      .then((ks) => ks.forEach((k) => void caches.delete(k)))
+      .catch(() => {});
+} catch (e) {
+  /* not available here */
+}
 
 // ---- the current mode and its player (created on first use) ----
 let mode: ModeDef = modeById(store.mode);
 const players = new Map<string, ModePlayer>();
 function P(): ModePlayer {
   let p = players.get(mode.id);
-  if (!p) { p = mode.player(audio); players.set(mode.id, p); }
+  if (!p) {
+    p = mode.player(audio);
+    players.set(mode.id, p);
+  }
   return p;
 }
 
@@ -94,9 +121,14 @@ const state = { playing: false };
 const editor = new Editor({
   onChange: (v) => {
     if (v && clearBtn.classList.contains('undo')) armUndo(false);
-    status(v); clearTimeout(saveTimer); saveTimer = setTimeout(() => store.setDraft(v), 400);
+    status(v);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => store.setDraft(v), 400);
     // live coding: in split view, edits go straight into the running program
-    if (state.playing && isSplit()) { clearTimeout(swapTimer); swapTimer = setTimeout(() => P().hotSwap(editor.value), 650); }
+    if (state.playing && isSplit()) {
+      clearTimeout(swapTimer);
+      swapTimer = setTimeout(() => P().hotSwap(editor.value), 650);
+    }
   },
   onType: (ch, inputType) => {
     // laid-back sounds while typing, pitched by where the key sits
@@ -114,19 +146,29 @@ const editor = new Editor({
   },
 });
 
-function isSplit(): boolean { return app.classList.contains('split'); }
+function isSplit(): boolean {
+  return app.classList.contains('split');
+}
 function layout(): void {
   // side by side needs room in both directions: tablets and desktops, not a phone on its side
   const split = window.innerWidth >= 820 && window.innerHeight >= 560 && window.innerWidth > window.innerHeight * 1.05;
   app.classList.toggle('split', split);
   app.classList.toggle('playing', state.playing);
-  if (split) { $('edit').hidden = false; $('play').hidden = false; }
-  else { $('edit').hidden = state.playing; $('play').hidden = !state.playing; }
+  if (split) {
+    $('edit').hidden = false;
+    $('play').hidden = false;
+  } else {
+    $('edit').hidden = state.playing;
+    $('play').hidden = !state.playing;
+  }
   editor.active = !$('edit').hidden;
   const rb = $<KmButton>('btn-run');
   rb.icon = split && state.playing ? '■' : '▶';
   rb.text = t(split && state.playing ? 'stop' : 'run');
-  requestAnimationFrame(() => { editor.resize(); P().fit(); });
+  requestAnimationFrame(() => {
+    editor.resize();
+    P().fit();
+  });
 }
 window.addEventListener('resize', layout);
 
@@ -140,7 +182,12 @@ function armUndo(on: boolean): void {
   clearBtn.countdown(on ? UNDO_MS : 0, () => armUndo(false));
 }
 clearBtn.addEventListener('click', () => {
-  if (clearBtn.counting) { editor.value = undo; armUndo(false); editor.ta.focus({ preventScroll: true }); return; }
+  if (clearBtn.counting) {
+    editor.value = undo;
+    armUndo(false);
+    editor.ta.focus({ preventScroll: true });
+    return;
+  }
   if (!editor.value) return;
   undo = editor.value;
   editor.value = '';
@@ -151,10 +198,12 @@ clearBtn.addEventListener('click', () => {
 function applyMode(m: ModeDef): void {
   const root = document.documentElement;
   for (const other of MODES) root.classList.remove(other.theme);
-  mode = m; store.setMode(m.id);
+  mode = m;
+  store.setMode(m.id);
   root.classList.add(m.theme);
   const logo = document.querySelector<HTMLElement>('header .logo')!;
-  logo.textContent = m.name; logo.dataset.text = m.name;
+  logo.textContent = m.name;
+  logo.dataset.text = m.name;
   $<KmModeIcon>('mode-icon').mode = m;
   document.title = `${m.name} — ${m.tagline}`;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m.themeColor);
@@ -180,13 +229,22 @@ applyMode(mode);
 
 /** the mode's own animation: switching in, starting and stopping a program */
 function transition(): void {
-  app.classList.remove(mode.transition); void app.offsetWidth; app.classList.add(mode.transition);
+  app.classList.remove(mode.transition);
+  void app.offsetWidth;
+  app.classList.add(mode.transition);
 }
 
 function run(): void {
-  if (state.playing && isSplit()) { edit(); return; }
+  if (state.playing && isSplit()) {
+    edit();
+    return;
+  }
   let src = editor.value;
-  if (!src.trim()) { src = pawMash(70); editor.value = src; toast(mode.emptyToast); }
+  if (!src.trim()) {
+    src = pawMash(70);
+    editor.value = src;
+    toast(mode.emptyToast);
+  }
   audio.padStop();
   if (!isSplit()) editor.ta.blur();
   transition();
@@ -220,7 +278,8 @@ $('btn-mash').addEventListener('click', () => {
   const tick = () => {
     if (i >= chars.length) return;
     const n = 1 + ((Math.random() * 3) | 0);
-    const chunk = chars.slice(i, i + n).join(''); i += n;
+    const chunk = chars.slice(i, i + n).join('');
+    i += n;
     editor.ta.setSelectionRange(editor.ta.value.length, editor.ta.value.length);
     editor.ta.setRangeText(chunk, editor.ta.value.length, editor.ta.value.length, 'end');
     editor.input({ data: chunk });
@@ -241,13 +300,21 @@ const drawer = $<KmDrawer>('drawer');
 const item = (name: string, sub: string, onPick: () => void, onDelete?: () => void) => KmItem.create({ name, sub, onPick, onDelete });
 
 function openDrawer(): void {
-  const load = (src: string) => () => { editor.value = src; drawer.close(); toast(t('loaded')); };
+  const load = (src: string) => () => {
+    editor.value = src;
+    drawer.close();
+    toast(t('loaded'));
+  };
   const nodes: Node[] = [
     KmDrawer.heading(t('mode')),
     KmSelect.create({
-      label: t('switchHint'), value: mode.id,
+      label: t('switchHint'),
+      value: mode.id,
       options: MODES.map((m) => [m.id, `${m.glyph} ${m.name} — ${m.tagline}`] as const),
-      onPick: (id) => { drawer.close(); switchMode(modeById(id)); },
+      onPick: (id) => {
+        drawer.close();
+        switchMode(modeById(id));
+      },
     }),
     KmDrawer.heading(t('demos')),
     ...mode.demos.map((d) => item(d.name, d.src.replace(/\n/g, ' ⏎ '), load(d.src))),
@@ -255,18 +322,48 @@ function openDrawer(): void {
   ];
   const slots = store.slots();
   if (!slots.length) nodes.push(KmDrawer.empty(t('nothingSaved')));
-  slots.forEach((s, i) => nodes.push(item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => { store.remove(i); openDrawer(); })));
+  slots.forEach((s, i) =>
+    nodes.push(
+      item(s.name, new Date(s.t).toLocaleString() + ' · ' + s.src.replace(/\n/g, ' ⏎ '), load(s.src), () => {
+        store.remove(i);
+        openDrawer();
+      }),
+    ),
+  );
   for (const sec of mode.drawer?.({ audio, item, refresh: openDrawer }) ?? []) nodes.push(KmDrawer.heading(sec.title), ...sec.items);
-  nodes.push(KmDrawer.heading(t('share')), item(t('copy'), t('copySub'), async () => {
-    try { await navigator.clipboard.writeText(editor.value); toast(t('copied')); } catch (e) { toast(t('copyBlocked')); }
-  }));
+  nodes.push(
+    KmDrawer.heading(t('share')),
+    item(t('copy'), t('copySub'), async () => {
+      try {
+        await navigator.clipboard.writeText(editor.value);
+        toast(t('copied'));
+      } catch (e) {
+        toast(t('copyBlocked'));
+      }
+    }),
+  );
   // settings share one row: reload on the left, language on the right;
   // every string is resolved at startup, so a language change reloads (the text is kept)
-  const langs = [['auto', '🌐 ' + t('langAuto', { name: LANG_NAMES[systemLang] })], ['en', '🌐 ' + LANG_NAMES.en], ['de', '🌐 ' + LANG_NAMES.de]] as const;
-  nodes.push(KmDrawer.heading('APP · ' + VERSION_LABEL), KmDrawer.split(
-    item(t('reload'), t('reloadSub'), reloadApp),
-    KmSelect.create<LangPref>({ label: t('language'), options: langs, value: langPref, onPick: (p) => { setLangPref(p); reloadApp(); } }),
-  ));
+  const langs = [
+    ['auto', '🌐 ' + t('langAuto', { name: LANG_NAMES[systemLang] })],
+    ['en', '🌐 ' + LANG_NAMES.en],
+    ['de', '🌐 ' + LANG_NAMES.de],
+  ] as const;
+  nodes.push(
+    KmDrawer.heading('APP · ' + VERSION_LABEL),
+    KmDrawer.split(
+      item(t('reload'), t('reloadSub'), reloadApp),
+      KmSelect.create<LangPref>({
+        label: t('language'),
+        options: langs,
+        value: langPref,
+        onPick: (p) => {
+          setLangPref(p);
+          reloadApp();
+        },
+      }),
+    ),
+  );
   drawer.open(nodes);
 }
 
@@ -280,18 +377,42 @@ function reloadApp(): void {
   else location.reload();
 }
 
-function toast(text: string): void { $<KmToast>('toast').show(text); }
+function toast(text: string): void {
+  $<KmToast>('toast').show(text);
+}
 
 // pause audio when the page is hidden
 document.addEventListener('visibilitychange', () => {
   if (!audio.ctx) return;
-  if (document.hidden) audio.ctx.suspend().catch(() => {}); else audio.ctx.resume().catch(() => {});
-  if (!document.hidden && state.playing) { wake = null; void keepAwake(true); } // the lock is dropped when hidden
+  if (document.hidden) audio.ctx.suspend().catch(() => {});
+  else audio.ctx.resume().catch(() => {});
+  if (!document.hidden && state.playing) {
+    wake = null;
+    void keepAwake(true);
+  } // the lock is dropped when hidden
 });
 
 // handle for debugging and the browser tests
-const KEYMASH = { editor, players, audio, run, edit, state, switchMode: (id?: string) => switchMode(id ? modeById(id) : nextMode(mode)), get player() { return P(); }, get mode() { return mode.id; } };
-declare global { interface Window { KEYMASH: typeof KEYMASH } }
+const KEYMASH = {
+  editor,
+  players,
+  audio,
+  run,
+  edit,
+  state,
+  switchMode: (id?: string) => switchMode(id ? modeById(id) : nextMode(mode)),
+  get player() {
+    return P();
+  },
+  get mode() {
+    return mode.id;
+  },
+};
+declare global {
+  interface Window {
+    KEYMASH: typeof KEYMASH;
+  }
+}
 window.KEYMASH = KEYMASH;
 
 // everything is up: take the "waiting for JavaScript" message away

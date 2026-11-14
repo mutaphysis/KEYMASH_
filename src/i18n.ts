@@ -23,12 +23,22 @@ export type LangPref = Lang | 'auto';
 const LANG_KEY = 'keymash.lang.v1';
 
 function readPref(): LangPref {
-  try { const v = localStorage.getItem(LANG_KEY); return v === 'en' || v === 'de' ? v : 'auto'; } catch (e) { return 'auto'; }
+  try {
+    const v = localStorage.getItem(LANG_KEY);
+    return v === 'en' || v === 'de' ? v : 'auto';
+  } catch (e) {
+    return 'auto';
+  }
 }
 
 /** Takes effect on the next load: every string is resolved once, at startup. */
 export function setLangPref(p: LangPref): void {
-  try { if (p === 'auto') localStorage.removeItem(LANG_KEY); else localStorage.setItem(LANG_KEY, p); } catch (e) { /* storage blocked */ }
+  try {
+    if (p === 'auto') localStorage.removeItem(LANG_KEY);
+    else localStorage.setItem(LANG_KEY, p);
+  } catch (e) {
+    /* storage blocked */
+  }
 }
 
 export const langPref: LangPref = readPref();
@@ -70,7 +80,9 @@ export function defineMessages<E extends Record<string, Entry>>(en: E, de: Trans
       const p = M[key] as Plural;
       return fill(plural.select(n) === 'one' ? p.one : p.other, { n, ...vars });
     },
-    tl(key) { return M[key] as readonly string[]; },
+    tl(key) {
+      return M[key] as readonly string[];
+    },
   };
 }
 
@@ -120,7 +132,7 @@ const de: Translation<typeof en> = {
   modeAria: 'nächster Modus',
   modeTitle: 'tippen für den nächsten Modus',
   soundToggle: 'Ton an/aus',
-  placeholder: 'tipp irgendwas.\nhau in die tasten.\nlass den hund drüberlaufen.\n\nfehler gibt\'s hier nicht.',
+  placeholder: "tipp irgendwas.\nhau in die tasten.\nlass den hund drüberlaufen.\n\nfehler gibt's hier nicht.",
   extraKeys: 'Extratasten',
   run: 'LOS',
   stop: 'STOPP',
@@ -137,7 +149,7 @@ const de: Translation<typeof en> = {
   built: 'gebaut {time}',
   glyphs: 'ZEICHEN',
   saved: 'GESICHERT · PLATZ {n}',
-  storageBlocked: 'SPEICHER GESPERRT — KOPIER\'S LIEBER',
+  storageBlocked: "SPEICHER GESPERRT — KOPIER'S LIEBER",
   loaded: 'GELADEN',
   demos: 'DEMOS',
   savedHere: 'AUF DEINEM GERÄT',
@@ -146,7 +158,7 @@ const de: Translation<typeof en> = {
   switchHint: 'Modus — oder tipp oben aufs Symbol',
   share: 'TEILEN',
   copy: '📋 Programm kopieren',
-  copySub: 'füg\'s überall ein — jeder Text ist ein Programm',
+  copySub: "füg's überall ein — jeder Text ist ein Programm",
   copied: 'KOPIERT',
   copyBlocked: 'KOPIEREN GESPERRT',
   reload: '⟳ App neu laden',

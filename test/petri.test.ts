@@ -7,7 +7,20 @@ import { mulberry32 } from '../src/lang/rng';
 const POOL = [
   ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZäöü0123456789',
   ...'!?.,;:~-_|/\\*#@$%^+=<>&(){}[]`\'" \n\n\t',
-  '🌿', '☀️', '💧', '🫧', '🍄', '🦠', '❄️', '🔥', '☠️', '🍬', '💞', '🐶', '漢', '\uD800',
+  '🌿',
+  '☀️',
+  '💧',
+  '🫧',
+  '🍄',
+  '🦠',
+  '❄️',
+  '🔥',
+  '☠️',
+  '🍬',
+  '💞',
+  '🐶',
+  '漢',
+  '\uD800',
 ];
 const prog = (r: () => number, n: number) => Array.from({ length: n }, () => POOL[Math.floor(r() * POOL.length)]).join('');
 
@@ -27,7 +40,10 @@ test('every line is a species (unless it has no letters), every species has a na
   expect(c.lines.length).toBe(4);
   expect(c.species.length).toBe(3);
   expect(c.lines[1]!.species).toBeNull();
-  for (const s of c.species) { expect(s.name).toMatch(/^[A-Z][a-z]+ [a-z]+$/); expect(s.size).toBeGreaterThan(5); }
+  for (const s of c.species) {
+    expect(s.name).toMatch(/^[A-Z][a-z]+ [a-z]+$/);
+    expect(s.size).toBeGreaterThan(5);
+  }
   expect(c.species[1]!.diet).toBe('hunter');
   expect(pronounce('jjjjkkkkllll', mulberry32(1))).toMatch(/^j[aeiou]?k/);
 });
@@ -44,7 +60,10 @@ test('fuzz: random cultures for 90 s each never break the world', () => {
   const r = mulberry32(3);
   for (let i = 0; i < 40; i++) {
     const p = new Petri(prog(r, Math.floor(r() * 160)));
-    for (let t = 0; t < 90 * 10; t++) { p.tick(0.1); if (t % 50 === 0) check(p); }
+    for (let t = 0; t < 90 * 10; t++) {
+      p.tick(0.1);
+      if (t % 50 === 0) check(p);
+    }
     check(p);
   }
 }, 120000);
