@@ -41,7 +41,12 @@ export interface Species {
   lobes: number;
   /** a hybrid (see hybrid.ts): the eater's species and the one whose genes it took up; null for a line's own species */
   parents: [Species, Species] | null;
+  /** a drifted genome that still counts as this species (SPECIATION 'drift' in sim.ts); null for a species itself */
+  variantOf: Species | null;
 }
+
+/** the species a genome counts as: census, kin, extinction go by this */
+export const kindOf = (sp: Species): Species => sp.variantOf ?? sp;
 
 export type FoodKind = 'algae' | 'sugar' | 'crumb' | 'debris';
 export type Act =
@@ -312,6 +317,7 @@ function genome(text: string, toks: Token[], line: number, usedHues: Set<number>
     flagella: body === 'flagellate' ? 1 + Math.min(2, has('~')) : body === 'spirillum' ? 2 : body === 'bacillus' && seed % 3 === 0 ? 1 : 0,
     lobes: 3 + (seed % 3),
     parents: null,
+    variantOf: null,
   };
 }
 

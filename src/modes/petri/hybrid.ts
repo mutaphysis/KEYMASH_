@@ -42,6 +42,17 @@ function differs(a: Species, b: Species, g: Gene): boolean {
   return a[g] !== b[g];
 }
 
+/** how far two genomes are apart, 0 (the same) … 1 (every gene at the other end): the mean over all genes */
+export function genomeDistance(a: Species, b: Species): number {
+  let sum = 0;
+  for (const g of GENES) {
+    if (g === 'hue2') sum += Math.abs(((((b.hue2 - a.hue2) % 360) + 540) % 360) - 180) / 180;
+    else if (isRange(g)) sum += Math.min(1, Math.abs(a[g] - b[g]) / (RANGE[g][1] - RANGE[g][0]));
+    else sum += a[g] === b[g] ? 0 : 1;
+  }
+  return sum / GENES.length;
+}
+
 export interface Hybrid {
   sp: Species;
   /** the genes that came from the donor */

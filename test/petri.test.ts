@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { readCulture, pronounce } from '../src/modes/petri/genome';
+import { readCulture, pronounce, kindOf } from '../src/modes/petri/genome';
 import type { Species } from '../src/modes/petri/genome';
 import { Petri } from '../src/modes/petri/culture';
 import { hybridise } from '../src/modes/petri/hybrid';
@@ -124,4 +124,25 @@ test('hybrids live on: their daughters inherit the new genome, and only a few hy
   }
   expect(hybrids).toBeGreaterThan(0);
   expect(hybridBirths).toBeGreaterThan(0);
+});
+
+test("speciation 'drift': a meal changes the genome but not the species, until it has drifted far enough to split off", () => {
+  const p = new Petri('jfkdlsöä asdfghjkl JJJJJJJJJ\nkkkkk ddddd h h hhhh 🌿 5\nWOOF!!! ölkjhg qqqqqqq');
+  p.world.speciation = 'drift';
+  let variants = 0,
+    splits = 0;
+  for (let t = 0; t < 300 * 10; t++) {
+    for (const e of p.tick(0.1)) if (e.type === 'hybrid') splits++;
+    for (const c of p.world.cells) {
+      const kind = c.sp.variantOf;
+      if (!kind) continue;
+      variants++;
+      expect(c.sp.name).toBe(kind.name); // still one of its kind
+      expect(kind.variantOf).toBeNull();
+    }
+  }
+  // the census counts variants with their species
+  for (const [kind, n] of p.world.counts) expect(p.world.cells.filter((c) => kindOf(c.sp) === kind).length).toBe(n);
+  expect(variants).toBeGreaterThan(0);
+  expect(splits).toBeGreaterThan(0);
 });

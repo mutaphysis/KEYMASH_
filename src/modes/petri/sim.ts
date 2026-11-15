@@ -1,6 +1,7 @@
 // PETRI_ simulation: a little pond in a dish. Pure (no DOM, no audio), seeded, fixed time step.
+import { kindOf } from './genome';
 import type { Species, FoodKind } from './genome';
-import { hybridise } from './hybrid';
+import { genomeDistance, hybridise } from './hybrid';
 import type { Gene } from './hybrid';
 import { mulberry32 } from '../../lang/rng';
 
@@ -18,6 +19,16 @@ export const GENES_ENGULF = 0.4;
 export const GENES_DEBRIS = 0.06;
 /** at most this many hybrid species live at once; past it, meals are only food */
 export const MAX_HYBRIDS = 6;
+/**
+ * How hybrid species arise; switch SPECIATION to try the other way.
+ * 'meal': every meal that passes genes on founds a new species right away.
+ * 'drift': the genes change the cell's genome, but it stays a variant of its species (same name, same census row,
+ * still kin) until it has drifted far from that species' genome: from SPLIT_DRIFT[0] on, a meal that passes genes on
+ * may split it off as a new species, certainly from SPLIT_DRIFT[1] (genomeDistance() in hybrid.ts, 0 … 1).
+ */
+export type Speciation = 'meal' | 'drift';
+export const SPECIATION: Speciation = 'meal';
+export const SPLIT_DRIFT = [0.04, 0.2] as const;
 /** Swimmers turn first, then swim along their body axis (flagella and cilia push along it). */
 /** how far each body reaches beyond its radius as drawn (ciliates and rods are long), for collisions */
 const EXTENT: Record<string, number> = {
@@ -150,6 +161,8 @@ export class World {
   rng: () => number;
   counts = new Map<Species, number>();
   seen = new Set<Species>();
+  /** see SPECIATION */
+  speciation: Speciation = SPECIATION;
   private nextId = 1;
   private ev: SimEvent[] = [];
 
@@ -172,7 +185,7 @@ export class World {
   }
 
   population(sp?: Species): number {
-    return sp ? (this.counts.get(sp) ?? 0) : this.cells.length;
+    return sp ? (this.counts.get(kindOf(sp)) ?? 0) : this.cells.length;
   }
   /** cells / CAPACITY, updated every step */
   crowd = 0;
@@ -238,7 +251,7 @@ export class World {
     y: number,
     o: { energy?: number; gen?: number; hue?: number; size?: number; speed?: number } = {},
   ): Cell | null {
-    if (this.cells.length >= MAX_CELLS || (this.counts.get(sp) ?? 0) >= MAX_PER_SPECIES) return null;
+    if (this.cells.length >= MAX_CELLS || (this.counts.get(kindOf(sp)) ?? 0) >= MAX_PER_SPECIES) return null;
     [x, y] = this.inside(x, y, sp.size + 8);
     const size = o.size ?? sp.size * (0.9 + this.r() * 0.2);
     const c: Cell = {
@@ -281,10 +294,11 @@ export class World {
       fleeCool: 0,
     };
     this.cells.push(c);
-    this.counts.set(sp, (this.counts.get(sp) ?? 0) + 1);
-    if (!this.seen.has(sp)) {
-      this.seen.add(sp);
-      this.emit({ type: 'first', sp });
+    const kind = kindOf(sp);
+    this.counts.set(kind, (this.counts.get(kind) ?? 0) + 1);
+    if (!this.seen.has(kind)) {
+      this.seen.add(kind);
+      this.emit({ type: 'first', sp: kind });
     }
     return c;
   }
@@ -457,7 +471,7 @@ export class World {
     const before = new Map(this.counts);
     this.cells = this.cells.filter((c) => !c.gone);
     this.counts.clear();
-    for (const c of this.cells) this.counts.set(c.sp, (this.counts.get(c.sp) ?? 0) + 1);
+    for (const c of this.cells) this.counts.set(kindOf(c.sp), (this.counts.get(kindOf(c.sp)) ?? 0) + 1);
     for (const [sp, n] of before) if (n > 0 && !this.counts.get(sp)) this.emit({ type: 'extinct', sp });
     return this.ev;
   }
@@ -500,7 +514,7 @@ export class World {
       for (const o of this.cells) {
         if (o === c || o.gone || o.state === 'eaten') continue;
         const d = (o.x - c.x) ** 2 + (o.y - c.y) ** 2;
-        if (o.sp !== sp) {
+        if (kindOf(o.sp) !== kindOf(sp)) {
           if (
             (sp.diet === 'hunter' || sp.diet === 'omni') &&
             hungry &&
@@ -559,7 +573,7 @@ export class World {
         cy = 0,
         n = 0;
       for (const o of this.cells) {
-        if (o === c || o.sp !== sp || o.state !== 'live') continue;
+        if (o === c || kindOf(o.sp) !== kindOf(sp) || o.state !== 'live') continue;
         const ox = o.x - c.x,
           oy = o.y - c.y,
           d = Math.hypot(ox, oy);
@@ -731,7 +745,7 @@ export class World {
       c.age > 10 &&
       !c.sick &&
       this.cells.length < MAX_CELLS &&
-      (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES
+      (this.counts.get(kindOf(sp)) ?? 0) < MAX_PER_SPECIES
     ) {
       c.state = 'dividing';
       c.t = 0;
@@ -745,26 +759,41 @@ export class World {
     }
   }
 
-  /** a meal may pass genes on: the eater becomes a new hybrid species, its daughters inherit it */
+  /** a meal may pass genes on: the eater's genome changes (see SPECIATION), its daughters inherit it */
   private takeUp(c: Cell, donor: Species, chance: number): void {
-    const from = c.sp;
-    if (donor === from || c.state !== 'live' || this.r() >= chance) return;
+    const from = c.sp,
+      kind = kindOf(from);
+    if (kindOf(donor) === kind || c.state !== 'live' || this.r() >= chance) return;
     let hybrids = 0;
     for (const [s, n] of this.counts) if (s.parents && n > 0) hybrids++;
-    if (hybrids >= MAX_HYBRIDS) return;
+    const full = hybrids >= MAX_HYBRIDS;
+    if (full && this.speciation === 'meal') return;
     const h = hybridise(from, donor, this.rng, (name) => [...this.seen].some((s) => s.name === name));
     if (!h) return;
     const sp = h.sp;
+    const [d0, d1] = SPLIT_DRIFT;
+    const split = this.speciation === 'meal' || (!full && this.r() < (genomeDistance(sp, kind) - d0) / (d1 - d0));
+    if (split) {
+      sp.variantOf = null;
+      sp.parents = [kind, kindOf(donor)];
+    } else {
+      // still one of its kind: it keeps the species' name, census row and seed (field notes go by it)
+      sp.variantOf = kind;
+      sp.parents = kind.parents;
+      sp.name = kind.name;
+      sp.seed = kind.seed;
+    }
     // the cell's own size and speed (they drift from the species' at every division) follow the genes
     c.size = Math.max(5, Math.min(40, c.size * (sp.size / from.size)));
     c.speed = Math.max(3, c.speed * (sp.speed / from.speed));
     c.hue = sp.hue; // shownHue eases toward it
     c.sp = sp;
     c.food = c.prey = c.threat = c.partner = null; // a new diet looks around afresh
-    this.counts.set(from, (this.counts.get(from) ?? 1) - 1);
+    if (!split) return;
+    this.counts.set(kind, (this.counts.get(kind) ?? 1) - 1);
     this.counts.set(sp, 1);
     this.seen.add(sp);
-    this.emit({ type: 'hybrid', x: c.x, y: c.y, sp, from, donor, genes: h.genes });
+    this.emit({ type: 'hybrid', x: c.x, y: c.y, sp, from: kind, donor: kindOf(donor), genes: h.genes });
   }
 
   private divide(c: Cell, dt: number, born: Cell[]): void {
@@ -811,7 +840,7 @@ export class World {
       life: sp.life * (0.8 + this.r() * 0.4),
     };
     born.push(b);
-    this.counts.set(sp, (this.counts.get(sp) ?? 0) + 1);
+    this.counts.set(kindOf(sp), (this.counts.get(kindOf(sp)) ?? 0) + 1);
     this.emit({ type: 'divide', x: c.x - ax, y: c.y - ay, sp, gen: c.gen, size: c.size, axis: c.axis });
   }
 

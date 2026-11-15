@@ -104,6 +104,12 @@ genes again. Eating its own kind passes nothing on, and at most 6 hybrid species
 once; past that, meals are only food. A hybrid belongs to no line: the code does not
 inoculate it, and a live edit leaves it alone.
 
+The code has a second way for hybrids to arise, switched off for now: with `SPECIATION =
+'drift'` in `sim.ts` a meal only changes the eater's genome, and the cell stays one of its
+species (same name, census row and kin) until its genome has drifted far from the species'.
+From then on each meal that passes genes on may split it off as a new hybrid, the more likely
+the further it has drifted (`SPLIT_DRIFT`).
+
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over
 the dish; the microscope in front (vignette, rim) is drawn once per dish size. Cilia, shell ribs

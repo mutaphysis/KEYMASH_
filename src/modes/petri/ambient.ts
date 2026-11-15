@@ -4,6 +4,7 @@
 import type { AudioEngine } from '../../engine/audio';
 import type { SimEvent } from './sim';
 import { DISH_R, DIVIDE_TIME } from './sim';
+import { kindOf } from './genome';
 import type { Species, Body } from './genome';
 import { mulberry32 } from '../../lang/rng';
 import { t, tl } from './messages';
@@ -856,7 +857,9 @@ export class Ambient {
       }
       case 'touch':
         if (this.gap('touch', now, 1.1))
-          play('touch', (t) => this.touchSound(this.tone(ev.x, ev.size) - 12, t, Math.min(1, 0.35 + ev.speed / 60), pan, ev.a === ev.b));
+          play('touch', (t) =>
+            this.touchSound(this.tone(ev.x, ev.size) - 12, t, Math.min(1, 0.35 + ev.speed / 60), pan, kindOf(ev.a) === kindOf(ev.b)),
+          );
         break;
       case 'flee':
         if (this.gap('flee', now, 2)) play('flee', (t) => this.fleeSound(this.tone(ev.x, ev.size), t, pan));
