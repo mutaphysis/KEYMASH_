@@ -9,15 +9,20 @@ import { anchors, distanceTransform, FIELD_EXT, FIELD_N } from './shapes';
 import type { Field } from './shapes';
 import { program, uniforms, target, freeTarget, perspective, lookAt, mul } from './gl';
 import type { GL, Target, Uniforms, Vec3 } from './gl';
-import { FULL_VS, SCENE_FS, CRUMB_VS, CRUMB_FS, BLIT_FS } from './shader';
+import { FULL_VS, SCENE_FS, CRUMB_VS, CRUMB_FS, BLIT_FS, MOTE_VS, MOTE_FS } from './shader';
 import { ROUNDED } from './theme.css';
 
 const FOV = (38 * Math.PI) / 180;
 const TAN = Math.tan(FOV / 2);
 const DEG = Math.PI / 180;
 const TEXEL = (2 * FIELD_EXT) / FIELD_N;
-/** pixels of the scene target; a slow device steps down, never up */
-const BUDGETS = [420000, 300000, 210000, 150000];
+/** pixels of the scene target; a slow device steps down, never up. A desktop starts at the top, a touch screen at TOUCH. */
+const BUDGETS = [1400000, 900000, 600000, 420000, 300000, 210000, 150000];
+const TOUCH = 4;
+/** flour and dust in the air */
+const MOTES = 140;
+/** above this a frame must come within 24 ms or the target steps down; at and below it only a frame slower than 58 ms does (phones are fine at 30 fps) */
+const SHARP = 420000;
 const ELEV: Record<Stage, number> = {
   drop: 30,
   roll: 40,
@@ -78,6 +83,9 @@ export class CookieRenderer {
   private crumbU: Uniforms = {};
   private blit: WebGLProgram | null = null;
   private blitU: Uniforms = {};
+  private mote: WebGLProgram | null = null;
+  private moteU: Uniforms = {};
+  private moteVao: WebGLVertexArrayObject | null = null;
   private tgt: Target | null = null;
   private budget: number;
   private atlas: WebGLTexture | null = null;
@@ -96,10 +104,12 @@ export class CookieRenderer {
   private cam: Cam | null = null;
   private lastNow = 0;
   private times: number[] = [];
+  /** the band of the screen that stays sharp (0 bottom .. 1 top), eased like the camera; null: not placed yet */
+  private band: [number, number] | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.cv = canvas;
-    this.budget = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches ? 0 : 1;
+    this.budget = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches ? 0 : TOUCH;
     this.gl = canvas.getContext('webgl2', {
       alpha: false,
       antialias: false,
@@ -129,6 +139,8 @@ export class CookieRenderer {
     this.crumbU = uniforms(gl, this.crumb);
     this.blit = program(gl, FULL_VS, BLIT_FS);
     this.blitU = uniforms(gl, this.blit);
+    this.mote = program(gl, MOTE_VS, MOTE_FS);
+    this.moteU = uniforms(gl, this.mote);
     this.tgt = null;
 
     this.atlas = gl.createTexture();
@@ -155,6 +167,12 @@ export class CookieRenderer {
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, 32, (loc - 1) * 16);
       gl.vertexAttribDivisor(loc, 1);
     }
+    // the motes need only the quad: everything else they work out from their index
+    this.moteVao = gl.createVertexArray();
+    gl.bindVertexArray(this.moteVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
   }
 
@@ -202,6 +220,40 @@ export class CookieRenderer {
   snap(b: Bakery): void {
     this.greetPx = this.reserveGreet;
     [this.el, this.dist] = this.aim(b);
+    this.band = null;
+  }
+
+  /**
+   * Tilt-shift: the band of the screen that stays sharp is the middle of what the cookies (or the dough)
+   * cover; their far and near edges soften a little and the tray beyond blurs like a miniature's.
+   */
+  private focus(b: Bakery, cam: Cam): [number, number] {
+    const L = b.look;
+    // their nearest and furthest points; up the screen is back on the tray
+    const s = 0.9 * b.recipe.size;
+    const pts: Vec3[] =
+      L.gap < 2
+        ? [
+            [0, L.ballY, 0],
+            [0, 0, -0.8 * b.sheetR],
+            [0, 0, 0.8 * b.sheetR],
+          ]
+        : b.cookies.flatMap((c): Vec3[] => [
+            [c.x, b.top, c.z - s],
+            [c.x, b.top, c.z + s],
+          ]);
+    let lo = 1;
+    let hi = 0;
+    const m = cam.viewProj;
+    for (const [x, y, z] of pts) {
+      const w = m[3]! * x + m[7]! * y + m[11]! * z + m[15]!;
+      const v = ((m[1]! * x + m[5]! * y + m[9]! * z + m[13]!) / Math.max(1e-3, w)) * 0.5 + 0.5;
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    const mid = (lo + hi) / 2;
+    const half = 0.3 * (hi - lo) + 0.02;
+    return [mid - half, mid + half];
   }
 
   private reserve(): number {
@@ -310,7 +362,7 @@ export class CookieRenderer {
       if (this.times.length >= 30) {
         const mean = this.times.reduce((s, v) => s + v, 0) / this.times.length;
         this.times = [];
-        if (mean > 58 && this.budget < BUDGETS.length - 1) this.budget++;
+        if (mean > (BUDGETS[this.budget]! > SHARP ? 24 : 58) && this.budget < BUDGETS.length - 1) this.budget++;
       }
     }
     this.lastNow = now;
@@ -322,6 +374,10 @@ export class CookieRenderer {
     this.el += (el - this.el) * f;
     this.dist += (dist - this.dist) * f;
     const cam = (this.cam = this.camera());
+    const [lo, hi] = this.focus(b, cam);
+    if (!this.band) this.band = [lo, hi];
+    this.band[0] += (lo - this.band[0]) * f;
+    this.band[1] += (hi - this.band[1]) * f;
 
     if (this.decoBatch !== b.batch || this.decoRecipe !== b.recipe) this.pipeDeco(b);
     const tgt = this.fitTarget(); // before the atlas is bound: a new target binds its own texture
@@ -345,6 +401,7 @@ export class CookieRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     this.drawCrumbs(gl, b, cam);
+    this.drawMotes(gl, b, cam);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.cv.width, this.cv.height);
@@ -354,6 +411,9 @@ export class CookieRenderer {
     gl.bindTexture(gl.TEXTURE_2D, tgt.tex);
     gl.uniform1i(this.blitU.uTex!, 0);
     gl.uniform2f(this.blitU.uRes!, this.cv.width, this.cv.height);
+    gl.uniform2f(this.blitU.uFocus ?? null, this.band[0], this.band[1]);
+    gl.uniform1f(this.blitU.uHeat ?? null, this.gentle ? 0 : b.look.heat);
+    gl.uniform1f(this.blitU.uTime ?? null, this.time);
     gl.bindVertexArray(this.fullVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
@@ -500,6 +560,27 @@ export class CookieRenderer {
     const piped = PATTERN_KIND[r.pattern] > 0 || r.border || r.letters.length > 0 || r.face === 'smile' || r.face === 'frown';
     f1('uPipeOn', piped ? 1 : 0);
     i1('uField', 0);
+  }
+
+  /** the motes, added onto the scene where nothing stands in front of them; they hold still for reduced motion */
+  private drawMotes(gl: GL, b: Bakery, cam: Cam): void {
+    const u = this.moteU;
+    gl.useProgram(this.mote);
+    gl.bindVertexArray(this.moteVao);
+    gl.uniformMatrix4fv(u.uViewProj ?? null, false, cam.viewProj);
+    gl.uniform3f(u.uCamRight ?? null, cam.right[0], cam.right[1], cam.right[2]);
+    gl.uniform3f(u.uCamUp ?? null, cam.up[0], cam.up[1], cam.up[2]);
+    gl.uniform1f(u.uTime ?? null, this.gentle ? 0 : this.time);
+    gl.uniform1f(u.uSpot ?? null, b.sheetR + 1);
+    gl.uniform1f(u.uHeat ?? null, b.look.heat);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.depthMask(false);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, MOTES);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
   }
 
   /** blob shadows on the tray first, then the crumbs themselves, both against the scene's depth */

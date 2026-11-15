@@ -80,8 +80,9 @@ the words that decide it. At the end the message appears under the cookies: big 
 the cookie's colours, hopping a little, with "tap to bite!" under it until the first bite.
 
 The cookies of a batch differ a little in outline and turn, and each bakes up with lumps of its
-own. With `prefers-reduced-motion` the camera stands still, the dough does not bounce and the
-oven air does not shimmer.
+own; a burnt one is dark all the way through. Flour and dust drift in the light over the tray, and
+hot air ripples over the picture while the oven is on. With `prefers-reduced-motion` the camera
+stands still, the dough does not bounce, the motes hang still and the oven air does not ripple.
 
 Editing while it runs (split view): a changed recipe sweeps the tray and bakes again from the
 start.
@@ -118,5 +119,8 @@ burnt batch comes out of the oven to a sad trombone.
 
 One raymarched distance field in hand-written WebGL2 (`render.ts`, `shader.ts`): soft shadows,
 ambient occlusion and procedural materials, no textures. Each cookie's outline, its bites and
-its piped letters live in a small distance texture (`shapes.ts`, `Field`). The scene renders
-into a smaller target that steps down by itself when frames take too long.
+its piped letters live in a small distance texture (`shapes.ts`, `Field`). Crumbs and the motes in
+the air are instanced on top of it. The scene renders into a smaller target (up to 1.4 million
+pixels on a desktop, 300 000 on a touch screen) that steps down by itself when frames take too
+long; stretching it over the canvas adds the heat haze and a tilt-shift blur: the band the cookies
+sit in stays sharp, the tray beyond blurs like a miniature's.
