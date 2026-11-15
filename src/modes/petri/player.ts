@@ -241,6 +241,9 @@ export class MicroPlayer {
       case 'extinct':
         this.note(`${at} · ${t('noteExtinct', { name: ev.sp.name })}`, true);
         break;
+      case 'hybrid':
+        this.note(`${at} · ${t('noteHybrid', { from: ev.from.name, donor: ev.donor.name, name: ev.sp.name })}`, true);
+        break;
       default:
         break;
     }
@@ -274,12 +277,13 @@ export class MicroPlayer {
     this.follow.show(this.spans[g0], line);
   }
 
-  /** census: each species with its colour and head count */
+  /** census: each species with its colour and head count; hybrids while they live */
   private drawHud(): void {
     const p = this.petri;
     if (!p) return;
     const W = p.world;
-    const rows = p.species
+    const hybrids = [...W.counts.keys()].filter((sp) => sp.parents && W.population(sp) > 0);
+    const rows = [...p.species, ...hybrids]
       .map((sp) => ({ sp, n: W.population(sp) }))
       .sort((a, b) => b.n - a.n)
       .slice(0, 5);

@@ -8,6 +8,7 @@ import { hash, mulberry32 } from '../../lang/rng';
 export type Body = 'amoeba' | 'bacillus' | 'coccus' | 'spirillum' | 'diatom' | 'ciliate' | 'flagellate' | 'volvox';
 export type Diet = 'grazer' | 'hunter' | 'photo' | 'omni';
 export const BODIES: Body[] = ['amoeba', 'bacillus', 'coccus', 'spirillum', 'diatom', 'ciliate', 'flagellate', 'volvox'];
+export const DIETS: Diet[] = ['grazer', 'hunter', 'photo', 'omni'];
 
 export interface Species {
   /** stable identity: hash of the line text, so a live edit keeps unchanged species alive */
@@ -38,6 +39,8 @@ export interface Species {
   cilia: boolean;
   flagella: number;
   lobes: number;
+  /** a hybrid (see hybrid.ts): the eater's species and the one whose genes it took up; null for a line's own species */
+  parents: [Species, Species] | null;
 }
 
 export type FoodKind = 'algae' | 'sugar' | 'crumb' | 'debris';
@@ -308,6 +311,7 @@ function genome(text: string, toks: Token[], line: number, usedHues: Set<number>
     cilia: body === 'ciliate',
     flagella: body === 'flagellate' ? 1 + Math.min(2, has('~')) : body === 'spirillum' ? 2 : body === 'bacillus' && seed % 3 === 0 ? 1 : 0,
     lobes: 3 + (seed % 3),
+    parents: null,
   };
 }
 

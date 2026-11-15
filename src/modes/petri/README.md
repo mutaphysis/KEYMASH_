@@ -83,6 +83,25 @@ separates, a wall grows in from the middle), ciliates split front to back. Dying
 swell, grey, their membrane breaks up and their contents drift away. Field notes
 record the firsts: first division, first engulfing, extinctions.
 
+## Taking up genes
+A meal can change the eater's genome. Engulfing a live cell passes genes on in 40 % of
+meals, a piece of the debris a dead cell leaves in 6 % (debris carries its cell's genome
+until it is eaten or rots). The eater takes up one to three genes that differ from its own:
+numbers (size, speed, sense, agility, toxin, armour, glow, colony, energy to divide, life
+span, mutation rate, colour saturation, wobble, organelles, lobes, flagella, second colour)
+move a third to half of the way toward the donor's; body plan, diet, spores, symbiosis and
+cilia are taken over outright. Each may mutate at the eater's mutation rate (`?` in its
+line). The main colour moves toward the donor's, too.
+
+The eater becomes a new species right away, a hybrid named the way botanists write them:
+its own genus and an epithet spliced from both parents (*Hunterophyta × grosa*). Its
+daughters inherit the new genome. A hybrid is introduced like any newcomer, gets a field
+note (who took up whose genes), a short phrase on the eater's, donor's and its own
+instrument, a place in the census while it lives, and can go extinct. Hybrids can take up
+genes again. Eating its own kind passes nothing on, and at most 6 hybrid species live at
+once; past that, meals are only food. A hybrid belongs to no line: the code does not
+inoculate it, and a live edit leaves it alone.
+
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over
 the dish; the microscope in front (vignette, rim) is drawn once per dish size. Cilia, shell ribs

@@ -1,7 +1,9 @@
 import { test, expect } from 'bun:test';
 import { readCulture, pronounce } from '../src/modes/petri/genome';
+import type { Species } from '../src/modes/petri/genome';
 import { Petri } from '../src/modes/petri/culture';
-import { DISH_R, MAX_CELLS, MAX_FOOD } from '../src/modes/petri/sim';
+import { hybridise } from '../src/modes/petri/hybrid';
+import { DISH_R, MAX_CELLS, MAX_FOOD, MAX_HYBRIDS } from '../src/modes/petri/sim';
 import { mulberry32 } from '../src/lang/rng';
 
 const POOL = [
@@ -86,4 +88,40 @@ test('hunters engulf smaller cells of other species', () => {
   let engulfs = 0;
   for (let t = 0; t < 300 * 10; t++) for (const e of p.tick(0.1)) if (e.type === 'engulf') engulfs++;
   expect(engulfs).toBeGreaterThan(0);
+});
+
+test('a meal passes 1–3 genes on: each moves toward the donor, the hybrid names both parents', () => {
+  const [a0, b] = readCulture('asdf jkl\nHUNTER GRRR >> ~~~ !!! ###').species as [Species, Species];
+  const a = { ...a0, mutation: 0 }; // without mutation every gene must land between the parents
+  const r = mulberry32(7);
+  for (let i = 0; i < 50; i++) {
+    const h = hybridise(a, b, r, () => false)!;
+    expect(h.sp.parents).toEqual([a, b]);
+    expect(h.sp.name).toMatch(/^Asd\w* × [a-z]+$/);
+    expect(h.genes.length).toBeGreaterThanOrEqual(1);
+    expect(h.genes.length).toBeLessThanOrEqual(3);
+    for (const g of h.genes) {
+      if (g === 'hue2') continue;
+      const [va, vb, vh] = [a[g], b[g], h.sp[g]];
+      if (typeof va === 'number') expect(Math.abs((vh as number) - (vb as number))).toBeLessThanOrEqual(Math.abs(va - (vb as number)));
+      else expect(vh).toBe(vb);
+    }
+  }
+  expect(hybridise(a, a, r, () => false)).toBeNull(); // nothing to take up from its own kind
+});
+
+test('hybrids live on: their daughters inherit the new genome, and only a few hybrid species live at once', () => {
+  const p = new Petri('jfkdlsöä asdfghjkl JJJJJJJJJ\nkkkkk ddddd h h hhhh 🌿 5\nWOOF!!! ölkjhg qqqqqqq');
+  let hybrids = 0,
+    hybridBirths = 0;
+  for (let t = 0; t < 300 * 10; t++) {
+    for (const e of p.tick(0.1)) {
+      if (e.type === 'hybrid') hybrids++;
+      if (e.type === 'divide' && e.sp.parents) hybridBirths++;
+    }
+    const alive = [...p.world.counts].filter(([sp, n]) => sp.parents && n > 0).length;
+    expect(alive).toBeLessThanOrEqual(MAX_HYBRIDS);
+  }
+  expect(hybrids).toBeGreaterThan(0);
+  expect(hybridBirths).toBeGreaterThan(0);
 });

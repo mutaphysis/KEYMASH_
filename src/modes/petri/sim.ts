@@ -1,5 +1,7 @@
 // PETRI_ simulation: a little pond in a dish. Pure (no DOM, no audio), seeded, fixed time step.
 import type { Species, FoodKind } from './genome';
+import { hybridise } from './hybrid';
+import type { Gene } from './hybrid';
 import { mulberry32 } from '../../lang/rng';
 
 export const DISH_R = 420;
@@ -11,6 +13,11 @@ export const MAX_FOOD = 110;
 export const CAPACITY = 34;
 /** The code only inoculates: it adds cells of a species while there are fewer than this. */
 export const SEED_POP = 4;
+/** chance that a meal passes genes on: engulfing a whole cell, eating one piece of a dead cell's debris */
+export const GENES_ENGULF = 0.4;
+export const GENES_DEBRIS = 0.06;
+/** at most this many hybrid species live at once; past it, meals are only food */
+export const MAX_HYBRIDS = 6;
 /** Swimmers turn first, then swim along their body axis (flagella and cilia push along it). */
 /** how far each body reaches beyond its radius as drawn (ciliates and rods are long), for collisions */
 const EXTENT: Record<string, number> = {
@@ -45,6 +52,8 @@ export interface Food {
   life: number;
   gone: boolean;
   spin: number;
+  /** debris still carries the genome of the cell it came from */
+  sp: Species | null;
 }
 export type CellState = 'live' | 'dividing' | 'dying' | 'eaten';
 export interface Cell {
@@ -123,7 +132,9 @@ export type SimEvent =
   | { type: 'bloom'; x: number; y: number }
   | { type: 'zone'; zone: Zone }
   | { type: 'extinct'; sp: Species }
-  | { type: 'first'; sp: Species };
+  | { type: 'first'; sp: Species }
+  /** a cell took up genes from `donor` and became the new species `sp` (it was `from`) */
+  | { type: 'hybrid'; x: number; y: number; sp: Species; from: Species; donor: Species; genes: Gene[] };
 
 const TAU = Math.PI * 2;
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -278,7 +289,7 @@ export class World {
     return c;
   }
 
-  addFood(x: number, y: number, n: number, kind: FoodKind, spread = 40): number {
+  addFood(x: number, y: number, n: number, kind: FoodKind, spread = 40, sp: Species | null = null): number {
     let made = 0;
     for (let i = 0; i < n && this.food.length < MAX_FOOD; i++) {
       const a = this.r() * TAU,
@@ -298,6 +309,7 @@ export class World {
         life: kind === 'debris' ? 35 + this.r() * 15 : kind === 'crumb' ? 22 + this.r() * 10 : kind === 'sugar' ? 45 : 38 + this.r() * 24,
         gone: false,
         spin: this.r() * TAU,
+        sp,
       });
       made++;
     }
@@ -661,6 +673,7 @@ export class World {
           f.gone = true;
           c.food = null;
           this.emit({ type: 'eat', x: c.x, y: c.y, sp, size: c.size, kind: f.kind });
+          if (f.sp) this.takeUp(c, f.sp, GENES_DEBRIS);
         }
       }
     }
@@ -688,6 +701,7 @@ export class World {
           c.life = c.age + (c.life - c.age) * (0.75 - p.sp.toxic * 0.35);
           this.emit({ type: 'toxic', x: c.x, y: c.y, sp });
         }
+        this.takeUp(c, p.sp, GENES_ENGULF);
       }
       c.prey = null;
     }
@@ -729,6 +743,28 @@ export class World {
       c.t = 0;
       this.emit({ type: 'die', x: c.x, y: c.y, sp, size: c.size, cause: c.energy <= 0 ? (fl.toxin > 0 ? 'toxin' : 'starved') : 'old' });
     }
+  }
+
+  /** a meal may pass genes on: the eater becomes a new hybrid species, its daughters inherit it */
+  private takeUp(c: Cell, donor: Species, chance: number): void {
+    const from = c.sp;
+    if (donor === from || c.state !== 'live' || this.r() >= chance) return;
+    let hybrids = 0;
+    for (const [s, n] of this.counts) if (s.parents && n > 0) hybrids++;
+    if (hybrids >= MAX_HYBRIDS) return;
+    const h = hybridise(from, donor, this.rng, (name) => [...this.seen].some((s) => s.name === name));
+    if (!h) return;
+    const sp = h.sp;
+    // the cell's own size and speed (they drift from the species' at every division) follow the genes
+    c.size = Math.max(5, Math.min(40, c.size * (sp.size / from.size)));
+    c.speed = Math.max(3, c.speed * (sp.speed / from.speed));
+    c.hue = sp.hue; // shownHue eases toward it
+    c.sp = sp;
+    c.food = c.prey = c.threat = c.partner = null; // a new diet looks around afresh
+    this.counts.set(from, (this.counts.get(from) ?? 1) - 1);
+    this.counts.set(sp, 1);
+    this.seen.add(sp);
+    this.emit({ type: 'hybrid', x: c.x, y: c.y, sp, from, donor, genes: h.genes });
   }
 
   private divide(c: Cell, dt: number, born: Cell[]): void {
@@ -787,7 +823,7 @@ export class World {
     c.y += c.vy * dt;
     if (c.t < 2.6) return;
     c.gone = true;
-    this.addFood(c.x, c.y, 2 + Math.floor(c.size / 10), 'debris', c.r);
+    this.addFood(c.x, c.y, 2 + Math.floor(c.size / 10), 'debris', c.r, c.sp);
     if (c.sp.spores) this.addSpores(c.sp, c.x, c.y, 2);
   }
 

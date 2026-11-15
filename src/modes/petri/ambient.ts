@@ -118,6 +118,7 @@ type Voice =
   | 'bond'
   | 'toxic'
   | 'hatch'
+  | 'hybrid'
   | 'extinct'
   | 'touch'
   | 'flee';
@@ -889,6 +890,14 @@ export class Ambient {
         play('bond', (t) => {
           const m = this.tone(ev.ax, 14);
           this.swell(m, m + 4, t, 0.7, pan);
+        });
+        break;
+      case 'hybrid':
+        // eater, donor, then the hybrid: each on its own instrument, rising through the chord
+        play('hybrid', (t) => {
+          this.play(ev.from, this.tone(ev.x, ev.sp.size, 0), t, 0.4, pan);
+          this.play(ev.donor, this.tone(ev.x, ev.sp.size, 2), t + this.grid, 0.4, pan);
+          this.play(ev.sp, this.tone(ev.x, ev.sp.size, 4), t + this.grid * 2, 0.5, pan);
         });
         break;
       case 'toxic':
