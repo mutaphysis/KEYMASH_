@@ -165,7 +165,7 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
   float delay = h2.x * span;
   if (T < delay) return guard;
   // a piece stays inside its cell: the march only ever sees the cell it is in
-  float reach = kind < .5 ? .075 : kind < 1.5 ? .062 : kind < 2.5 ? .024 : kind < 3.5 ? .062 : kind < 4.5 ? .045 : kind < 5.5 ? .06 : .04;
+  float reach = kind < .5 ? .075 : kind < 1.5 ? .053 : kind < 2.5 ? .024 : kind < 3.5 ? .062 : kind < 4.5 ? .045 : kind < 5.5 ? .06 : .04;
   vec2 ctr = (cell + .5 + (h.xy - .5) * 2. * clamp((cs * .5 - .012 - reach) / cs, 0., .22)) * cs;
   vec4 fc = field(ci, ctr);
   float Rc = fc.r + uErode / uSize;
@@ -186,8 +186,8 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
     d.y /= 1. - .15 * uChipMelt;
     sd = sdRoundCone(d + vec3(0., .012, 0.), .07, .025, .065);
   } else if (kind < 1.5) {
-    float t = clamp(dot(d.xz, dir), -.045, .045);
-    sd = length(d - vec3(dir.x * t, .014, dir.y * t)) - .017;
+    float t = clamp(dot(d.xz, dir), -.038, .038);
+    sd = length(d - vec3(dir.x * t, .014, dir.y * t)) - .015;
   } else if (kind < 2.5) {
     vec3 b = abs(d - vec3(0., .014, 0.)) - .01;
     sd = length(max(b, 0.)) + min(max(b.x, max(b.y, b.z)), 0.) - .008;

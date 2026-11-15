@@ -477,8 +477,18 @@ export class CookieRenderer {
     for (const t of r.toppings) {
       if (t.kind === 'powder') powder = t.amount;
       else if (layer < 3) {
-        const cell = t.kind === 'pearls' ? 0.2 : t.kind === 'candy' ? mix(0.38, 0.24, t.amount) : mix(0.34, 0.2, t.amount);
-        tops.set([TOP_KIND[t.kind], cell, t.kind === 'pearls' ? 0.85 : 0.55 + 0.4 * t.amount], 3 * layer++);
+        // sprinkles are small and many, the rest sit further apart
+        const k = t.kind;
+        const cell =
+          k === 'pearls'
+            ? 0.2
+            : k === 'candy'
+              ? mix(0.38, 0.24, t.amount)
+              : k === 'sprinkles'
+                ? mix(0.24, 0.17, t.amount)
+                : mix(0.34, 0.2, t.amount);
+        const keep = k === 'pearls' ? 0.85 : k === 'sprinkles' ? 0.75 + 0.25 * t.amount : 0.55 + 0.4 * t.amount;
+        tops.set([TOP_KIND[t.kind], cell, keep], 3 * layer++);
       }
     }
     gl.uniform3fv(u.uTop ?? null, tops);
