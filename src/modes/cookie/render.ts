@@ -11,18 +11,16 @@ import { program, uniforms, target, freeTarget, perspective, lookAt, mul } from 
 import type { GL, Target, Uniforms, Vec3 } from './gl';
 import { FULL_VS, SCENE_FS, CRUMB_VS, CRUMB_FS, BLIT_FS, MOTE_VS, MOTE_FS } from './shader';
 import { ROUNDED } from './theme.css';
+import { PixelBudget } from '../../ui/budget';
 
 const FOV = (38 * Math.PI) / 180;
 const TAN = Math.tan(FOV / 2);
 const DEG = Math.PI / 180;
 const TEXEL = (2 * FIELD_EXT) / FIELD_N;
-/** pixels of the scene target; a slow device steps down, never up. A desktop starts at the top, a touch screen at TOUCH. */
-const BUDGETS = [1400000, 900000, 600000, 420000, 300000, 210000, 150000];
+/** a desktop starts at the top of the pixel ladder (src/ui/budget.ts), a touch screen this many steps down */
 const TOUCH = 4;
 /** flour and dust in the air */
 const MOTES = 140;
-/** above this a frame must come within 24 ms or the target steps down; at and below it only a frame slower than 58 ms does (phones are fine at 30 fps) */
-const SHARP = 420000;
 const ELEV: Record<Stage, number> = {
   drop: 30,
   roll: 40,
@@ -87,7 +85,7 @@ export class CookieRenderer {
   private moteU: Uniforms = {};
   private moteVao: WebGLVertexArrayObject | null = null;
   private tgt: Target | null = null;
-  private budget: number;
+  private budget: PixelBudget;
   private atlas: WebGLTexture | null = null;
   private uploaded: (Field | null)[] = [null, null, null];
   private versions = [-1, -1, -1];
@@ -102,14 +100,12 @@ export class CookieRenderer {
   private dist = 12;
   private time = 0;
   private cam: Cam | null = null;
-  private lastNow = 0;
-  private times: number[] = [];
   /** the band of the screen that stays sharp (0 bottom .. 1 top), eased like the camera; null: not placed yet */
   private band: [number, number] | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.cv = canvas;
-    this.budget = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches ? 0 : TOUCH;
+    this.budget = new PixelBudget(undefined, typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches ? 0 : TOUCH);
     this.gl = canvas.getContext('webgl2', {
       alpha: false,
       antialias: false,
@@ -191,7 +187,7 @@ export class CookieRenderer {
   /** the scene target for the canvas as it is now and the current budget */
   private fitTarget(): Target {
     const gl = this.gl!;
-    const scale = Math.min(1, Math.sqrt(BUDGETS[this.budget]! / (this.cv.width * this.cv.height)));
+    const scale = this.budget.scale(this.cv.width, this.cv.height);
     const w = Math.max(2, Math.round(this.cv.width * scale));
     const h = Math.max(2, Math.round(this.cv.height * scale));
     if (!this.tgt || this.tgt.w !== w || this.tgt.h !== h) {
@@ -354,18 +350,8 @@ export class CookieRenderer {
     const gl = this.gl;
     if (!gl || this.lost || !this.scene || !this.crumb || !this.blit) return;
 
-    // too slow for this many pixels: take the next smaller target
-    const now = performance.now();
-    if (dt > 0 && this.lastNow) {
-      const ms = now - this.lastNow;
-      if (ms < 500) this.times.push(ms);
-      if (this.times.length >= 30) {
-        const mean = this.times.reduce((s, v) => s + v, 0) / this.times.length;
-        this.times = [];
-        if (mean > (BUDGETS[this.budget]! > SHARP ? 24 : 58) && this.budget < BUDGETS.length - 1) this.budget++;
-      }
-    }
-    this.lastNow = now;
+    // too slow for this many pixels: the next frame takes a smaller target (fitTarget)
+    this.budget.frame(dt);
 
     this.time += dt;
     const [el, dist] = this.aim(b);
