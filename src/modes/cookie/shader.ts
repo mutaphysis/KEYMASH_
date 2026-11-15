@@ -223,7 +223,8 @@ float pipe2D(vec2 q, float R, float B) {
     d = abs(mod(length(q) - .26 * atan(q.y, q.x) / 6.2832, .26) - .13) - .035;
   }
   if (uBorder > .5) d = min(d, abs(R + uBorderIn) - .03);
-  d = max(d, q.x - mix(-1.5, 1.5, uPattern));
+  // piped from left to right; the swirl from its middle out, so it is drawn along the spiral (its radius grows along it)
+  d = max(d, uPatternKind == 3 ? length(q) - mix(-.05, 1.5, uPattern) : q.x - mix(-1.5, 1.5, uPattern));
   float swept = q.x - mix(-1.5, 1.5, uDeco);
   d = max(d, -max(B - .07, swept)); // the pattern makes room for letters and the mouth
   return min(d, max(B, swept));
