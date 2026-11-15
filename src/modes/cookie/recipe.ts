@@ -25,7 +25,9 @@ export type Stage =
   | 'deco'
   | 'present'
   | 'serve'
-  | 'sweep';
+  | 'sweep'
+  /** the tray is empty after eating: it waits for another batch */
+  | 'done';
 export type RGB = [number, number, number]; // sRGB 0..1
 export interface Mark {
   stage: Stage;

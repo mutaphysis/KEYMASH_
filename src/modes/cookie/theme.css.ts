@@ -91,6 +91,59 @@ export const greetLetter = style({
   '@media': { '(prefers-reduced-motion: reduce)': { animation: 'none' } },
 });
 
+const pulse = keyframes({
+  '0%, 100%': { transform: 'scale(1)' },
+  '50%': { transform: 'scale(1.06)' },
+});
+/** under the greeting until the first bite: what to do now */
+export const tapHint = style({
+  display: 'block',
+  fontSize: 'max(22px, .42em)',
+  marginTop: '.3em',
+  animation: `${pulse} 1.6s ease-in-out infinite`,
+  '@media': { '(prefers-reduced-motion: reduce)': { animation: 'none' } },
+});
+
+const popIn = keyframes({
+  '0%': { opacity: 0, transform: 'translateY(-.35em) scale(.8)' },
+  '100%': { opacity: 1, transform: 'none' },
+});
+/** the stage at work, big at the top middle, in the greeting's round letters (the player sets --size) */
+export const step = style({
+  position: 'absolute',
+  left: 48,
+  right: 48,
+  top: `calc(44px + ${layout.safeTop})`,
+  textAlign: 'center',
+  fontFamily: ROUNDED,
+  fontWeight: 900,
+  fontSize: 'var(--size, 30px)',
+  lineHeight: 1.1,
+  color: '#fff4e2',
+  WebkitTextStroke: '.14em #4a2810',
+  paintOrder: 'stroke fill',
+  textShadow: '0 .07em 0 #4a2810, 0 .14em .3em rgba(0,0,0,.45)',
+  pointerEvents: 'none',
+  opacity: 0,
+  transition: 'opacity .4s ease',
+  selectors: { '&.on': { opacity: 1, animation: `${popIn} .45s cubic-bezier(.3, 1.6, .5, 1)` } },
+  '@media': { '(prefers-reduced-motion: reduce)': { selectors: { '&.on': { animation: 'none' } } } },
+});
+
+/** the tray is empty: bake it again or write your own; the play buttons may be hidden (stage only), so these stand alone */
+export const donePanel = style({
+  position: 'absolute',
+  inset: 0,
+  zIndex: 4,
+  display: 'none',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 14,
+  selectors: { '&.on': { display: 'flex', animation: `${popIn} .5s cubic-bezier(.3, 1.6, .5, 1)` } },
+  '@media': { '(prefers-reduced-motion: reduce)': { selectors: { '&.on': { animation: 'none' } } } },
+});
+
 const p = (sel: string) => `${cookieTheme} ${sel}`;
 
 // calm: no scanlines, no flicker, no glitching logo, nothing blinks
@@ -111,17 +164,6 @@ globalStyle(p('#codeview span.on'), { boxShadow: '0 0 14px var(--c)', borderRadi
 // the baker's notes
 globalStyle(p('#hud'), { color: 'rgba(255,240,220,.9)', lineHeight: 1.55, letterSpacing: 0.3 });
 globalStyle(p('#hud .meta'), { color: 'rgba(255,214,165,.65)', fontSize: 10.5 });
-globalStyle(p('#log'), {
-  fontFamily: layout.serif,
-  fontStyle: 'italic',
-  fontSize: 12.5,
-  color: 'rgba(255,240,220,.82)',
-  bottom: 76,
-  transition: 'opacity .5s ease',
-});
-// the greeting takes the bottom of the stage; the notes step aside meanwhile
-globalStyle(p(`#log:has(~ .${greeting}.on)`), { opacity: 0 });
-globalStyle(p('#log div:last-child::after'), { content: '""' });
 globalStyle(p('#boot'), {
   background: 'radial-gradient(circle at 50% 45%, #3a2212, #140c08 75%)',
   color: '#ffe0b0',

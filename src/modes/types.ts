@@ -20,6 +20,12 @@ export interface ModePlayer {
   fit(): void;
 }
 
+/** what a player may ask of the app shell */
+export interface PlayerHost {
+  /** stop and go back to the editor (out of the stage-only view too) */
+  edit(): void;
+}
+
 /** What the mode paints behind the editor text. The editor owns the two canvases and the loop. */
 export interface Backdrop {
   /** size in CSS pixels */
@@ -108,6 +114,6 @@ export interface ModeCode {
   sheet: Sheet;
   backdrop(): Backdrop;
   status(src: string): Status;
-  player(audio: AudioEngine): ModePlayer;
+  player(audio: AudioEngine, host: PlayerHost): ModePlayer;
   drawer?(ctx: DrawerContext): DrawerSection[];
 }

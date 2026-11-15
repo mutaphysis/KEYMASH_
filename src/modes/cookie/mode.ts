@@ -54,5 +54,5 @@ export const mode: ModeCode = {
     const n = readRecipe(src).count;
     return { ok: t('ready'), count: n, unit: tn('cookies', n) };
   },
-  player: (audio) => new CookiePlayer(audio),
+  player: (audio, host) => new CookiePlayer(audio, host),
 };

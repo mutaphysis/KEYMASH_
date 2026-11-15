@@ -15,7 +15,7 @@ import { VERSION_LABEL, BUILD_TIME } from './version';
 import { t, langPref, setLangPref, systemLang, LANG_NAMES } from './i18n';
 import type { LangPref } from './i18n';
 import { MODES, modeById, nextMode } from './modes';
-import type { ModeDef, ModeCode, ModePlayer } from './modes/types';
+import type { ModeDef, ModeCode, ModePlayer, PlayerHost } from './modes/types';
 import { KmMute, KmItem, KmSelect, KmDrawer, KmCard } from './ui/components';
 import type { KmButton, KmModeIcon, KmToast } from './ui/components';
 
@@ -105,10 +105,18 @@ let mode: ModeDef = MODES.find((m) => m.id === link.get('mode')) ?? modeById(sto
 const firstLoad = mode.load(); // start fetching now; applyMode() below waits for it
 let code!: ModeCode;
 const players = new Map<string, ModePlayer>();
+/** a player's way back to the editor, e.g. COOKIE_'s "make your own" once the tray is empty */
+const host: PlayerHost = {
+  edit() {
+    stageOnly(false);
+    edit();
+    if (isSplit()) editor.ta.focus(); // no keyboard pops up on a phone
+  },
+};
 function P(): ModePlayer {
   let p = players.get(mode.id);
   if (!p) {
-    p = code.player(audio);
+    p = code.player(audio, host);
     players.set(mode.id, p);
   }
   return p;

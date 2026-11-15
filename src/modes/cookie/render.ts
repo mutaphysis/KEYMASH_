@@ -32,6 +32,7 @@ const ELEV: Record<Stage, number> = {
   present: 60,
   serve: 66,
   sweep: 50,
+  done: 50,
 };
 /** shader kinds of the pieces that lie on top; powder is a dusting, not a layer of pieces */
 const TOP_KIND: Record<Exclude<Topping, 'powder'>, number> = { sprinkles: 1, sugar: 2, strands: 3, pearls: 4, coconut: 5, candy: 6 };

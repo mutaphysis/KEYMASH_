@@ -74,8 +74,9 @@ The dough ball drops and is rolled out in three passes, the cutters come down, t
 chips land, the oven glows while the timer runs (the HUD shows it), the cookies rise and brown,
 then the coating pours down from above and spreads, pattern, toppings and the finishing
 touches, each only if the recipe has them.
-The code view lights up the words that decide the stage at work. At the end the message appears
-under the cookies: big round letters in the cookie's colours, hopping a little.
+Each stage is announced in big round letters at the top of the stage, and the code view lights up
+the words that decide it. At the end the message appears under the cookies: big round letters in
+the cookie's colours, hopping a little, with "tap to bite!" under it until the first bite.
 
 The cookies of a batch differ a little in outline and turn, and each bakes up with lumps of its
 own. With `prefers-reduced-motion` the camera stands still, the dough does not bounce and the
@@ -89,7 +90,9 @@ start.
 Tap a cookie to bite a piece off. Bites come from the edge, each one a little different in size
 and shape; a tap in the middle bites the nearest edge. Crumbs fall, bounce and stay, on the
 cookie or on the tray.
-A cookie that is almost gone crumbles. When the tray is empty a new batch starts.
+A cookie that is almost gone crumbles. Left alone for ten seconds, the cookies get nibbled away
+on their own (a tap puts that off again). When the tray is empty it is swept and two buttons
+come up: **make your own** goes back to the editor, **bake again** bakes the same recipe once more.
 
 ## Sound
 

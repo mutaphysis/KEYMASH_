@@ -443,4 +443,13 @@ export class Field {
       }
     return n ? [sx / n, sy / n] : null;
   }
+
+  /** a random point of what is left (u in 0..1 picks it), or null */
+  anyLeft(u: number): [number, number] | null {
+    const at: number[] = [];
+    const d = this.data;
+    for (let k = 0; k < N * N; k++) if (d[k * 4]! < 0 && d[k * 4 + 1]! > 0) at.push(k);
+    const k = at[Math.min(at.length - 1, Math.floor(u * at.length))];
+    return k === undefined ? null : [coord(k % N), coord(Math.floor(k / N))];
+  }
 }

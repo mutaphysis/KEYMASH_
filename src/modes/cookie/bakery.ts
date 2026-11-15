@@ -143,6 +143,7 @@ const ORDER: readonly Stage[] = [
   'present',
   'serve',
   'sweep',
+  'done',
 ];
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const sat = (v: number) => clamp(v, 0, 1);
@@ -163,6 +164,9 @@ export const CUTTER_UP = 6;
 /** the coating's stream starts this high above the cookie and takes POUR_FALL seconds to land */
 const POUR_FROM = 5;
 const POUR_FALL = 0.4;
+/** nobody has bitten for this long while the cookies are served: they get nibbled on their own, one bite every NIBBLE seconds */
+const IDLE = 10;
+const NIBBLE = 0.9;
 
 interface ActiveBite {
   cookie: Cookie;
@@ -205,6 +209,8 @@ export class Bakery {
   private queued: BakeEvent[] = [];
   private active: ActiveBite | null = null;
   private goneT = 0;
+  /** seconds since the cookies were served or last bitten */
+  private idleT = 0;
   private crumbN = 0;
   private rnd: () => number = Math.random;
 
@@ -295,6 +301,7 @@ export class Bakery {
     this.crumbs = [];
     this.active = null;
     this.goneT = 0;
+    this.idleT = 0;
     this.look = {
       ballY: 4.2,
       doughR: 0,
@@ -354,6 +361,7 @@ export class Bakery {
       case 'present':
         return 1.2;
       case 'serve':
+      case 'done':
         return Infinity;
       case 'sweep':
         return 1.4;
@@ -538,6 +546,7 @@ export class Bakery {
         L.hero = ss(0, 1.2, t);
         break;
       case 'serve':
+      case 'done':
         break;
       case 'sweep': {
         const f = sat(t / 1.4);
@@ -556,12 +565,19 @@ export class Bakery {
 
   private next(): void {
     if (this.stage === 'sweep') {
-      this.newBatch();
+      // swept for an edited recipe: bake it; swept after eating: the tray stays empty until asked
+      if (this.pending) this.newBatch();
+      else this.enter('done');
       return;
     }
     let i = ORDER.indexOf(this.stage) + 1;
     while (this.len(ORDER[i]!) === 0) i++;
     this.enter(ORDER[i]!);
+  }
+
+  /** another batch of the same recipe, once the tray is empty */
+  again(): void {
+    if (this.stage === 'done') this.newBatch();
   }
 
   tick(dt: number): BakeEvent[] {
@@ -602,7 +618,8 @@ export class Bakery {
       return false;
     }
     this.pending = next;
-    if (this.stage !== 'sweep') this.enter('sweep');
+    if (this.stage === 'done') this.newBatch();
+    else if (this.stage !== 'sweep') this.enter('sweep');
     return true;
   }
 
@@ -632,13 +649,28 @@ export class Bakery {
       }
     }
     if (!best) return false;
-    const target = 0.38 * (0.8 + 0.4 * this.rnd());
-    const [cx, cy, out] = this.rim(best.field, bx, by, target * 0.3);
-    this.active = { cookie: best, cx, cy, r: 0, target, shape: biteShape(this.rnd, out), t: 0, dur: 0.14, last: false };
-    this.queued.push({ type: 'bite', pan: this.pan(best) });
-    const n = Math.round((10 + this.rnd() * 6) * (this.gentle ? 0.5 : 1));
-    this.scatter(best, cx, cy, target, n, true);
+    this.idleT = 0;
+    this.biteAt(best, bx, by);
     return true;
+  }
+
+  /** nobody eats: a bite from the rim of a cookie still there, at any spot of what is left of it */
+  private nibble(): void {
+    while (this.active) this.grow(Infinity, this.queued);
+    const left = this.cookies.filter((c) => !c.gone);
+    const c = left[Math.floor(this.rnd() * left.length)];
+    const at = c?.field.anyLeft(this.rnd());
+    if (c && at) this.biteAt(c, ...at);
+  }
+
+  /** a bite into cookie c near its local point (x, y), taken from the nearest edge */
+  private biteAt(c: Cookie, x: number, y: number): void {
+    const target = 0.38 * (0.8 + 0.4 * this.rnd());
+    const [cx, cy, out] = this.rim(c.field, x, y, target * 0.3);
+    this.active = { cookie: c, cx, cy, r: 0, target, shape: biteShape(this.rnd, out), t: 0, dur: 0.14, last: false };
+    this.queued.push({ type: 'bite', pan: this.pan(c) });
+    const n = Math.round((10 + this.rnd() * 6) * (this.gentle ? 0.5 : 1));
+    this.scatter(c, cx, cy, target, n, true);
   }
 
   /**
@@ -793,6 +825,14 @@ export class Bakery {
     if (this.cookies.every((c) => c.gone)) {
       this.goneT += dt;
       if (this.goneT >= 1) this.enter('sweep');
+      return;
+    }
+    this.idleT += dt;
+    if (this.idleT >= IDLE + NIBBLE) {
+      this.idleT = IDLE;
+      this.nibble();
+      out.push(...this.queued);
+      this.queued = [];
     }
   }
 }

@@ -8,12 +8,12 @@ import { graphemes } from '../../lang/lexer';
 import { CookieRenderer } from './render';
 import { Jingle } from './music';
 import type { AudioEngine } from '../../engine/audio';
-import type { ModePlayer } from '../types';
+import type { ModePlayer, PlayerHost } from '../types';
 import { $ } from '../../ui/dom';
 import { VERSION_LABEL } from '../../version';
 import { t, tn } from './messages';
 import type { CookieMsg } from './messages';
-import { stage3d, greeting, greetWord, greetLetter } from './theme.css';
+import { stage3d, greeting, greetWord, greetLetter, tapHint, step, donePanel } from './theme.css';
 
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -42,6 +42,7 @@ const LOG: Partial<Record<Stage, CookieMsg>> = {
   toppings: 'logToppings',
   deco: 'logDeco',
   sweep: 'logSweep',
+  done: 'logEmpty',
 };
 /** the colour a stage lights its words up in */
 const HUE: Partial<Record<Stage, number>> = {
@@ -65,6 +66,10 @@ export class CookiePlayer implements ModePlayer {
   hud = $('hud');
   logEl = $('log');
   boot = $('boot');
+  /** the stage at work, announced at the top */
+  stepEl: HTMLDivElement;
+  /** bake again / make your own, once the tray is empty */
+  panel: HTMLDivElement;
   canvas: HTMLCanvasElement;
   greet: HTMLDivElement;
   r: CookieRenderer;
@@ -74,7 +79,7 @@ export class CookiePlayer implements ModePlayer {
   /** true from start() until stop(): this player owns the shared stage */
   active = false;
   spans: HTMLSpanElement[] = [];
-  logs: string[] = [];
+  private hint: HTMLElement | null = null;
   private lit: HTMLSpanElement[] = [];
   private hlLast: HTMLSpanElement | null = null;
   private fitW = 0;
@@ -84,7 +89,7 @@ export class CookiePlayer implements ModePlayer {
   private hudTick = 0;
   private run = 0;
 
-  constructor(audio: AudioEngine) {
+  constructor(audio: AudioEngine, host: PlayerHost) {
     this.audio = audio;
     this.jingle = new Jingle(audio);
     this.canvas = document.createElement('canvas');
@@ -93,12 +98,30 @@ export class CookiePlayer implements ModePlayer {
     this.greet = document.createElement('div');
     this.greet.className = greeting;
     this.logEl.after(this.greet);
+    this.stepEl = document.createElement('div');
+    this.stepEl.className = step;
+    this.greet.after(this.stepEl);
+    this.panel = document.createElement('div');
+    this.panel.className = donePanel;
+    this.wrap.append(this.panel);
+    this.button('idle', '✏️', t('makeOwn'), () => host.edit(), true);
+    this.button('play', '🍪', t('again'), () => this.again());
     this.r = new CookieRenderer(this.canvas);
     new ResizeObserver(() => {
       if (this.active) this.fit();
     }).observe(this.wrap); // the stage is shared: only the active player sizes it
     this.canvas.addEventListener('pointerdown', (e) => this.tap(e));
     this.loop = this.loop.bind(this);
+  }
+
+  private button(variant: 'idle' | 'play', icon: string, text: string, onClick: () => void, primary = false): void {
+    const b = document.createElement('km-button');
+    b.setAttribute('variant', variant);
+    b.setAttribute('icon', icon);
+    if (primary) b.setAttribute('primary', '');
+    this.panel.append(b); // connected, it builds its <button>; only then does the text stay
+    b.text = text;
+    b.addEventListener('click', onClick);
   }
 
   fit(): void {
@@ -111,6 +134,7 @@ export class CookiePlayer implements ModePlayer {
     this.r.reserveBottom = 76; // the play buttons
     this.r.resize(w, h);
     if (this.bakery) this.bakery.aspect = w / h; // the next batch is laid out for it
+    this.stepEl.style.setProperty('--size', `${Math.max(20, Math.min(40, 0.06 * w))}px`);
     if (this.greet.classList.contains('on')) this.sizeGreeting();
   }
 
@@ -143,13 +167,12 @@ export class CookiePlayer implements ModePlayer {
     const b = (this.bakery = new Bakery(src, this.fitW / Math.max(1, this.fitH)));
     b.gentle = this.r.gentle;
     this.buildCode(b.recipe.gs);
-    this.logs = [];
-    this.logEl.textContent = '';
+    this.logEl.textContent = ''; // another mode's notes; COOKIE_ announces at the top instead
     this.hud.textContent = '';
     this.greet.textContent = '';
     this.jingle.configure(b.recipe.seed);
     if (!this.r.ok) {
-      this.note(t('noGl'));
+      this.announce(t('noGl'));
       return;
     }
     this.r.snap(b);
@@ -198,6 +221,8 @@ export class CookiePlayer implements ModePlayer {
     this.jingle.stop();
     this.canvas.classList.remove('on');
     this.hideGreeting();
+    this.announce('');
+    this.panel.classList.remove('on');
     if (!silent) this.audio.stop();
   }
 
@@ -211,7 +236,13 @@ export class CookiePlayer implements ModePlayer {
     this.src = src;
     const changed = b.swap(src);
     this.buildCode((b.pending ?? b.recipe).gs, true);
-    if (changed) this.note(t('logRebake'));
+    if (changed) this.announce(t('logRebake'));
+  }
+
+  /** the tray is empty: the same recipe once more */
+  private again(): void {
+    this.panel.classList.remove('on');
+    this.bakery?.again();
   }
 
   private tap(e: PointerEvent): void {
@@ -244,14 +275,19 @@ export class CookiePlayer implements ModePlayer {
     this.jingle.event(ev);
     if (ev.type === 'stage') {
       this.jingle.stage(ev.stage);
+      this.panel.classList.toggle('on', ev.stage === 'done');
       const r = b.recipe;
       const msg = LOG[ev.stage];
-      if (msg) this.note(t(msg, { temp: r.temp, min: r.minutes }));
-      if (ev.stage === 'cool' && r.bake > 1.45) this.note(t('logBurnt'));
+      if (ev.stage === 'cool' && r.bake > 1.45) this.announce(t('logBurnt'));
+      else if (ev.stage === 'sweep' && b.pending) {
+        // swept for an edit: "baking again" stays up
+      } else if (msg) this.announce(t(msg, { temp: r.temp, min: r.minutes }));
       this.highlight(b, ev.stage);
     } else if (ev.type === 'ready') {
+      this.announce('');
       this.showGreeting(b.recipe);
-      this.note(t('logReady'));
+    } else if (ev.type === 'bite') {
+      this.hideHint();
     } else if (ev.type === 'sweep') {
       this.hideGreeting();
     }
@@ -275,11 +311,23 @@ export class CookiePlayer implements ModePlayer {
       }
       el.append(w);
     }
+    this.hint = document.createElement('span');
+    this.hint.className = tapHint;
+    this.hint.textContent = t('tapToBite');
+    el.append(this.hint);
     const [fill, line] = greetColors(r);
     el.style.setProperty('--fill', css(fill));
     el.style.setProperty('--line', css(line));
     el.classList.add('on');
     this.sizeGreeting();
+  }
+
+  /** the first bite: they know now; the greeting shrinks back and the camera follows */
+  private hideHint(): void {
+    if (!this.hint) return;
+    this.hint.remove();
+    this.hint = null;
+    if (this.greet.classList.contains('on')) this.sizeGreeting();
   }
 
   /** as big as the stage allows: the longest word fits across, all of it in the lower third; the camera makes room */
@@ -300,18 +348,18 @@ export class CookiePlayer implements ModePlayer {
 
   private hideGreeting(): void {
     this.greet.classList.remove('on');
+    this.hint = null;
     this.r.reserveGreet = 0;
   }
 
-  private note(text: string): void {
-    this.logs.push(text);
-    if (this.logs.length > 3) this.logs.shift();
-    this.logEl.textContent = '';
-    for (const l of this.logs) {
-      const d = document.createElement('div');
-      d.textContent = l;
-      this.logEl.appendChild(d);
-    }
+  /** big, at the top middle, until the next one; '' takes it away */
+  private announce(text: string): void {
+    const el = this.stepEl;
+    el.classList.remove('on');
+    if (!text) return;
+    el.textContent = text;
+    void el.offsetWidth; // the pop plays again
+    el.classList.add('on');
   }
 
   /** the words, symbols and numbers that decided this stage glow while it runs */
@@ -350,7 +398,6 @@ export class CookiePlayer implements ModePlayer {
     const meta = document.createElement('div');
     meta.className = 'meta';
     if (b.stage === 'bake' || b.stage === 'cool') meta.textContent = `${r.temp}° · ${clock(b.timer())}`;
-    else if (b.stage === 'serve') meta.textContent = t('hudEat');
     this.hud.replaceChildren(head, meta);
   }
 }

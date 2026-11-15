@@ -32,6 +32,7 @@ const MOOD: Record<Stage, Mood> = {
   present: 'serve',
   serve: 'serve',
   sweep: 'quiet',
+  done: 'quiet',
 };
 
 export class Jingle {

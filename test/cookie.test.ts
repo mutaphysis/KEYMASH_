@@ -127,7 +127,8 @@ test('fuzz: every recipe bakes through to serving', () => {
     const src = prog(r, Math.floor(r() * 160));
     for (const aspect of [0.75, 1.8]) {
       const b = new Bakery(src, aspect);
-      for (let t = 0; t < 40 / 0.05; t++) {
+      // until served: left alone there, the cookies get eaten after a while
+      for (let t = 0; t < 40 / 0.05 && b.stage !== 'serve'; t++) {
         b.tick(0.05);
         for (const v of Object.values(b.look)) expect(Number.isFinite(v)).toBe(true);
       }
@@ -137,7 +138,7 @@ test('fuzz: every recipe bakes through to serving', () => {
   }
 });
 
-test('eating: bites carve the cookies, crumbs stay bounded, an empty tray starts a new batch', () => {
+test('eating: bites carve the cookies, crumbs stay bounded, an empty tray waits until asked for another batch', () => {
   const b = new Bakery('round 2', 1.5);
   const seen: BakeEvent[] = [];
   const tick = (dt: number) => {
@@ -150,18 +151,43 @@ test('eating: bites carve the cookies, crumbs stay bounded, an empty tray starts
   expect(b.bite(50, 5, 50, 0, -1, 0)).toBe(false);
   let bites = 0;
   outer: for (let sweep = 0; sweep < 12; sweep++)
-    for (let z = -3; z <= 3; z += 0.25)
-      for (let x = -4; x <= 4; x += 0.25) {
+    for (let z = -1.5; z <= 1.5; z += 0.25)
+      for (let x = -3.5; x <= 3.5; x += 0.25) {
         if (stage() !== 'serve') break outer;
         if (b.bite(x, 5, z, 0, -1, 0)) bites++;
-        tick(0.2);
+        tick(0.1);
       }
   expect(bites).toBeGreaterThan(6);
-  for (let i = 0; i < 80 && !(stage() === 'drop' && b.batch === 1); i++) tick(0.05);
+  for (let i = 0; i < 80 && stage() !== 'done'; i++) tick(0.05);
   expect(seen.filter((e) => e.type === 'gone').length).toBe(2);
   expect(seen.findIndex((e) => e.type === 'sweep')).toBeGreaterThan(seen.findIndex((e) => e.type === 'gone'));
+  expect(stage()).toBe('done');
+  for (let i = 0; i < 100; i++) tick(0.1);
+  expect(stage()).toBe('done');
+  expect(b.batch).toBe(0);
+  b.again();
+  tick(0.05);
   expect(stage()).toBe('drop');
   expect(b.batch).toBe(1);
+});
+
+test('nobody eats: after a while the cookies get eaten anyway, a tap puts that off', () => {
+  const b = new Bakery('round 2', 1.5);
+  for (let t = 0; t < 30 && b.stage !== 'serve'; t += 0.05) b.tick(0.05);
+  const bites = () => {
+    let n = 0;
+    for (let i = 0; i < 20; i++) n += b.tick(0.05).filter((e) => e.type === 'bite').length;
+    return n;
+  };
+  for (let i = 0; i < 8; i++) expect(bites()).toBe(0); // 8 s: still waiting
+  const c = b.cookies[0]!;
+  expect(b.bite(c.x, 5, c.z, 0, -1, 0)).toBe(true);
+  expect(b.tick(0.05).filter((e) => e.type === 'bite').length).toBe(1);
+  for (let i = 0; i < 9; i++) expect(bites()).toBe(0); // the tap restarted the wait
+  const stage = (): Stage => b.stage;
+  for (let i = 0; i < 2000 && stage() !== 'done'; i++) b.tick(0.05);
+  expect(stage()).toBe('done');
+  expect(b.cookies.every((k) => k.gone)).toBe(true);
 });
 
 test('a tap in the middle bites the nearest edge, not a hole', () => {
