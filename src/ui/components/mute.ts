@@ -24,7 +24,7 @@ export class KmMute extends KmButton {
   }
 
   private show(): void {
-    this.icon = KmMute.audio?.muted ? '🔇' : '🔊';
+    this.icon = KmMute.audio?.muted ? 'mute' : 'sound';
   }
 }
 customElements.define('km-mute', KmMute);

@@ -79,12 +79,17 @@ export const mode: ModeCode = {
       {
         title: t('voice'),
         items: voices.map(([vm, name, sub]) =>
-          item((audio.voice === vm ? '✓ ' : '') + name, sub, () => {
-            audio.setVoice(vm);
-            audio.init();
-            setTimeout(() => audio.speak(t('voiceHello'), 1, 1), 150);
-            refresh();
-          }),
+          item(
+            name,
+            sub,
+            () => {
+              audio.setVoice(vm);
+              audio.init();
+              setTimeout(() => audio.speak(t('voiceHello'), 1, 1), 150);
+              refresh();
+            },
+            audio.voice === vm ? 'check' : undefined,
+          ),
         ),
       },
     ];

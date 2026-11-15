@@ -11,6 +11,7 @@ import type { AudioEngine } from '../../engine/audio';
 import type { ModePlayer, PlayerHost } from '../types';
 import { $ } from '../../ui/dom';
 import { CodeFollow } from '../../ui/follow';
+import type { IconName } from '../../ui/icon';
 import { VERSION_LABEL } from '../../version';
 import { t, tn } from './messages';
 import type { CookieMsg } from './messages';
@@ -105,9 +106,9 @@ export class CookiePlayer implements ModePlayer {
     this.panel = document.createElement('div');
     this.panel.className = donePanel;
     this.wrap.append(this.panel);
-    this.button('idle', '✏️', t('makeOwn'), () => host.edit(true), true);
-    this.button('play', '🍪', t('again'), () => this.again());
-    this.button('play', '🔗', t('share'), () => host.share());
+    this.button('idle', 'edit', t('makeOwn'), () => host.edit(true), true);
+    this.button('play', 'cookie', t('again'), () => this.again());
+    this.button('play', 'share', t('share'), () => host.share());
     this.r = new CookieRenderer(this.canvas);
     new ResizeObserver(() => {
       if (this.active) this.fit();
@@ -116,7 +117,7 @@ export class CookiePlayer implements ModePlayer {
     this.loop = this.loop.bind(this);
   }
 
-  private button(variant: 'idle' | 'play', icon: string, text: string, onClick: () => void, primary = false): void {
+  private button(variant: 'idle' | 'play', icon: IconName, text: string, onClick: () => void, primary = false): void {
     const b = document.createElement('km-button');
     b.setAttribute('variant', variant);
     b.setAttribute('icon', icon);

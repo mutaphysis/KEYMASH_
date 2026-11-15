@@ -104,12 +104,12 @@ globalStyle(`${host}[primary] > ${variant.control}`, { flex: 1.4 });
 globalStyle(`${host}[primary] > ${variant.play}`, { fontSize: 18 });
 globalStyle(`${host}[primary] > ${variant.idle}`, { animation: `${blink} 1.6s infinite` });
 
-// icon over label (control); icon beside label elsewhere
-globalStyle(`${variant.control} i`, { fontStyle: 'normal', fontSize: 26, lineHeight: 1, textShadow: 'none' });
+// icon (src/ui/icon.ts, 1em) over label (control); icon beside label elsewhere
+globalStyle(`${variant.control} i`, { fontSize: 26 });
 globalStyle(`${variant.control} span`, { fontSize: 11, letterSpacing: 1, '@media': { '(max-width: 380px)': { fontSize: 10 } } });
 globalStyle(`${host}[primary] > ${variant.control} i`, { fontSize: 30 });
 globalStyle(`${host}[primary] > ${variant.control} span`, { fontSize: 15, fontWeight: 'bold' });
-globalStyle(`${variant.play} i, ${variant.idle} i, ${variant.row} i, ${variant.header} i, ${variant.corner} i`, { fontStyle: 'normal' });
+globalStyle(`${variant.row} i`, { fontSize: 16 });
 globalStyle(`${variant.play} i + span:not(:empty), ${variant.idle} i + span:not(:empty)`, { marginLeft: '0.4em' });
 
 // countdown(): a fill inside the button drains from right to left

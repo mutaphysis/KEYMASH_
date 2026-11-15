@@ -52,8 +52,8 @@ Pages (`.github/workflows/pages.yml`).
 
 ## The modes
 
-**Tap the icon in the header** (or the logo) for the next mode, or pick one in 📂 LOAD → MODE.
-Each mode keeps its own draft and its own saves. **📖** next to the sound button opens the
+**Tap the icon in the header** (or the logo) for the next mode, or pick one in LOAD → MODE.
+Each mode keeps its own draft and its own saves. **The book** next to the sound button opens the
 mode's cheat sheet; tap a card to add its snippet as a new line. The full language reference
 lives with each mode:
 
@@ -75,13 +75,13 @@ RUN rolls, cuts, bakes and decorates it in 3D, then every tap is a bite.</td>
 
 ### Links
 `?mode=<id>&code=<text>` opens a mode with that text with only the stage showing, waiting for one
-tap on ▶ (✖ or Esc brings the editor back), e.g.
+tap on RUN (the close button or Esc brings the editor back), e.g.
 [`?mode=cookie&code=round%20!!!%20blue%201`](https://mutaphysis.github.io/KEYMASH_/?mode=cookie&code=round%20!!!%20blue%201).
 Mode ids: `keymash`, `petri`, `cookie`; `code` is URL-encoded. Without `code` the link only picks
 the mode. It does not start by itself: browsers allow sound and real fullscreen only after a tap,
-so ▶ starts both.
+so RUN starts both.
 The text becomes the mode's draft, like a picked demo; the parameters leave the address bar.
-🔗 on the play view (between sound and restart) shares such a link to the current mode with the text
+SHARE (the link icon) on the play view, between sound and restart, shares such a link to the current mode with the text
 as it is now: the system share sheet where there is one, else the link is copied to the clipboard.
 
 ### Side by side & live coding
@@ -90,12 +90,12 @@ While a program runs, every edit is hot-swapped into it ~0.6 s after you stop
 typing — the clock, the picture and the sound keep going.
 
 ### Fullscreen
-**⛶** in the stage's top right corner hides everything but the picture and, where the
+**The fullscreen button** in the stage's top right corner hides everything but the picture and, where the
 browser allows it, goes fullscreen as well (on iPhone, which has no fullscreen for pages,
-only the rest of the UI hides). ✖ or Esc brings the UI back.
+only the rest of the UI hides). The same button again or Esc brings the UI back.
 
 ### Cheat-sheet pictures
-The cards behind 📖 are listed in `src/modes/<id>/sheet.ts` (snippet, short name, how long it runs
+The cards behind the book are listed in `src/modes/<id>/sheet.ts` (snippet, short name, how long it runs
 before the picture is taken). `bun scripts/sheet.ts` plays every snippet through the real
 interpreter and renderer in headless Chromium, in simulated time with seeded randomness, and
 saves the last frame as `src/modes/<id>/sheet/<card>.webp`; it also rewrites the picture
@@ -120,6 +120,7 @@ src/lang/rng.ts          shared: seeded hash + PRNG
 src/engine/sound.ts      what the audio engine plays (notes, drums, sfx, phone tones): the modes' sound vocabulary
 src/engine/audio.ts      WebAudio synth, drums, sfx, reverb/delay, typing sounds, speech
 src/ui/editor.ts         textarea, the mode's backdrop canvases, key bar
+src/ui/icon.ts           UI icons: SVGs in src/ui/icons/ (MingCute via Iconify, fetched by scripts/ui-icons.ts), drawn as a CSS mask
 src/ui/components/       light-DOM custom elements: km-button, km-mute, km-mode-icon, km-item, km-select, km-toast, km-drawer, km-card
 src/ui/storage.ts        per-mode draft and save slots in localStorage
 src/ui/budget.ts         pixel budget: a renderer on a slow device steps down to fewer pixels (every mode)
@@ -130,6 +131,7 @@ src/styles/global.css.ts the app shell's styles
 src/i18n.ts              language detection + defineMessages(); the shared UI's text
 scripts/sheet.ts         renders the cheat-sheet pictures (browser side: scripts/sheet/)
 scripts/icons.ts         renders the app icons
+scripts/ui-icons.ts      downloads the UI icons from the Iconify API and writes src/ui/icons/index.ts
 ```
 
 Shared code (`src/lang/`, `src/engine/`, `src/ui/`, `src/main.ts`) never imports from a mode;
@@ -151,9 +153,17 @@ can't express (no scanlines, a breathing icon) goes in the same file as
 `` globalStyle(`${theme} …`) ``. Components keep their styles next to them.
 
 **Components** are light-DOM custom elements (no shadow root, so the theme
-variables and classes reach them): `<km-button icon="▶" label="run" variant="control" primary>`
-takes message ids for `label` / `title-key`; rows and selects are built with
+variables and classes reach them): `<km-button icon="play" label="run" variant="control" primary>`
+takes an icon name and message ids for `label` / `title-key`; rows and selects are built with
 `KmItem.create()` / `KmSelect.create()`, cheat-sheet cards with `KmCard.create()`.
+
+**Icons** in buttons, rows, selects and toasts come from one set, [MingCute](https://www.mingcute.com)
+(filled, rounded, one colour), never emoji. Each is an SVG file in `src/ui/icons/`, imported with
+`?url` and drawn as a CSS `mask-image` over `currentColor`, so it takes the text's colour and size
+(`iconEl('paw')`, `setIcon(el, 'paw')` from `src/ui/icon.ts`). To add one, put a line into `ICONS`
+in `scripts/ui-icons.ts` and run `bun scripts/ui-icons.ts`: it downloads every icon from the
+[Iconify API](https://iconify.design/docs/api/) and rewrites `src/ui/icons/index.ts` (the `IconName` type).
+Emoji stay where they are program text: demos, the key bar's emoji keys, what a program shows.
 
 **Text**: every part defines its own messages with `defineMessages(en, de)` — the
 shared UI in `src/i18n.ts`, each mode in `src/modes/<id>/messages.ts`. `en` is the

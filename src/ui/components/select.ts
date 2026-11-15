@@ -1,11 +1,15 @@
 // <km-select>: a native select (the phone's own picker) dressed like the drawer rows.
-import { pick, select } from './drawer.css';
+// Options are plain text (an <option> can't show an icon); the icon sits on the select instead.
+import { iconEl } from '../icon';
+import { pick, select, lead, arrow } from './drawer.css';
 
 export interface SelectOpts<T extends string> {
   label: string;
   options: readonly (readonly [value: T, text: string])[];
   value: T;
   onPick: (v: T) => void;
+  /** on the left, what the select is about: an iconEl() or the mode's own SVG */
+  icon?: HTMLElement;
 }
 
 export class KmSelect extends HTMLElement {
@@ -24,7 +28,13 @@ export class KmSelect extends HTMLElement {
       sel.appendChild(opt);
     }
     sel.addEventListener('change', () => o.onPick(sel.value as T));
-    el.appendChild(sel);
+    if (o.icon) {
+      o.icon.classList.add(lead);
+      el.appendChild(o.icon);
+    }
+    const down = iconEl('down');
+    down.classList.add(arrow);
+    el.append(sel, down);
     return el;
   }
 }

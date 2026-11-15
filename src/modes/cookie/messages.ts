@@ -4,7 +4,7 @@ import type { Translation } from '../../i18n';
 
 const en = {
   tagline: 'bake what you type',
-  emptyToast: 'EMPTY BOWL? A PAW MIXED SOMETHING 🐾',
+  emptyToast: 'EMPTY BOWL? A PAW MIXED SOMETHING',
   runHint: 'bake the cookies',
   ready: 'DOUGH READY',
   cookies: { one: 'COOKIE', other: 'COOKIES' },
@@ -73,7 +73,7 @@ const en = {
 // casual "du", short
 const de: Translation<typeof en> = {
   tagline: 'back, was du tippst',
-  emptyToast: 'SCHÜSSEL LEER? EINE PFOTE HAT GERÜHRT 🐾',
+  emptyToast: 'SCHÜSSEL LEER? EINE PFOTE HAT GERÜHRT',
   runHint: 'Kekse backen',
   ready: 'TEIG FERTIG',
   cookies: { one: 'KEKS', other: 'KEKSE' },

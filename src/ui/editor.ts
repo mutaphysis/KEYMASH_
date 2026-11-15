@@ -1,6 +1,8 @@
 // Edit mode: the textarea, the mode's backdrop behind it (two canvases), and a key bar for
 // phones: cursor keys plus the mode's symbols and emoji.
 import { $, ctx2d } from './dom';
+import { iconEl } from './icon';
+import type { IconName } from './icon';
 import { graphemes } from '../lang/lexer';
 import type { Backdrop } from '../modes/types';
 
@@ -9,13 +11,13 @@ export interface EditorOpts {
   onChange?: (v: string) => void;
   onType?: (ch: string, inputType: string) => void;
 }
-type KeyDef = string | [label: string, action: string];
-const NAV_KEYS: KeyDef[] = [
-  ['◀', 'left'],
-  ['▶', 'right'],
-  ['▲', 'up'],
-  ['▼', 'down'],
-  ['⏎', '\n'],
+/** the cursor keys: an icon and what they do */
+const NAV_KEYS: [IconName, string][] = [
+  ['left', 'left'],
+  ['right', 'right'],
+  ['up', 'up'],
+  ['down', 'down'],
+  ['enter', '\n'],
 ];
 
 export class Editor {
@@ -192,14 +194,15 @@ export class Editor {
     bar.textContent = '';
     for (const k of [...NAV_KEYS, ...keys]) {
       const b = document.createElement('button');
-      const [label, val] = Array.isArray(k) ? k : [k, k];
-      b.textContent = label;
+      const nav = Array.isArray(k);
+      if (nav) b.append(iconEl(k[0]));
+      else b.textContent = k;
       b.type = 'button';
-      if (Array.isArray(k)) b.className = 'nav';
+      if (nav) b.className = 'nav';
       // keep focus in the textarea so the phone keyboard stays open
       b.addEventListener('pointerdown', (e) => e.preventDefault());
       b.addEventListener('mousedown', (e) => e.preventDefault());
-      b.addEventListener('click', () => this.key(val));
+      b.addEventListener('click', () => this.key(nav ? k[1] : k));
       bar.appendChild(b);
     }
   }

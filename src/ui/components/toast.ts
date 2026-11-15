@@ -1,4 +1,6 @@
-// <km-toast>: a short message under the header that goes away by itself.
+// <km-toast>: a short message under the header that goes away by itself, optionally ending in an icon.
+import { iconEl } from '../icon';
+import type { IconName } from '../icon';
 import { toast } from './drawer.css';
 
 export class KmToast extends HTMLElement {
@@ -10,8 +12,9 @@ export class KmToast extends HTMLElement {
     this.setAttribute('role', 'status');
   }
 
-  show(text: string, ms = 1800): void {
+  show(text: string, icon?: IconName, ms = 1800): void {
     this.textContent = text;
+    if (icon) this.append(' ', iconEl(icon));
     this.hidden = false;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {

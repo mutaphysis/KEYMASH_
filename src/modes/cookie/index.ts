@@ -12,7 +12,6 @@ const ICON = `<svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke=
 export const cookie: ModeDef = {
   id: 'cookie',
   name: 'COOKIE_',
-  glyph: '🍪',
   icon: ICON,
   tagline: t('tagline'),
   themeColor: '#140c08',

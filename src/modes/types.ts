@@ -3,6 +3,7 @@
 // reads everything mode specific from here.
 import type { AudioEngine, TypingStyle } from '../engine/audio';
 import type { Demo } from '../ui/storage';
+import type { IconName } from '../ui/icon';
 
 /**
  * Play mode: owns the shared stage (#stage, #hud, #log, #boot, #codeview) between start() and stop().
@@ -52,13 +53,13 @@ export interface DrawerSection {
 }
 export interface DrawerContext {
   audio: AudioEngine;
-  /** a drawer row: name, a smaller line underneath, an action */
-  item(name: string, sub: string, onPick: () => void): HTMLElement;
+  /** a drawer row: name, a smaller line underneath, an action; an icon in front, e.g. `check` for the setting in use */
+  item(name: string, sub: string, onPick: () => void, icon?: IconName): HTMLElement;
   /** rebuild the drawer (after a setting changed) */
   refresh(): void;
 }
 
-/** one card of the cheat sheet (📖 in the header): a snippet, what it does, and a picture of it */
+/** one card of the cheat sheet (the book in the header): a snippet, what it does, and a picture of it */
 export interface SheetCard {
   /** the picture is src/modes/<mode>/sheet/<id>.webp, rendered by `bun scripts/sheet.ts` */
   id: string;
@@ -86,8 +87,6 @@ export interface ModeDef {
   id: string;
   /** shown as the logo, e.g. "PETRI_" */
   name: string;
-  /** emoji in the mode select (an <option> can't show the SVG icon) */
-  glyph: string;
   /** header icon, inline SVG markup */
   icon: string;
   tagline: string;
@@ -103,16 +102,16 @@ export interface ModeDef {
 
 /** A mode's code: the editor backdrop, the player, the cheat sheet, … */
 export interface ModeCode {
-  /** toast when RUN gets an empty text and a paw fills it */
+  /** toast when RUN gets an empty text and a paw fills it (the toast ends in the paw icon) */
   emptyToast: string;
-  /** under ▶ when only the stage shows: what RUN does here, e.g. "bake the cookies" */
+  /** under RUN when only the stage shows: what RUN does here, e.g. "bake the cookies" */
   runHint: string;
   /** typing sounds in the editor */
   typing: TypingStyle;
   demos: Demo[];
   /** key bar entries after the cursor keys */
   keys: string[];
-  /** the cheat sheet behind 📖 */
+  /** the cheat sheet behind the book in the header */
   sheet: Sheet;
   backdrop(): Backdrop;
   status(src: string): Status;

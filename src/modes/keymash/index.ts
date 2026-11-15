@@ -12,7 +12,6 @@ const ICON = `<svg class="ic-key" viewBox="0 0 64 64" aria-hidden="true"><g fill
 export const keymash: ModeDef = {
   id: 'keymash',
   name: 'KEYMASH_',
-  glyph: '🐾',
   icon: ICON,
   tagline: t('tagline'),
   themeColor: '#000800',

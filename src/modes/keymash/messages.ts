@@ -4,14 +4,14 @@ import type { Translation } from '../../i18n';
 
 const en = {
   tagline: 'every keystroke compiles',
-  emptyToast: 'EMPTY? A PAW TYPED SOMETHING FOR YOU 🐾',
+  emptyToast: 'EMPTY? A PAW TYPED SOMETHING FOR YOU',
   runHint: 'run the program',
   errors0: '0 ERRORS',
   threads: 'THREADS',
   voice: 'VOICE',
-  voiceSystem: '🗣 system speech',
+  voiceSystem: 'system speech',
   voiceSystemSub: 'real words from your device — Firefox on macOS may click',
-  voiceBabble: '🤖 keymash babble',
+  voiceBabble: 'keymash babble',
   voiceBabbleSub: 'made right here, sounds the same everywhere, never clicks',
   voiceHello: 'hello, i am keymash!',
   // ---- demo names ----
@@ -114,14 +114,14 @@ const en = {
 
 const de: Translation<typeof en> = {
   tagline: 'jeder Tastendruck kompiliert',
-  emptyToast: 'LEER? EINE PFOTE HAT WAS FÜR DICH GETIPPT 🐾',
+  emptyToast: 'LEER? EINE PFOTE HAT WAS FÜR DICH GETIPPT',
   runHint: 'Programm starten',
   errors0: '0 FEHLER',
   threads: 'THREADS',
   voice: 'STIMME',
-  voiceSystem: '🗣 Systemstimme',
+  voiceSystem: 'Systemstimme',
   voiceSystemSub: 'echte Wörter von deinem Gerät — Firefox auf dem Mac knackst evtl.',
-  voiceBabble: '🤖 Keymash-Gebrabbel',
+  voiceBabble: 'Keymash-Gebrabbel',
   voiceBabbleSub: 'kommt von hier, klingt überall gleich, knackst nie',
   voiceHello: 'hallo, ich bin keymash!',
   demoDog: '🐶 Hund auf der Tastatur',

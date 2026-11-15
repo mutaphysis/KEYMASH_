@@ -12,7 +12,6 @@ const ICON = `<svg class="ic-cell" viewBox="0 0 64 64" aria-hidden="true"><g fil
 export const petri: ModeDef = {
   id: 'petri',
   name: 'PETRI_',
-  glyph: '🧫',
   icon: ICON,
   tagline: t('tagline'),
   themeColor: '#010a0d',

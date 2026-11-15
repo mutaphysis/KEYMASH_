@@ -57,29 +57,27 @@ export const sub = style({
   textShadow: 'none',
 });
 export const del = style([button, { flex: '0 0 46px', color: rgba(vars.rgb.accent, 1), borderColor: rgba(vars.rgb.accent, 0.5) }]);
+globalStyle(`${name} > i`, { fontSize: 14, marginRight: 6 });
+globalStyle(`${del} > i`, { fontSize: 16 });
 /** two things side by side, e.g. reload | language */
 export const split = style({ display: 'flex', gap: 6, marginBottom: 6 });
 globalStyle(`${split} > *`, { flex: '1 1 0', minWidth: 0, marginBottom: 0 });
 globalStyle(`${split} ${sub}`, { whiteSpace: 'normal' });
 
-// ---------- <km-select>: a native select dressed like the rows, the arrow drawn on top ----------
-export const pick = style({
-  position: 'relative',
-  display: 'flex',
-  marginBottom: 6,
-  selectors: {
-    '&::after': {
-      content: '"▾"',
-      position: 'absolute',
-      right: 12,
-      top: '50%',
-      transform: 'translateY(-50%)',
-      pointerEvents: 'none',
-      color: rgba(fg, 1),
-      fontSize: 14,
-    },
-  },
-});
+// ---------- <km-select>: a native select dressed like the rows, its icon and the arrow drawn on top ----------
+export const pick = style({ position: 'relative', display: 'flex', marginBottom: 6 });
+/** drawn over the select; plain styles, not composed: they go onto an icon via classList.add */
+const over = {
+  position: 'absolute',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  color: rgba(fg, 1),
+} as const;
+/** what the select is about (globe, the mode's icon), on the left */
+export const lead = style({ ...over, left: 10, width: 18, height: 18, fontSize: 18 });
+globalStyle(`${lead} svg`, { display: 'block', width: '100%', height: '100%' });
+export const arrow = style({ ...over, right: 10, fontSize: 16 });
 export const select = style([
   button,
   {
@@ -91,6 +89,7 @@ export const select = style([
     selectors: { '&:focus-visible': { outline: `1px solid ${rgba(fg, 1)}`, outlineOffset: 2 } },
   },
 ]);
+globalStyle(`${lead} ~ ${select}`, { paddingLeft: 36 });
 globalStyle(`${select} option`, { background: vars.color.panel, color: vars.color.text });
 
 // ---------- <km-toast> ----------

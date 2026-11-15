@@ -19,6 +19,8 @@ import { MODES, modeById, nextMode } from './modes';
 import type { ModeDef, ModeCode, ModePlayer, PlayerHost } from './modes/types';
 import { KmMute, KmItem, KmSelect, KmDrawer, KmCard } from './ui/components';
 import type { KmButton, KmModeIcon, KmToast } from './ui/components';
+import { iconEl } from './ui/icon';
+import type { IconName } from './ui/icon';
 
 localize();
 const app = $('app');
@@ -182,13 +184,13 @@ function layout(): void {
     $('play').hidden = !state.playing;
   }
   if (app.classList.contains('stageonly')) {
-    // only the stage, playing or waiting for ▶
+    // only the stage, playing or waiting for RUN
     $('edit').hidden = true;
     $('play').hidden = false;
   }
   editor.active = !$('edit').hidden;
   const rb = $<KmButton>('btn-run');
-  rb.icon = split && state.playing ? '■' : '▶';
+  rb.icon = split && state.playing ? 'stop' : 'play';
   rb.text = t(split && state.playing ? 'stop' : 'run');
   requestAnimationFrame(() => {
     editor.resize();
@@ -202,7 +204,7 @@ const UNDO_MS = 6000;
 let undo = '';
 const clearBtn = $<KmButton>('btn-clear');
 function armUndo(on: boolean): void {
-  clearBtn.icon = on ? '↶' : '✖';
+  clearBtn.icon = on ? 'undo' : 'close';
   clearBtn.text = t(on ? 'undo' : 'clear');
   clearBtn.countdown(on ? UNDO_MS : 0, () => armUndo(false));
 }
@@ -292,7 +294,7 @@ function run(): void {
   if (!src.trim()) {
     src = pawMash(70);
     editor.value = src;
-    toast(code.emptyToast);
+    toast(code.emptyToast, 'paw');
   }
   audio.padStop();
   if (!isSplit()) editor.ta.blur();
@@ -329,12 +331,12 @@ function shareProgram(): void {
   });
 }
 
-// ⛶ in the stage corner: only the picture, the rest of the UI hides. Where the browser allows it
+// fullscreen in the stage corner: only the picture, the rest of the UI hides. Where the browser allows it
 // (not on iPhone, not in some embeds) the page goes fullscreen too.
 const fullBtn = $<KmButton>('btn-full');
 function stageOnly(on: boolean): void {
   app.classList.toggle('stageonly', on);
-  fullBtn.icon = on ? '✖' : '⛶';
+  fullBtn.icon = on ? 'fullscreenExit' : 'fullscreen';
   if (on && document.fullscreenEnabled && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
   if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   layout();
@@ -374,7 +376,7 @@ $('btn-save').addEventListener('click', () => {
 });
 $('btn-load').addEventListener('click', openDrawer);
 
-// ---- the cheat sheet (📖 next to the sound button): the current mode's cards ----
+// ---- the cheat sheet (the book next to the sound button): the current mode's cards ----
 // A tap adds the card's snippet as a new last line; the sheet stays open for more.
 function addLine(snippet: string): void {
   const ta = editor.ta,
@@ -404,7 +406,8 @@ function openDrawer(): void {
     KmSelect.create({
       label: t('switchHint'),
       value: mode.id,
-      options: MODES.map((m) => [m.id, `${m.glyph} ${m.name} — ${m.tagline}`] as const),
+      options: MODES.map((m) => [m.id, `${m.name} — ${m.tagline}`] as const),
+      icon: modeIconEl(),
       onPick: (id) => {
         drawer.close();
         switchMode(modeById(id));
@@ -424,33 +427,26 @@ function openDrawer(): void {
       }),
     ),
   );
-  for (const sec of code.drawer?.({ audio, item, refresh: openDrawer }) ?? []) nodes.push(KmDrawer.heading(sec.title), ...sec.items);
-  nodes.push(
-    KmDrawer.heading(t('share')),
-    item(t('copy'), t('copySub'), async () => {
-      try {
-        await navigator.clipboard.writeText(editor.value);
-        toast(t('copied'));
-      } catch (e) {
-        toast(t('copyBlocked'));
-      }
-    }),
-  );
+  const sectionItem = (name: string, sub: string, onPick: () => void, icon?: IconName) => KmItem.create({ name, sub, onPick, icon });
+  for (const sec of code.drawer?.({ audio, item: sectionItem, refresh: openDrawer }) ?? [])
+    nodes.push(KmDrawer.heading(sec.title), ...sec.items);
+  nodes.push(KmDrawer.heading(t('share')), sectionItem(t('copy'), t('copySub'), copyProgram, 'copy'));
   // settings share one row: reload on the left, language on the right;
   // every string is resolved at startup, so a language change reloads (the text is kept)
   const langs = [
-    ['auto', '🌐 ' + t('langAuto', { name: LANG_NAMES[systemLang] })],
-    ['en', '🌐 ' + LANG_NAMES.en],
-    ['de', '🌐 ' + LANG_NAMES.de],
+    ['auto', t('langAuto', { name: LANG_NAMES[systemLang] })],
+    ['en', LANG_NAMES.en],
+    ['de', LANG_NAMES.de],
   ] as const;
   nodes.push(
     KmDrawer.heading('APP · ' + VERSION_LABEL),
     KmDrawer.split(
-      item(t('reload'), t('reloadSub'), reloadApp),
+      sectionItem(t('reload'), t('reloadSub'), reloadApp, 'reload'),
       KmSelect.create<LangPref>({
         label: t('language'),
         options: langs,
         value: langPref,
+        icon: iconEl('globe'),
         onPick: (p) => {
           setLangPref(p);
           reloadApp();
@@ -459,6 +455,22 @@ function openDrawer(): void {
     ),
   );
   drawer.open(nodes);
+}
+
+/** the current mode's own icon (the one in the header), for the mode select */
+function modeIconEl(): HTMLElement {
+  const i = document.createElement('i');
+  i.innerHTML = mode.icon;
+  return i;
+}
+
+async function copyProgram(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(editor.value);
+    toast(t('copied'));
+  } catch (e) {
+    toast(t('copyBlocked'));
+  }
 }
 
 /** Reload, for the home-screen app that has no reload button. The text survives as the draft. */
@@ -471,8 +483,8 @@ function reloadApp(): void {
   else location.reload();
 }
 
-function toast(text: string): void {
-  $<KmToast>('toast').show(text);
+function toast(text: string, icon?: IconName): void {
+  $<KmToast>('toast').show(text, icon);
 }
 
 // pause audio when the page is hidden

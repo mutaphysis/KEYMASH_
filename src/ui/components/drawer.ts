@@ -1,5 +1,5 @@
 // <km-drawer title-key="programs">: a sheet from the bottom over a dark backdrop.
-// open(nodes) fills and shows it; a tap on the backdrop or ✖ closes it.
+// open(nodes) fills and shows it; a tap on the backdrop or the close button closes it.
 // heading(), empty() and split() build the pieces that go between the rows.
 import { t } from '../../i18n';
 import type { Msg } from '../../i18n';
@@ -21,7 +21,7 @@ export class KmDrawer extends HTMLElement {
     title.textContent = t((this.getAttribute('title-key') ?? 'programs') as Msg);
     const close = document.createElement('km-button');
     close.setAttribute('variant', 'row');
-    close.setAttribute('icon', '✖');
+    close.setAttribute('icon', 'close');
     close.addEventListener('click', () => this.close());
     h.append(title, close);
     p.append(h, this.body);

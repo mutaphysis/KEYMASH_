@@ -8,7 +8,7 @@ repeat and roll.
 
 ## Cheat sheet
 
-The 📖 button in the header shows these cards in the app; tap one to add its snippet as a new line. The pictures are real frames of the snippets, rendered by `bun scripts/sheet.ts`.
+The book button in the header shows these cards in the app; tap one to add its snippet as a new line. The pictures are real frames of the snippets, rendered by `bun scripts/sheet.ts`.
 
 <!-- sheet:start (bun scripts/sheet.ts writes this table) -->
 <table>
@@ -56,7 +56,7 @@ Each letter is placed by **where its key sits**:
 |---|---|---|
 | held key | `jjjjjjj` | ratchet: the sound repeats as a roll, stream of particles, shake when long |
 | roll over neighbours | `asdf`, `poiu` | glissando + an arcing sweep through the keys |
-| CAPS chunk | `WOOF`, `ASDKJ` | spoken out loud — by the system voice, or by the built-in *babble* voice (pick in 📂 LOAD → VOICE; default on Firefox/macOS, where system speech clicks) |
+| CAPS chunk | `WOOF`, `ASDKJ` | spoken out loud — by the system voice, or by the built-in *babble* voice (pick in LOAD → VOICE; default on Firefox/macOS, where system speech clicks) |
 | chunk + `?`/`!` | `fjdk?` | spoken as a question / exclamation |
 | long chunk (≥5) | `lkjhgfdsa` | casts a **spell** from the effect library, picked by the chunk's hash (same mash → same spell). Spells have a cooldown shared by all threads: 1.5 s each, and all hacker spells together at most once every 4 s. While a spell cools down, the chunk just floats away as text. |
 | number | `42` | shown on screen, dialled as DTMF phone tones, becomes the argument of the next op |

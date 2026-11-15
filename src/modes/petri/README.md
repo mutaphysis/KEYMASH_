@@ -7,7 +7,7 @@ text is the genome of a species and, read slowly, a feeder for the dish.
 
 ## Cheat sheet
 
-The 📖 button in the header shows these cards in the app; tap one to add its snippet as a new line. The pictures are real frames of the snippets, rendered by `bun scripts/sheet.ts`.
+The book button in the header shows these cards in the app; tap one to add its snippet as a new line. The pictures are real frames of the snippets, rendered by `bun scripts/sheet.ts`.
 
 <!-- sheet:start (bun scripts/sheet.ts writes this table) -->
 <table>

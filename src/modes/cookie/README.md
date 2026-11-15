@@ -7,7 +7,7 @@ bakes it and decorates it; then the cookies are yours to eat, one tap a bite.
 
 ## Cheat sheet
 
-The 📖 button in the header shows these cards in the app; tap one to add its snippet as a new line. The pictures are real frames of the snippets, rendered by `bun scripts/sheet.ts`.
+The book button in the header shows these cards in the app; tap one to add its snippet as a new line. The pictures are real frames of the snippets, rendered by `bun scripts/sheet.ts`.
 
 <!-- sheet:start (bun scripts/sheet.ts writes this table) -->
 <table>
@@ -94,7 +94,7 @@ and shape; a tap in the middle bites the nearest edge. Crumbs fall, bounce and s
 cookie or on the tray.
 A cookie that is almost gone crumbles. Left alone for ten seconds, the cookies get nibbled away
 on their own (a tap puts that off again). When the tray is empty it is swept and three buttons
-come up: **make your own** goes back to an empty editor (↶ UNDO brings the recipe back for a few
+come up: **make your own** goes back to an empty editor (UNDO brings the recipe back for a few
 seconds), **bake again** bakes the same recipe once more, **share** shares a link to it (the play
 buttons hide meanwhile: the panel covers them).
 

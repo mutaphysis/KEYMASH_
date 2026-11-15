@@ -1,8 +1,11 @@
-// <km-button icon="▶" label="run" variant="control" primary>: the app's one button.
-// `label` and `title-key` are message ids (shared UI messages); `.icon` / `.text` change them later.
+// <km-button icon="play" label="run" variant="control" primary>: the app's one button.
+// `icon` is an IconName (src/ui/icons/); `label` and `title-key` are message ids (shared UI messages);
+// `.icon` / `.text` change them later.
 // The host takes no space (display: contents), so the inner <button> sits in the parent's layout.
 import { t } from '../../i18n';
 import type { Msg } from '../../i18n';
+import { setIcon } from '../icon';
+import type { IconName } from '../icon';
 import { host, variant } from './button.css';
 import type { Variant } from './button.css';
 
@@ -17,7 +20,8 @@ export class KmButton extends HTMLElement {
     this.classList.add(host);
     this.button.type = 'button';
     this.button.className = variant[(this.getAttribute('variant') as Variant | null) ?? 'control'];
-    this.iconEl.textContent = this.getAttribute('icon') ?? '';
+    const icon = this.getAttribute('icon');
+    if (icon) setIcon(this.iconEl, icon as IconName);
     const label = this.getAttribute('label');
     this.textEl.textContent = label ? t(label as Msg) : '';
     const title = this.getAttribute('title-key');
@@ -29,8 +33,8 @@ export class KmButton extends HTMLElement {
     this.appendChild(this.button);
   }
 
-  set icon(s: string) {
-    this.iconEl.textContent = s;
+  set icon(name: IconName) {
+    setIcon(this.iconEl, name);
   }
   set text(s: string) {
     this.textEl.textContent = s;

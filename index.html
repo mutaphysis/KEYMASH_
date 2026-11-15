@@ -93,7 +93,7 @@
             <b class="ok" id="st-ok">0 ERRORS</b> · <span id="st-threads">0</span> <span id="st-unit">THREADS</span> ·
             <span id="st-glyphs">0</span> <span data-i18n="glyphs">GLYPHS</span><b id="st-live"> · LIVE</b>
           </div>
-          <km-button id="btn-sheet" variant="header" icon="📖" title-key="sheetTitle"></km-button>
+          <km-button id="btn-sheet" variant="header" icon="sheet" title-key="sheetTitle"></km-button>
           <km-mute id="btn-mute-edit" variant="header"></km-mute>
         </header>
         <div id="editorWrap">
@@ -111,11 +111,11 @@
         </div>
         <div id="keybar" role="toolbar" aria-label="extra keys" data-i18n-aria-label="extraKeys"></div>
         <nav id="controls">
-          <km-button id="btn-run" icon="▶" label="run" primary></km-button>
-          <km-button id="btn-mash" icon="🐾" label="mash" title-key="mashTitle"></km-button>
-          <km-button id="btn-clear" icon="✖" label="clear"></km-button>
-          <km-button id="btn-save" icon="💾" label="save"></km-button>
-          <km-button id="btn-load" icon="📂" label="load"></km-button>
+          <km-button id="btn-run" icon="play" label="run" primary></km-button>
+          <km-button id="btn-mash" icon="paw" label="mash" title-key="mashTitle"></km-button>
+          <km-button id="btn-clear" icon="close" label="clear"></km-button>
+          <km-button id="btn-save" icon="save" label="save"></km-button>
+          <km-button id="btn-load" icon="open" label="load"></km-button>
         </nav>
       </section>
 
@@ -127,17 +127,17 @@
           <div id="log"></div>
           <div id="boot"></div>
           <div id="idle">
-            <km-button id="btn-idle-run" variant="idle" icon="▶" label="run" primary></km-button>
+            <km-button id="btn-idle-run" variant="idle" icon="play" label="run" primary></km-button>
             <p data-i18n="idleHint">edit on the left — changes go live while it runs</p>
             <p id="idle-run"></p>
           </div>
           <div class="playbtns">
             <km-mute id="btn-mute" variant="play"></km-mute>
-            <km-button id="btn-share" variant="play" icon="🔗" title-key="shareTitle"></km-button>
-            <km-button id="btn-restart" variant="play" icon="⟲" title-key="restart"></km-button>
-            <km-button id="btn-stop" variant="play" icon="■" label="edit" primary></km-button>
+            <km-button id="btn-share" variant="play" icon="share" title-key="shareTitle"></km-button>
+            <km-button id="btn-restart" variant="play" icon="restart" title-key="restart"></km-button>
+            <km-button id="btn-stop" variant="play" icon="stop" label="edit" primary></km-button>
           </div>
-          <km-button id="btn-full" variant="corner" icon="⛶" title-key="fullscreen"></km-button>
+          <km-button id="btn-full" variant="corner" icon="fullscreen" title-key="fullscreen"></km-button>
         </div>
         <div id="codeview"></div>
       </section>
