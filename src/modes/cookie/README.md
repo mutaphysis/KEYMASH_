@@ -97,9 +97,21 @@ come up: **make your own** goes back to the editor, **bake again** bakes the sam
 
 ## Sound
 
-A small seeded music box (key and tempo from the text) follows the stages: plucks and bass while
-the dough is worked, a pad while the oven hums, bells for the decoration, a piano joins when it
-is served. Every thud, cut, chip, oven tick, sprinkle, bite and crumb has its own sound.
+A small band follows the stages: a tune while the dough is worked, a pad while the oven hums, more
+of it for the decoration, a lead joins when it is served. The dough picks the band:
+
+| dough | band |
+|---|---|
+| butter | music box: plucks, bells, piano |
+| ginger | sleigh ride: chiptune, bells, sleigh bells, a little faster |
+| cocoa | piano bar: swung piano over a walking bass, chords with sevenths |
+| oat | barn dance: plucks and an organ, a light swing |
+| matcha | rainy afternoon: slow, piano and chiptune, sevenths |
+
+Hearts and bells waltz (3/4), stars and trees march (4/4), round cookies and bears do either.
+Key, tempo, chords and tune come from the text, so every recipe hums its own song (the boot text
+says which). Every thud, cut, chip, oven tick, sprinkle, bite and crumb has its own sound, and a
+burnt batch comes out of the oven to a sad trombone.
 
 ## How it is drawn
 

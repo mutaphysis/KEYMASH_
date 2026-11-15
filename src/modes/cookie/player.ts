@@ -170,7 +170,7 @@ export class CookiePlayer implements ModePlayer {
     this.logEl.textContent = ''; // another mode's notes; COOKIE_ announces at the top instead
     this.hud.textContent = '';
     this.greet.textContent = '';
-    this.jingle.configure(b.recipe.seed);
+    this.jingle.configure(b.recipe);
     if (!this.r.ok) {
       this.announce(t('noGl'));
       return;
@@ -274,18 +274,20 @@ export class CookiePlayer implements ModePlayer {
   private apply(b: Bakery, ev: BakeEvent): void {
     this.jingle.event(ev);
     if (ev.type === 'stage') {
+      if (ev.stage === 'drop') this.jingle.configure(b.recipe); // a new batch, maybe of an edited recipe: its own band
       this.jingle.stage(ev.stage);
       this.panel.classList.toggle('on', ev.stage === 'done');
       const r = b.recipe;
       const msg = LOG[ev.stage];
-      if (ev.stage === 'cool' && r.bake > 1.45) this.announce(t('logBurnt'));
-      else if (ev.stage === 'sweep' && b.pending) {
+      if (ev.stage === 'sweep' && b.pending) {
         // swept for an edit: "baking again" stays up
       } else if (msg) this.announce(t(msg, { temp: r.temp, min: r.minutes }));
       this.highlight(b, ev.stage);
     } else if (ev.type === 'ready') {
       this.announce('');
       this.showGreeting(b.recipe);
+    } else if (ev.type === 'burnt') {
+      this.announce(t('logBurnt'));
     } else if (ev.type === 'bite') {
       this.hideHint();
     } else if (ev.type === 'sweep') {

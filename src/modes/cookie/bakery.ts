@@ -89,6 +89,8 @@ export type BakeEvent =
   | { type: 'chip'; pan: number }
   | { type: 'tick' }
   | { type: 'ding' }
+  /** out of the oven black: it went too hot or too long */
+  | { type: 'burnt' }
   | { type: 'pour' }
   | { type: 'sprinkle'; pan: number }
   | { type: 'place'; pan: number }
@@ -101,6 +103,8 @@ export type BakeEvent =
 export const MAX_CRUMBS = 240;
 /** above this the oldest crumbs start to fade, so the hard limit is never a visible pop */
 const SOFT_CRUMBS = 200;
+/** baked past this (recipe.bake) the cookies come out black */
+const BURNT = 1.45;
 
 export const DOUGH: Record<Dough, { raw: RGB; baked: RGB }> = {
   butter: { raw: [0.93, 0.84, 0.62], baked: [0.82, 0.58, 0.28] },
@@ -426,6 +430,9 @@ export class Bakery {
       case 'bake':
         for (let t = 0.5; t < 4.2; t += 0.5) cues.push([t, { type: 'tick' }]);
         cues.push([4.2, { type: 'ding' }]);
+        break;
+      case 'cool':
+        if (this.recipe.bake > BURNT) cues.push([0, { type: 'burnt' }]);
         break;
       case 'coat':
         cues.push([POUR_FALL - 0.05, { type: 'pour' }]); // as the stream lands

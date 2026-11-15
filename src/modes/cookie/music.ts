@@ -1,22 +1,121 @@
-// COOKIE_ sound: a small music box that follows the bakery. Each stage has its own arrangement of
-// the same seeded pattern, every bakery event has one sound. All of it goes through the shared
-// engine's play(), so mute and stop just work.
+// COOKIE_ sound: a small band that follows the bakery. The dough picks the band (instruments,
+// swing, tempo, harmony), the cutter the metre, the text's seed the key, the chords and the tune;
+// each stage has its own arrangement of it, every bakery event has one sound. All of it goes
+// through the shared engine's play(), so mute and stop just work.
 import type { AudioEngine } from '../../engine/audio';
 import type { Panned } from '../../engine/sound';
 import type { Instrument } from '../../engine/sound';
 import { mulberry32 } from '../../lang/rng';
-import type { Stage } from './recipe';
+import type { Dough, Recipe, Shape, Stage } from './recipe';
 import type { BakeEvent } from './bakery';
 
 const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 const PENTA = [0, 2, 4, 7, 9];
-/** I, vi, IV, V: root and third of each bar's chord */
-const CHORDS = [
-  { root: 0, third: 4 },
-  { root: -3, third: 3 },
-  { root: 5, third: 4 },
-  { root: 7, third: 4 },
-];
+
+/** a chord: root above the key, its third, and a seventh for the bands that like them */
+interface Chord {
+  root: number;
+  third: number;
+  seventh: number;
+}
+const M = (root: number): Chord => ({ root, third: 4, seventh: 11 });
+const m = (root: number): Chord => ({ root, third: 3, seventh: 10 });
+const DOM = (root: number): Chord => ({ root, third: 4, seventh: 10 });
+/** four bars each */
+const PROGS = {
+  pop: [M(0), m(-3), M(5), M(7)], // I vi IV V
+  anthem: [M(0), M(7), m(-3), M(5)], // I V vi IV
+  hymn: [M(0), M(5), m(-3), M(7)], // I IV vi V
+  sad: [m(-3), M(5), M(0), M(7)], // vi IV I V
+  jazz: [m(2), DOM(7), M(0), m(-3)], // ii V I vi
+  folk: [M(0), M(5), M(0), M(7)], // I IV I V
+};
+type Prog = keyof typeof PROGS;
+
+/** who plays what: the dough's band */
+interface Band {
+  /** while the dough is worked */
+  work: Instrument;
+  /** while it is dressed */
+  dress: Instrument;
+  /** the tune once it is served */
+  lead: Instrument;
+  /** 0 straight .. 1 heavy swing: how late the off-beat eighths come */
+  swing: number;
+  bpm: [number, number];
+  progs: Prog[];
+  /** sevenths in the chords */
+  sevenths: boolean;
+  /** a walking bass on every beat instead of one or two notes a bar */
+  walk: boolean;
+  /** sleigh bells on the eighths while it is dressed and served */
+  sleigh: boolean;
+}
+const BANDS: Record<Dough, Band> = {
+  // a music box
+  butter: {
+    work: 'pluck',
+    dress: 'bell',
+    lead: 'piano',
+    swing: 0,
+    bpm: [88, 108],
+    progs: ['pop', 'anthem', 'hymn'],
+    sevenths: false,
+    walk: false,
+    sleigh: false,
+  },
+  // a sleigh ride
+  ginger: {
+    work: 'chip',
+    dress: 'bell',
+    lead: 'bell',
+    swing: 0.15,
+    bpm: [108, 126],
+    progs: ['pop', 'folk', 'anthem'],
+    sevenths: false,
+    walk: false,
+    sleigh: true,
+  },
+  // a piano bar
+  cocoa: {
+    work: 'piano',
+    dress: 'piano',
+    lead: 'piano',
+    swing: 0.6,
+    bpm: [84, 100],
+    progs: ['jazz', 'sad'],
+    sevenths: true,
+    walk: true,
+    sleigh: false,
+  },
+  // a barn dance
+  oat: {
+    work: 'pluck',
+    dress: 'pluck',
+    lead: 'organ',
+    swing: 0.3,
+    bpm: [96, 116],
+    progs: ['folk', 'hymn'],
+    sevenths: false,
+    walk: false,
+    sleigh: false,
+  },
+  // a rainy afternoon
+  matcha: {
+    work: 'piano',
+    dress: 'chip',
+    lead: 'piano',
+    swing: 0.4,
+    bpm: [72, 86],
+    progs: ['sad', 'jazz', 'anthem'],
+    sevenths: true,
+    walk: false,
+    sleigh: false,
+  },
+};
+/** hearts and bells waltz, stars and trees march, the rest as the seed says */
+const WALTZ: Record<Shape, number> = { heart: 1, bell: 1, star: 0, tree: 0, round: 0.4, bear: 0.4 };
+
 type Mood = 'work' | 'oven' | 'dress' | 'serve' | 'quiet';
 /** chips are not listed: they land while the dough is worked or, on a coated cookie, while it is dressed, and keep that tune */
 const MOOD: Partial<Record<Stage, Mood>> = {
@@ -39,7 +138,11 @@ export class Jingle {
   private audio: AudioEngine;
   private root = 48;
   private bpm = 96;
-  /** eight steps of chord tones (0..4); the strong ones also play while the dough is worked */
+  private band: Band = BANDS.butter;
+  private prog: Chord[] = PROGS.pop;
+  /** beats in a bar: 4 or 3 */
+  private beats = 4;
+  /** one entry per eighth of a bar: a chord tone (0..4); the strong ones also play while the dough is worked */
   private pattern: number[] = [0, 2, 1, 3, 2, 4, 3, 1];
   private strong: boolean[] = [true, false, false, true, false, true, false, false];
   private melody: number[] = [4, 2, 3, 0];
@@ -48,24 +151,31 @@ export class Jingle {
   private mood: Mood = 'work';
   private step = 0;
   private nextT = 0;
+  /** the music holds its breath until then (audio time) */
+  private hush = 0;
 
   constructor(audio: AudioEngine) {
     this.audio = audio;
   }
 
-  configure(seed: number): void {
+  configure(r: Recipe): void {
+    const seed = r.seed;
     const rnd = mulberry32(seed);
     this.rnd = rnd;
+    const band = (this.band = BANDS[r.dough]);
     this.root = 48 + (seed % 12);
-    this.bpm = 84 + ((seed >>> 4) % 24);
-    this.pattern = Array.from({ length: 8 }, (_, i) => (i === 0 ? 0 : Math.floor(rnd() * 5)));
+    this.bpm = band.bpm[0] + ((seed >>> 4) % (band.bpm[1] - band.bpm[0] + 1));
+    this.prog = PROGS[band.progs[(seed >>> 9) % band.progs.length]!];
+    this.beats = rnd() < WALTZ[r.shape] ? 3 : 4;
+    const eighths = this.beats * 2;
+    this.pattern = Array.from({ length: eighths }, (_, i) => (i === 0 ? 0 : Math.floor(rnd() * 5)));
     this.strong = this.pattern.map((_, i) => i === 0 || rnd() < 0.45);
     this.melody = Array.from({ length: 8 }, () => Math.floor(rnd() * 5));
   }
 
-  /** e.g. "D · 96 bpm", for the boot text */
+  /** e.g. "D · 96 bpm", "A · 112 bpm · 3/4", for the boot text */
   describe(): string {
-    return `${NAMES[this.root % 12]} · ${this.bpm} bpm`;
+    return `${NAMES[this.root % 12]} · ${this.bpm} bpm${this.beats === 3 ? ' · 3/4' : ''}`;
   }
 
   private get stepDur(): number {
@@ -76,6 +186,7 @@ export class Jingle {
     this.on = true;
     this.step = 0;
     this.mood = 'work';
+    this.hush = 0;
     this.nextT = this.audio.now + 0.1;
   }
 
@@ -122,6 +233,11 @@ export class Jingle {
       case 'ding':
         this.note('bell', 96, 24, 0.7, this.audio.now, 0.4);
         break;
+      case 'burnt':
+        // the sad trombone, with the music holding its breath
+        this.now({ type: 'sfx', kind: 'wahwah', vel: 0.9, p: 1 }, 0.15);
+        this.hush = this.audio.now + 2.8;
+        break;
       case 'pour':
         this.now({ type: 'sfx', kind: 'bubbles', vel: 0.3, p: 1 });
         break;
@@ -163,30 +279,46 @@ export class Jingle {
 
   private play(step: number, t: number): void {
     const mood = this.mood;
-    if (mood === 'quiet') return;
-    const s = step % 16;
-    const chord = CHORDS[Math.floor(step / 16) % 4]!;
+    if (mood === 'quiet' || t < this.hush) return;
+    const band = this.band;
+    const bar = this.beats * 4; // sixteenths
+    const s = step % bar;
+    const chord = this.prog[Math.floor(step / bar) % this.prog.length]!;
     const base = this.root + chord.root;
-    const tones = [0, chord.third, 7, 12, 12 + chord.third];
-    const eighth = s % 2 === 0 ? (s / 2) % 8 : -1;
+    const tones = band.sevenths ? [0, chord.third, 7, chord.seventh, 12] : [0, chord.third, 7, 12, 12 + chord.third];
+    const eighth = s % 2 === 0 ? s / 2 : -1;
+    // swung: every second eighth comes a little late
+    const at = eighth % 2 === 1 ? t + band.swing * this.stepDur * 0.66 : t;
 
     if (mood === 'oven') {
       // half time: the oven hums
-      if (step % 32 === 0) for (const n of [0, chord.third, 7]) this.note('pad', base + 12 + n, 30, 0.3, t);
-      if (step % 32 === 0) this.note('bass', base - 12, 6, 0.4, t);
+      if (step % (2 * bar) === 0) {
+        for (const n of tones.slice(0, band.sevenths ? 4 : 3)) this.note('pad', base + 12 + n, 30, 0.3, t);
+        this.note('bass', base - 12, 6, 0.4, t);
+      }
       return;
     }
-    if (s === 0 || s === 8) this.note('bass', base - 12, 3, 0.45, t);
+    if (s % 4 === 0) {
+      // the bass: a walk on every beat, or the root on one (and three)
+      const beat = s / 4;
+      if (band.walk) this.note('bass', base - 12 + [0, tones[1]!, 7, tones[3]! - 12][beat % 4]!, 3, 0.4, t);
+      else if (beat === 0 || (this.beats === 4 && beat === 2)) this.note('bass', base - 12, 3, 0.45, t);
+    }
     if (eighth < 0) return;
-    const tone = tones[this.pattern[eighth]!]!;
+    const tone = tones[this.pattern[eighth % this.pattern.length]!]!;
     if (mood === 'work') {
-      if (this.strong[eighth]) this.note('pluck', base + 12 + tone, 2, 0.35, t);
+      if (this.strong[eighth % this.strong.length]) this.note(band.work, base + 12 + tone, 2, 0.35, at);
+      // a waltz: oom-pah-pah, the chord on two and three
+      if (this.beats === 3 && (eighth === 2 || eighth === 4))
+        for (const n of [tones[1]!, 7]) this.note(band.work, base + 12 + n, 1.5, 0.18, at);
       return;
     }
-    this.note('bell', base + 24 + tone, 3, 0.3, t, 0.3, eighth % 2 ? 0.3 : -0.3);
+    if (band.sleigh)
+      this.audio.play({ type: 'drum', kind: 'hat', vel: eighth % 2 ? 0.07 : 0.12, pan: eighth % 2 ? 0.4 : -0.4 }, at, this.stepDur);
+    this.note(band.dress, base + 24 + tone, 3, 0.3, at, 0.3, eighth % 2 ? 0.3 : -0.3);
     if (mood === 'serve' && s % 8 === 0) {
-      const m = this.melody[Math.floor(step / 8) % 8]!;
-      if (this.rnd() < 0.85) this.note('piano', this.root + 12 + PENTA[m]! + (m < 2 ? 12 : 0), 6, 0.4, t, 0.2);
+      const n = this.melody[Math.floor(step / 8) % 8]!;
+      if (this.rnd() < 0.85) this.note(band.lead, this.root + 12 + PENTA[n]! + (n < 2 ? 12 : 0), 6, 0.4, t, 0.2);
     }
   }
 }
