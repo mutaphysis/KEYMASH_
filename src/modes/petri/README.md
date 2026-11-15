@@ -72,7 +72,8 @@ Tap the dish to drop food.
 Cells sense food, prey and threats. Rod bacteria run and tumble (keep running while
 food gets closer — real chemotaxis), flagellates dart, amoebae crawl, cocci jiggle and
 cluster, volvox rolls. Grazers eat algae, photosynthetic cells feed on light,
-predators engulf smaller cells of other species (toxic prey makes them sick), symbionts
+predators engulf smaller cells of other species (toxic prey makes them sick: they crawl,
+lose part of the life they had left and cannot divide until it wears off), symbionts
 even out their energy when they touch. Cells divide with small mutations, age and
 die; their debris feeds the next generation and spores hatch later. Division is drawn
 as it happens: cells with a nucleus go through mitosis (the envelope dissolves,

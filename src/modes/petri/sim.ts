@@ -565,7 +565,7 @@ export class World {
     }
 
     // --- body-specific locomotion
-    let speed = c.speed * (0.55 + 0.45 * Math.min(1, c.energy / (sp.divideAt * 0.6))) * (c.sick ? 0.5 : 1);
+    let speed = c.speed * (0.55 + 0.45 * Math.min(1, c.energy / (sp.divideAt * 0.6))) * (c.sick ? 0.3 : 1);
     switch (sp.body) {
       case 'bacillus': {
         // run and tumble: keep running while food gets closer, tumble when it doesn't (chemotaxis)
@@ -684,6 +684,8 @@ export class World {
         if (p.sp.toxic > 0 && sp.toxic < p.sp.toxic) {
           c.sick = 4 + p.sp.toxic * 8;
           c.energy -= p.sp.toxic * 35;
+          // poison wears the body out: part of the life it had left is gone for good
+          c.life = c.age + (c.life - c.age) * (0.75 - p.sp.toxic * 0.35);
           this.emit({ type: 'toxic', x: c.x, y: c.y, sp });
         }
       }
@@ -709,7 +711,14 @@ export class World {
     const target = c.size * (0.8 + 0.35 * Math.min(1.1, c.energy / sp.divideAt));
     c.r += (target - c.r) * Math.min(1, dt * 1.5);
 
-    if (c.energy >= this.divideNeed(sp) && c.age > 10 && this.cells.length < MAX_CELLS && (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES) {
+    // a sick cell does not divide: the meal that poisoned it does not become offspring right away
+    if (
+      c.energy >= this.divideNeed(sp) &&
+      c.age > 10 &&
+      !c.sick &&
+      this.cells.length < MAX_CELLS &&
+      (this.counts.get(sp) ?? 0) < MAX_PER_SPECIES
+    ) {
       c.state = 'dividing';
       c.t = 0;
       c.axis = c.heading + (TRANSVERSE.has(sp.body) ? 0 : Math.PI / 2);
