@@ -21,6 +21,7 @@ import type { KmButton, KmModeIcon, KmToast } from './ui/components';
 
 localize();
 const app = $('app');
+const codeview = $('codeview');
 const audio = new AudioEngine();
 
 const ver = $('version');
@@ -251,6 +252,7 @@ async function switchMode(m: ModeDef): Promise<void> {
   if (ticket !== switching) return; // switched again while loading: the newer switch wins
   store.setDraft(editor.value);
   if (state.playing) edit();
+  else codeview.replaceChildren(); // the last run of the old mode
   audio.padStop();
   applyMode(m, c);
   transition();
@@ -290,6 +292,7 @@ function run(): void {
 }
 function edit(): void {
   P().stop();
+  codeview.replaceChildren(); // the next run (or mode) fills it again; the old code must not linger
   if (!isSplit()) transition();
   state.playing = false;
   void keepAwake(false);
