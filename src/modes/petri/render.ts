@@ -5,6 +5,7 @@ import { DISH_R, DIVIDE_TIME, DIVIDE_GAP, TRANSVERSE } from './sim';
 import type { Species } from './genome';
 import type { Note } from './culture';
 import { ctx2d } from '../../ui/dom';
+import { LADDER, PixelBudget } from '../../ui/budget';
 import { t } from './messages';
 
 type Ctx = CanvasRenderingContext2D;
@@ -16,6 +17,8 @@ const smooth = (a: number, b: number, x: number): number => {
 const BACTERIA = new Set(['bacillus', 'coccus', 'spirillum']);
 const SERIF = 'Georgia, "Iowan Old Style", "Times New Roman", serif';
 const MONO = '"Share Tech Mono", ui-monospace, monospace';
+/** the water and its caustics are soft, so they are drawn this small (pixels per side) and stretched over the dish */
+const UNDER = 256;
 
 interface Ripple {
   x: number;
@@ -99,6 +102,20 @@ export class MicroRenderer {
   specks: Speck[] = [];
   private glows = new Map<number, HTMLCanvasElement>();
   private soft: HTMLCanvasElement;
+  /** a fast device keeps the full resolution; a slow one steps down to fewer pixels */
+  private budget = new PixelBudget([Infinity, ...LADDER]);
+  private cssW = 0;
+  private cssH = 0;
+  /** the water (gradient + caustics), small; redrawn every frame */
+  private under = document.createElement('canvas');
+  private underCtx = ctx2d(this.under);
+  private underBg: CanvasGradient | null = null;
+  /** the microscope in front (vignette, rim), drawn once per size of the dish */
+  private over = document.createElement('canvas');
+  private overCtx = ctx2d(this.over);
+  private overKey = '';
+  private overX = 0;
+  private overY = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.cv = canvas;
@@ -133,7 +150,10 @@ export class MicroRenderer {
   }
 
   resize(cssW: number, cssH: number): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    this.cssW = cssW;
+    this.cssH = cssH;
+    const full = Math.min(window.devicePixelRatio || 1, 1.5);
+    const dpr = full * this.budget.scale(cssW * full, cssH * full);
     const W = Math.max(2, Math.round(cssW * dpr)),
       H = Math.max(2, Math.round(cssH * dpr));
     if (W !== this.cv.width || H !== this.cv.height) {
@@ -150,6 +170,72 @@ export class MicroRenderer {
     this.cx = W / 2;
     this.cy = Math.max(this.R + 6 * dpr, usableH / 2);
     this.k = this.R / DISH_R;
+  }
+
+  /** the water: a gradient and slow caustic light, both soft enough to draw small */
+  private drawUnder(T: number, activity: number): HTMLCanvasElement {
+    const N = Math.max(16, Math.min(UNDER, Math.ceil(this.R * 2)));
+    const u = this.under,
+      g = this.underCtx;
+    if (u.width !== N || !this.underBg) {
+      u.width = u.height = N;
+      this.underBg = g.createRadialGradient(N / 2, N * 0.4, 0, N / 2, N / 2, N / 2);
+      this.underBg.addColorStop(0, '#0d3036');
+      this.underBg.addColorStop(0.6, '#072027');
+      this.underBg.addColorStop(1, '#03121a');
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
+    g.fillStyle = this.underBg;
+    g.fillRect(0, 0, N, N);
+    // caustics: slow light moving through the water
+    const s0 = N / (2 * DISH_R);
+    g.setTransform(s0, 0, 0, s0, N / 2, N / 2);
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = 0.05 + activity * 0.03;
+    for (let i = 0; i < 3; i++) {
+      const x = Math.sin(T * 0.05 * (i + 1) + i * 2) * DISH_R * 0.5,
+        y = Math.cos(T * 0.037 * (i + 2) + i) * DISH_R * 0.45;
+      const s = DISH_R * (0.9 + 0.2 * Math.sin(T * 0.1 + i));
+      g.drawImage(this.glow(175 + i * 15), x - s, y - s, s * 2, s * 2);
+    }
+    return u;
+  }
+
+  /** the microscope in front of the dish: vignette and rim, redrawn only when the dish moves or changes size */
+  private drawOver(): HTMLCanvasElement {
+    const d = this.dpr,
+      pad = Math.ceil(4 * d);
+    const x0 = Math.floor(this.cx - this.R) - pad,
+      y0 = Math.floor(this.cy - this.R) - pad;
+    const key = `${this.cx},${this.cy},${this.R},${d}`;
+    if (key === this.overKey) return this.over;
+    this.overKey = key;
+    this.overX = x0;
+    this.overY = y0;
+    const o = this.over,
+      g = this.overCtx;
+    o.width = o.height = Math.ceil(this.R * 2) + 2 * pad + 1;
+    g.translate(-x0, -y0);
+    const vg = g.createRadialGradient(this.cx, this.cy, this.R * 0.72, this.cx, this.cy, this.R);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(0.75, 'rgba(0,4,6,0.45)');
+    vg.addColorStop(1, 'rgba(0,3,5,0.95)');
+    g.fillStyle = vg;
+    g.beginPath();
+    g.arc(this.cx, this.cy, this.R + 1, 0, TAU);
+    g.fill();
+    g.lineWidth = 1.2 * d;
+    g.strokeStyle = 'rgba(150,255,230,0.14)';
+    g.beginPath();
+    g.arc(this.cx, this.cy, this.R, 0, TAU);
+    g.stroke();
+    g.strokeStyle = 'rgba(255,150,200,0.05)';
+    g.beginPath();
+    g.arc(this.cx + 1.5 * d, this.cy, this.R + 2 * d, 0, TAU);
+    g.stroke();
+    return o;
   }
 
   /** a soft round light sprite, coloured (hue) or white (-1) */
@@ -270,6 +356,8 @@ export class MicroRenderer {
 
   // ---------- frame ----------
   frame(dt: number, world: World, activity: number): void {
+    // too slow for this many pixels: draw fewer from now on
+    if (this.budget.frame(dt) && this.cssW) this.resize(this.cssW, this.cssH);
     dt = Math.min(dt, 0.05);
     this.time += dt;
     const c = this.ctx,
@@ -287,23 +375,9 @@ export class MicroRenderer {
     c.beginPath();
     c.arc(this.cx, this.cy, this.R, 0, TAU);
     c.clip();
-    const bg = c.createRadialGradient(this.cx, this.cy - this.R * 0.2, 0, this.cx, this.cy, this.R);
-    bg.addColorStop(0, '#0d3036');
-    bg.addColorStop(0.6, '#072027');
-    bg.addColorStop(1, '#03121a');
-    c.fillStyle = bg;
-    c.fillRect(this.cx - this.R, this.cy - this.R, this.R * 2, this.R * 2);
+    c.drawImage(this.drawUnder(T, activity), this.cx - this.R, this.cy - this.R, this.R * 2, this.R * 2);
     c.setTransform(k, 0, 0, k, this.cx, this.cy);
-
-    // caustics: slow light moving through the water
     c.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 3; i++) {
-      const x = Math.sin(T * 0.05 * (i + 1) + i * 2) * DISH_R * 0.5,
-        y = Math.cos(T * 0.037 * (i + 2) + i) * DISH_R * 0.45;
-      const s = DISH_R * (0.9 + 0.2 * Math.sin(T * 0.1 + i));
-      c.globalAlpha = 0.05 + activity * 0.03;
-      c.drawImage(this.glow(175 + i * 15), x - s, y - s, s * 2, s * 2);
-    }
     // zones
     for (const z of world.zones) this.drawZone(c, z, world.time);
     // spores
@@ -395,23 +469,7 @@ export class MicroRenderer {
 
     // --- microscope: vignette, rim, labels (canvas pixels)
     c.setTransform(1, 0, 0, 1, 0, 0);
-    const vg = c.createRadialGradient(this.cx, this.cy, this.R * 0.72, this.cx, this.cy, this.R);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(0.75, 'rgba(0,4,6,0.45)');
-    vg.addColorStop(1, 'rgba(0,3,5,0.95)');
-    c.fillStyle = vg;
-    c.beginPath();
-    c.arc(this.cx, this.cy, this.R + 1, 0, TAU);
-    c.fill();
-    c.lineWidth = 1.2 * this.dpr;
-    c.strokeStyle = 'rgba(150,255,230,0.14)';
-    c.beginPath();
-    c.arc(this.cx, this.cy, this.R, 0, TAU);
-    c.stroke();
-    c.strokeStyle = 'rgba(255,150,200,0.05)';
-    c.beginPath();
-    c.arc(this.cx + 1.5 * this.dpr, this.cy, this.R + 2 * this.dpr, 0, TAU);
-    c.stroke();
+    c.drawImage(this.drawOver(), this.overX, this.overY);
     this.drawScale(c);
     this.drawCaption(c, dt);
   }
@@ -433,13 +491,15 @@ export class MicroRenderer {
       c.globalAlpha = 1;
       c.lineWidth = (1 / this.k) * this.dpr;
       c.lineCap = 'round';
+      c.strokeStyle = `hsla(190,70%,75%,${0.07 * fade})`;
+      c.beginPath();
       for (let i = 0; i < 4; i++) {
         const rr = z.r * (0.3 + i * 0.18),
           a0 = this.time * 0.6 * (z.swirl || 1) + i * 1.7;
-        c.strokeStyle = `hsla(190,70%,75%,${0.07 * fade})`;
-        c.beginPath();
-        if (z.swirl) c.arc(z.x, z.y, rr, a0, a0 + 1.6);
-        else {
+        if (z.swirl) {
+          c.moveTo(z.x + Math.cos(a0) * rr, z.y + Math.sin(a0) * rr);
+          c.arc(z.x, z.y, rr, a0, a0 + 1.6);
+        } else {
           const ca = Math.cos(z.angle),
             sa = Math.sin(z.angle),
             off = ((this.time * 30 + i * 40) % (z.r * 1.6)) - z.r * 0.8,
@@ -447,8 +507,8 @@ export class MicroRenderer {
           c.moveTo(z.x + ca * off - sa * side, z.y + sa * off + ca * side);
           c.lineTo(z.x + ca * (off + 40) - sa * side, z.y + sa * (off + 40) + ca * side);
         }
-        c.stroke();
       }
+      c.stroke();
     }
     c.globalAlpha = 1;
   }
@@ -681,6 +741,7 @@ export class MicroRenderer {
       // cilia keep beating around the dividing body
       c.strokeStyle = `hsla(${hue},55%,82%,0.45)`;
       c.lineWidth = 0.8 * px;
+      c.beginPath(); // one path for all of them: a stroke per cilium is what made ciliates slow to draw
       for (let i = 0; i < 40; i++) {
         const th = (i / 40) * TAU,
           co = Math.cos(th),
@@ -688,11 +749,10 @@ export class MicroRenderer {
         const r =
           Math.pow(Math.pow(Math.abs(co / A), 2) + Math.pow(Math.abs(si / B), 2), -0.5) * (1 - pinch * 0.93 * Math.exp(-(co * co) / 0.05));
         const b = th + Math.sin(t * 9 - i * 0.55) * 0.5;
-        c.beginPath();
         c.moveTo(co * r, si * r);
         c.lineTo(co * r + Math.cos(b) * R * 0.25, si * r + Math.sin(b) * R * 0.25);
-        c.stroke();
       }
+      c.stroke();
     }
     // cytoplasm and organelles: half go to each side
     const part = smooth(0.25, 0.9, p);
@@ -709,15 +769,14 @@ export class MicroRenderer {
       const sep = smooth(0.1, 0.6, p);
       c.strokeStyle = `hsla(${sp.hue2},50%,78%,0.45)`;
       c.lineWidth = 0.8 * px;
-      for (const s of [-1, 1]) {
-        c.beginPath();
+      c.beginPath();
+      for (const s of [-1, 1])
         for (let i = 0; i <= 8; i++) {
           const x = s * end * sep + (i / 8 - 0.5) * R * 0.6,
             y = Math.sin(i * 1.9 + s) * B * 0.3;
           i ? c.lineTo(x, y) : c.moveTo(x, y);
         }
-        c.stroke();
-      }
+      c.stroke();
       const wall = smooth(0.4, 0.92, p);
       if (wall > 0) {
         c.strokeStyle = `hsla(${hue},${sat}%,82%,0.7)`;
@@ -752,18 +811,19 @@ export class MicroRenderer {
       // spindle fibres
       c.strokeStyle = `hsla(${sp.hue2},40%,85%,${0.22 * chrom})`;
       c.lineWidth = 0.6 * px;
+      c.beginPath();
       for (let i = 0; i < 6; i++) {
         const y = (i / 5 - 0.5) * B * 0.9;
         for (const s of [-1, 1]) {
-          c.beginPath();
           c.moveTo(s * end * 0.95, 0);
           c.lineTo(s * Math.max(pull, 1), y * 0.7);
-          c.stroke();
         }
       }
+      c.stroke();
       c.strokeStyle = `hsla(${sp.hue2},75%,80%,${0.9 * chrom})`;
       c.lineWidth = 1.8 * px;
       c.lineCap = 'round';
+      c.beginPath();
       for (let i = 0; i < 6; i++) {
         const y = (i / 5 - 0.5) * B * 0.8 * (1 - 0.3 * smooth(0.48, 0.72, p));
         const x0 = Math.sin(i * 2.3 + cell.seed) * R * 0.25 * (1 - align);
@@ -771,12 +831,11 @@ export class MicroRenderer {
         const L = R * 0.16;
         for (const s of pull > 0.5 ? [-1, 1] : [0]) {
           const x = x0 + s * pull;
-          c.beginPath();
           c.moveTo(x - (Math.cos(a0) * L) / 2, y - (Math.sin(a0) * L) / 2);
           c.lineTo(x + (Math.cos(a0) * L) / 2, y + (Math.sin(a0) * L) / 2);
-          c.stroke();
         }
       }
+      c.stroke();
     }
     const reform = smooth(0.74, 0.95, p); // two new nuclei
     if (reform > 0.01) {
@@ -870,12 +929,12 @@ export class MicroRenderer {
   private mouth(c: Ctx, R: number, hue: number, px: number): void {
     c.strokeStyle = `hsla(${hue},80%,80%,0.7)`;
     c.lineWidth = 1.1 * px;
+    c.beginPath();
     for (const s of [-0.35, 0, 0.35]) {
-      c.beginPath();
       c.moveTo(R * 0.92, R * s * 0.8);
       c.lineTo(R * 1.22, R * s);
-      c.stroke();
     }
+    c.stroke();
   }
 
   private flagellum(c: Ctx, x0: number, len: number, amp: number, t: number, hue: number, px: number, dir = -1): void {
@@ -983,31 +1042,26 @@ export class MicroRenderer {
         c.stroke();
         c.strokeStyle = `hsla(${hue},40%,85%,0.3)`;
         c.lineWidth = 0.7 * px;
+        c.beginPath();
         if (pennate) {
           for (let i = -6; i <= 6; i++) {
             const x = (i / 6) * R * 1.3,
               h = R * 0.5 * Math.sqrt(Math.max(0, 1 - (x / (R * 1.5)) ** 2));
-            c.beginPath();
             c.moveTo(x, -h);
             c.lineTo(x, h);
-            c.stroke();
           }
-          c.beginPath();
           c.moveTo(-R * 1.4, 0);
           c.lineTo(R * 1.4, 0);
-          c.stroke();
         } else {
           for (let i = 0; i < 16; i++) {
             const a = (i / 16) * TAU;
-            c.beginPath();
             c.moveTo(Math.cos(a) * R * 0.25, Math.sin(a) * R * 0.25);
             c.lineTo(Math.cos(a) * R * 0.92, Math.sin(a) * R * 0.92);
-            c.stroke();
           }
-          c.beginPath();
+          c.moveTo(R * 0.25, 0);
           c.arc(0, 0, R * 0.25, 0, TAU);
-          c.stroke();
         }
+        c.stroke();
         // golden chloroplasts
         c.fillStyle = 'hsla(44,70%,55%,0.45)';
         for (const s of [-1, 1]) {
@@ -1027,6 +1081,7 @@ export class MicroRenderer {
         c.strokeStyle = `hsla(${hue},55%,82%,${0.55 * (1 - this.dis)})`;
         c.lineWidth = 0.8 * px;
         const n = 34;
+        c.beginPath();
         for (let i = 0; i < n; i++) {
           const th = (i / n) * TAU,
             x = Math.cos(th) * a,
@@ -1038,11 +1093,10 @@ export class MicroRenderer {
             ux = nx / nl,
             uy = ny / nl;
           const L = R * 0.28;
-          c.beginPath();
           c.moveTo(x, y);
           c.lineTo(x + (ux * Math.cos(beat) - uy * Math.sin(beat)) * L, y + (ux * Math.sin(beat) + uy * Math.cos(beat)) * L);
-          c.stroke();
         }
+        c.stroke();
         // oral groove and a pulsing contractile vacuole
         c.strokeStyle = `hsla(${hue},40%,35%,0.5)`;
         c.lineWidth = 1.4 * px;
@@ -1090,13 +1144,16 @@ export class MicroRenderer {
         c.stroke();
         // hundreds of little cells on the surface (a few dozen here), turning as it rolls
         c.fillStyle = `hsla(${hue},${sat}%,72%,0.75)`;
+        c.beginPath();
         for (let i = 0; i < 36; i++) {
           const a = i * 2.39996 + t * 0.15,
-            d = R * Math.sqrt((i + 0.5) / 36) * 0.97;
-          c.beginPath();
-          c.arc(Math.cos(a) * d, Math.sin(a) * d, R * 0.045, 0, TAU);
-          c.fill();
+            d = R * Math.sqrt((i + 0.5) / 36) * 0.97,
+            x = Math.cos(a) * d,
+            y = Math.sin(a) * d;
+          c.moveTo(x + R * 0.045, y);
+          c.arc(x, y, R * 0.045, 0, TAU);
         }
+        c.fill();
         // daughter colonies inside
         for (let i = 0; i < 3; i++) {
           const a = i * 2.1 + t * 0.1;

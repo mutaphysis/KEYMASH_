@@ -82,6 +82,13 @@ separates, a wall grows in from the middle), ciliates split front to back. Dying
 swell, grey, their membrane breaks up and their contents drift away. Field notes
 record the firsts: first division, first engulfing, extinctions.
 
+## How it is drawn
+Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over
+the dish; the microscope in front (vignette, rim) is drawn once per dish size. Cilia, shell ribs
+and volvox dots are one path per organism, not one stroke each. Fast devices draw at up to
+1.5 × the screen resolution; when frames take too long the canvas steps down to fewer pixels
+(the same pixel ladder as COOKIE_, `src/ui/budget.ts`).
+
 ## Balance
 The code only inoculates (up to 4 cells per species); growth after that is up to the
 culture. Above a comfortable 34 cells the dish pushes back: metabolism rises, cells
