@@ -137,6 +137,7 @@ export class CookiePlayer implements ModePlayer {
     this.active = true;
     this.src = src;
     this.audio.init();
+    this.audio.newSession(); // stop() faded the last session's bus out for good
     this.canvas.classList.add('on');
     this.fit();
     const b = (this.bakery = new Bakery(src, this.fitW / Math.max(1, this.fitH)));
