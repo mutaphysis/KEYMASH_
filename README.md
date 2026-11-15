@@ -122,7 +122,7 @@ src/engine/audio.ts      WebAudio synth, drums, sfx, reverb/delay, typing sounds
 src/ui/editor.ts         textarea, the mode's backdrop canvases, key bar
 src/ui/components/       light-DOM custom elements: km-button, km-mute, km-mode-icon, km-item, km-select, km-toast, km-drawer, km-card
 src/ui/storage.ts        per-mode draft and save slots in localStorage
-src/ui/budget.ts         pixel budget: a renderer on a slow device steps down to fewer pixels (COOKIE_, PETRI_)
+src/ui/budget.ts         pixel budget: a renderer on a slow device steps down to fewer pixels (every mode)
 src/ui/follow.ts         keeps the code view on what is being read, without chasing parallel lines back and forth
 src/ui/share.ts          a link to the current mode and text: system share sheet, else the clipboard
 src/styles/theme.css.ts  the theme contract (design tokens every mode fills in)

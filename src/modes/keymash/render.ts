@@ -2,6 +2,7 @@
 // sprites/particles on top, view transforms and glitch post-processing.
 
 import type { Color, Point, VMEvent, EventOf, ParticleSpec, ShapeKind, TextStyle, ActorKind } from './types';
+import { LADDER, PixelBudget } from '../../ui/budget';
 
 type Ctx = CanvasRenderingContext2D;
 type PartKind = ParticleSpec['kind'] | 'star' | 'rect' | 'char' | 'bubble';
@@ -182,6 +183,10 @@ export class Renderer {
   reserveBottom = 0;
   /** "Reduce motion" in the system settings: softer flashes, shakes and glitches, no strobing. */
   gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** a fast device keeps the full resolution; a slow one steps down to fewer pixels */
+  private budget = new PixelBudget([Infinity, ...LADDER]);
+  private cssW = 0;
+  private cssH = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.cv = canvas;
@@ -218,7 +223,10 @@ export class Renderer {
   }
 
   resize(cssW: number, cssH: number): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    this.cssW = cssW;
+    this.cssH = cssH;
+    const full = Math.min(window.devicePixelRatio || 1, 1.5);
+    const dpr = full * this.budget.scale(cssW * full, cssH * full);
     const W = Math.max(2, Math.round(cssW * dpr)),
       H = Math.max(2, Math.round(cssH * dpr));
     if (W === this.W && H === this.H && this.cv.width === W && this.cv.height === H) return; // (the canvas is shared with PETRI)
@@ -737,6 +745,8 @@ export class Renderer {
 
   // ---------- per frame ----------
   frame(dt: number, level = 0, bass = 0): void {
+    // too slow for this many pixels: draw fewer from now on
+    if (this.budget.frame(dt) && this.cssW) this.resize(this.cssW, this.cssH);
     dt = Math.min(dt, 0.05);
     this.time += dt;
     const { W, H, s } = this;
