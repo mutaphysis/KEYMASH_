@@ -7,6 +7,7 @@ import { Ambient } from './ambient';
 import type { AudioEngine } from '../../engine/audio';
 import type { SimEvent } from './sim';
 import { $ } from '../../ui/dom';
+import { CodeFollow } from '../../ui/follow';
 import { VERSION_LABEL } from '../../version';
 import { t, tn } from './messages';
 import { hash } from '../../lang/rng';
@@ -28,7 +29,7 @@ export class MicroPlayer {
   running = false;
   spans: HTMLSpanElement[] = [];
   hlPrev = new Map<number, [number, number]>();
-  hlLast: HTMLSpanElement | null = null;
+  private follow = new CodeFollow(this.codeview);
   logs: string[] = [];
   private lastNote = 0;
   private records = { gen: 1 };
@@ -88,7 +89,7 @@ export class MicroPlayer {
     this.buildCode(this.petri.culture.gs);
     this.r.reset();
     this.hlPrev.clear();
-    this.hlLast = null;
+    this.follow.reset();
     this.logs = [];
     this.logEl.textContent = '';
     this.firsts.clear();
@@ -151,7 +152,7 @@ export class MicroPlayer {
     this.petri.swap(src);
     this.buildCode(this.petri.culture.gs, true);
     this.hlPrev.clear();
-    this.hlLast = null;
+    this.follow.reset();
     this.note(tn('genomeEdited', this.petri.species.length, { t: clock(this.petri.world.time) }), true);
   }
 
@@ -175,7 +176,6 @@ export class MicroPlayer {
     this.amb.update(dt, this.petri.world.crowd);
     this.audio.readLevel();
     this.r.frame(dt, this.petri.world, this.amb.activity);
-    this.follow(dt);
     this.hudTick += dt;
     if (this.hudTick > 0.3) {
       this.hudTick = 0;
@@ -271,16 +271,7 @@ export class MicroPlayer {
       s.classList.add('on', 'seen');
     }
     this.hlPrev.set(line, [g0, g1]);
-    this.hlLast = this.spans[g0] ?? null;
-  }
-
-  private follow(dt: number): void {
-    const s = this.hlLast;
-    if (!s) return;
-    const cv = this.codeview;
-    const target = s.offsetTop - cv.clientHeight * 0.35;
-    const next = cv.scrollTop + (target - cv.scrollTop) * Math.min(1, dt * 3);
-    if (Math.abs(next - cv.scrollTop) > 0.5) cv.scrollTop = next;
+    this.follow.show(this.spans[g0], line);
   }
 
   /** census: each species with its colour and head count */

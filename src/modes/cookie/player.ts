@@ -10,6 +10,7 @@ import { Jingle } from './music';
 import type { AudioEngine } from '../../engine/audio';
 import type { ModePlayer, PlayerHost } from '../types';
 import { $ } from '../../ui/dom';
+import { CodeFollow } from '../../ui/follow';
 import { VERSION_LABEL } from '../../version';
 import { t, tn } from './messages';
 import type { CookieMsg } from './messages';
@@ -81,7 +82,7 @@ export class CookiePlayer implements ModePlayer {
   spans: HTMLSpanElement[] = [];
   private hint: HTMLElement | null = null;
   private lit: HTMLSpanElement[] = [];
-  private hlLast: HTMLSpanElement | null = null;
+  private follow = new CodeFollow(this.codeview);
   private fitW = 0;
   private fitH = 0;
   private raf = 0;
@@ -152,7 +153,7 @@ export class CookiePlayer implements ModePlayer {
     cv.appendChild(frag);
     cv.scrollTop = keepScroll ? top : 0;
     this.lit = [];
-    this.hlLast = null;
+    this.follow.reset();
   }
 
   async start(src: string): Promise<void> {
@@ -263,7 +264,6 @@ export class CookiePlayer implements ModePlayer {
     this.jingle.update();
     this.audio.readLevel();
     this.r.frame(dt, b, this.audio.level);
-    this.follow(dt);
     this.hudTick += dt;
     if (this.hudTick > 0.25) {
       this.hudTick = 0;
@@ -381,16 +381,7 @@ export class CookiePlayer implements ModePlayer {
         this.lit.push(s);
       }
     }
-    this.hlLast = this.lit[0] ?? this.hlLast;
-  }
-
-  private follow(dt: number): void {
-    const s = this.hlLast;
-    if (!s) return;
-    const cv = this.codeview;
-    const target = s.offsetTop - cv.clientHeight * 0.35;
-    const next = cv.scrollTop + (target - cv.scrollTop) * Math.min(1, dt * 3);
-    if (Math.abs(next - cv.scrollTop) > 0.5) cv.scrollTop = next;
+    this.follow.show(this.lit[0]);
   }
 
   private drawHud(b: Bakery): void {

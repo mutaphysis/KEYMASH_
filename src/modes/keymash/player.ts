@@ -6,6 +6,7 @@ import type { AudioEngine } from '../../engine/audio';
 import { isSound } from './types';
 import type { VMEvent, EventOf } from './types';
 import { $ } from '../../ui/dom';
+import { CodeFollow } from '../../ui/follow';
 import { VERSION_LABEL } from '../../version';
 import { t } from './messages';
 
@@ -29,7 +30,7 @@ export class Player {
   logs: string[] = [];
   spans: HTMLSpanElement[] = [];
   hlPrev = new Map<number, [number, number]>();
-  hlLast: HTMLSpanElement | null = null;
+  private follow = new CodeFollow(this.codeview);
   activity = new Map<number, number>();
   taps: number[] = [];
   tapBpm = 0;
@@ -97,7 +98,7 @@ export class Player {
     this.buildCode(this.vm.gs, true);
     this.queue = this.queue.filter((q) => q.e.type !== 'hl');
     this.hlPrev.clear();
-    this.hlLast = null;
+    this.follow.reset();
     this.restartAt = 0;
     if (this.tapBpm) this.vm.baseBpm = this.vm.bpm = this.tapBpm; // a tapped tempo survives edits
     this.audio.setBpm(this.vm.bpm);
@@ -122,7 +123,7 @@ export class Player {
     this.queue = [];
     this.logs = [];
     this.hlPrev.clear();
-    this.hlLast = null;
+    this.follow.reset();
     this.restartAt = 0;
     this.logEl.textContent = '';
     await this.bootSequence();
@@ -290,7 +291,6 @@ export class Player {
 
     const level = this.audio.readLevel();
     this.r.frame(dt, level, this.audio.bass || 0);
-    this.follow(dt);
     this.hudTick = (this.hudTick || 0) + dt;
     if (this.hudTick > 0.1) {
       this.hudTick = 0;
@@ -339,18 +339,8 @@ export class Player {
       s.classList.add('on', 'seen');
     }
     this.hlPrev.set(th, [e.g0, e.g1]);
-    this.hlLast = this.spans[e.g0] ?? null;
+    this.follow.show(this.spans[e.g0], th);
     this.activity.set(e.th ?? -1, performance.now());
-  }
-
-  follow(dt: number): void {
-    const s = this.hlLast;
-    if (!s) return;
-    const cv = this.codeview;
-    const target = s.offsetTop - cv.clientHeight * 0.35;
-    const cur = cv.scrollTop;
-    const next = cur + (target - cur) * Math.min(1, dt * 5);
-    if (Math.abs(next - cur) > 0.5) cv.scrollTop = next;
   }
 
   log(text: string): void {
