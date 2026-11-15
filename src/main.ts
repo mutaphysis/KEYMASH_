@@ -9,6 +9,7 @@ import { $, localize } from './ui/dom';
 import { Editor } from './ui/editor';
 import { store } from './ui/storage';
 import { pawMash } from './ui/paw';
+import { shareLink, shareUrl } from './ui/share';
 import { keyInfo } from './lang/keys';
 import { graphemes } from './lang/lexer';
 import { VERSION_LABEL, BUILD_TIME } from './version';
@@ -106,13 +107,14 @@ let mode: ModeDef = MODES.find((m) => m.id === link.get('mode')) ?? modeById(sto
 const firstLoad = mode.load(); // start fetching now; applyMode() below waits for it
 let code!: ModeCode;
 const players = new Map<string, ModePlayer>();
-/** a player's way back to the editor, e.g. COOKIE_'s "make your own" once the tray is empty */
+/** what a player may ask of the shell, e.g. COOKIE_'s "make your own" and "share" once the tray is empty */
 const host: PlayerHost = {
   edit() {
     stageOnly(false);
     edit();
     if (isSplit()) editor.ta.focus(); // no keyboard pops up on a phone
   },
+  share: shareProgram,
 };
 function P(): ModePlayer {
   let p = players.get(mode.id);
@@ -312,6 +314,15 @@ $('btn-idle-run').addEventListener('click', () => {
 });
 $('btn-stop').addEventListener('click', edit);
 $('btn-restart').addEventListener('click', () => P().restart());
+$('btn-share').addEventListener('click', shareProgram);
+
+/** a link to this mode with the text as it is now: the system share sheet, else the clipboard */
+function shareProgram(): void {
+  void shareLink(`${mode.name} — ${mode.tagline}`, shareUrl(mode.id, editor.value)).then((r) => {
+    if (r === 'copied') toast(t('linkCopied'));
+    else if (r === 'failed') toast(t('copyBlocked'));
+  });
+}
 
 // ⛶ in the stage corner: only the picture, the rest of the UI hides. Where the browser allows it
 // (not on iPhone, not in some embeds) the page goes fullscreen too.

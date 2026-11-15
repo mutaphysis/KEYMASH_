@@ -143,6 +143,8 @@ export const donePanel = style({
   selectors: { '&.on': { display: 'flex', animation: `${popIn} .5s cubic-bezier(.3, 1.6, .5, 1)` } },
   '@media': { '(prefers-reduced-motion: reduce)': { selectors: { '&.on': { animation: 'none' } } } },
 });
+// the panel covers the stage, so the play buttons below it could not be tapped: it has its own share
+globalStyle(`#stageWrap:has(> ${donePanel}.on) .playbtns`, { display: 'none' });
 
 const p = (sel: string) => `${cookieTheme} ${sel}`;
 

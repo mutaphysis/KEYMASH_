@@ -81,6 +81,8 @@ Mode ids: `keymash`, `petri`, `cookie`; `code` is URL-encoded. Without `code` th
 the mode. It does not start by itself: browsers allow sound and real fullscreen only after a tap,
 so ▶ starts both.
 The text becomes the mode's draft, like a picked demo; the parameters leave the address bar.
+🔗 on the play view (between sound and restart) shares such a link to the current mode with the text
+as it is now: the system share sheet where there is one, else the link is copied to the clipboard.
 
 ### Side by side & live coding
 On wide screens (iPad landscape, desktop) editor and stage sit side by side.
@@ -122,6 +124,7 @@ src/ui/components/       light-DOM custom elements: km-button, km-mute, km-mode-
 src/ui/storage.ts        per-mode draft and save slots in localStorage
 src/ui/budget.ts         pixel budget: a renderer on a slow device steps down to fewer pixels (COOKIE_, PETRI_)
 src/ui/follow.ts         keeps the code view on what is being read, without chasing parallel lines back and forth
+src/ui/share.ts          a link to the current mode and text: system share sheet, else the clipboard
 src/styles/theme.css.ts  the theme contract (design tokens every mode fills in)
 src/styles/global.css.ts the app shell's styles
 src/i18n.ts              language detection + defineMessages(); the shared UI's text

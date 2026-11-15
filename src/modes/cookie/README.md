@@ -93,8 +93,9 @@ Tap a cookie to bite a piece off. Bites come from the edge, each one a little di
 and shape; a tap in the middle bites the nearest edge. Crumbs fall, bounce and stay, on the
 cookie or on the tray.
 A cookie that is almost gone crumbles. Left alone for ten seconds, the cookies get nibbled away
-on their own (a tap puts that off again). When the tray is empty it is swept and two buttons
-come up: **make your own** goes back to the editor, **bake again** bakes the same recipe once more.
+on their own (a tap puts that off again). When the tray is empty it is swept and three buttons
+come up: **make your own** goes back to the editor, **bake again** bakes the same recipe once more,
+**share** shares a link to it (the play buttons hide meanwhile: the panel covers them).
 
 ## Sound
 

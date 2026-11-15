@@ -24,6 +24,8 @@ export interface ModePlayer {
 export interface PlayerHost {
   /** stop and go back to the editor (out of the stage-only view too) */
   edit(): void;
+  /** share a link to this mode with the program as it is now (system share sheet, else the clipboard) */
+  share(): void;
 }
 
 /** What the mode paints behind the editor text. The editor owns the two canvases and the loop. */

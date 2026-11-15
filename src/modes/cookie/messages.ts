@@ -12,6 +12,7 @@ const en = {
   noGl: 'this browser has no WebGL2: the oven stays cold',
   tapToBite: 'tap to bite!',
   again: 'bake again',
+  share: 'share',
   makeOwn: 'make your own',
   // ---- demo names ----
   demoStars: '⭐ gingerbread stars',
@@ -80,6 +81,7 @@ const de: Translation<typeof en> = {
   noGl: 'dieser Browser kann kein WebGL2: der Ofen bleibt kalt',
   tapToBite: 'tipp zum Abbeißen!',
   again: 'nochmal backen',
+  share: 'teilen',
   makeOwn: 'back deinen eigenen',
   demoStars: '⭐ Lebkuchensterne',
   demoHeart: '❤️ sei mein',
