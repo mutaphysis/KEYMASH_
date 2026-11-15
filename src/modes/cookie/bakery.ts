@@ -731,7 +731,9 @@ export class Bakery {
   private scatter(c: Cookie, cx: number, cy: number, radius: number, n: number, toppings: boolean): void {
     const r = this.recipe;
     const d = DOUGH[r.dough];
-    const inside = mix3(d.raw, d.baked, 0.35).map((v) => Math.min(1, v * 1.1)) as RGB;
+    // the inside as the shader shades it: toasted through when it burnt
+    const pale = mix3(d.raw, d.baked, 0.35).map((v) => Math.min(1, v * 1.1)) as RGB;
+    const inside = mix3(pale, d.baked.map((v) => v * 0.45) as RGB, sat((r.bake - 1) / 0.8) * 0.9);
     const crust = mix3(mix3(d.raw, d.baked, sat(r.bake)), CHAR, sat((r.bake * 0.85 - 1.1) / 0.35));
     const top = this.top;
     let extra = 0;

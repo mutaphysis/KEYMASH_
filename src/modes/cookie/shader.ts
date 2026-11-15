@@ -467,9 +467,12 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
       float cr = 1. - abs(2. * n3(p * vec3(7., 3., 7.) + 3.) - 1.);
       col *= 1. - .3 * smoothstep(.93, .99, cr) * smoothstep(.4, .65, n3(p * 2.3 + 9.)) * uRise * uPuff * step(.5, n.y); // a few cracks, not a net
       if (c.G * uSize < .04 && n.y < .75) {
-        // inside: paler, full of pores
-        col = uInside * (.8 + .4 * n3(p * 45.)) * (1. - .35 * smoothstep(.55, .8, n3(p * 30. + 9.)));
-        col = mix(col, CHAR * 4., sat((uBaked - 1.5) / .5) * .6);
+        // inside: paler, full of pores; a burnt one is toasted through, black under the crust, the more the longer it was in
+        float burn = sat((uBaked - 1.) / .8);
+        float deep = max(min(-Rw, min(p.y, uThick * (1. + .6 * uRise * uPuff) - p.y)), 0.); // how far in from the crust
+        col = mix(uInside, uBakedCol * .2, burn * .9);
+        col = mix(col, CHAR * 3., burn * smoothstep(.04 + .16 * burn, 0., deep));
+        col *= (.8 + .4 * n3(p * 45.)) * (1. - .35 * smoothstep(.55, .8, n3(p * 30. + 9.)));
         rough = .95;
       }
     }
@@ -652,7 +655,58 @@ void main() {
   fragColor = vec4(display(col), 1.);
 }`;
 
-/** the scene target stretched over the canvas, with a soft vignette and a little dither against banding */
+/**
+ * Motes: flour and dust in the air over the tray, one instance each, placed and moved entirely here
+ * from their index and the time. A slow draft carries them across, each dances on its own, and they
+ * light up in the beam from the soft box above. Added onto the scene, behind the cookies where they are.
+ */
+export const MOTE_VS = `#version 300 es
+layout(location = 0) in vec2 aCorner;
+uniform mat4 uViewProj;
+uniform vec3 uCamRight, uCamUp;
+uniform float uTime, uSpot;
+out vec2 vUv;
+out float vGlow;
+${TONE}
+float h(float n) { return fract(sin(n * 127.1 + 31.7) * 43758.5453); }
+void main() {
+  float id = float(gl_InstanceID);
+  float t = uTime;
+  float W = uSpot * 1.3, H = 3.2;
+  vec3 p = vec3((h(id) * 2. - 1.) * W, h(id + .37) * H, (h(id + .71) * 2. - 1.) * W);
+  // the draft: sideways, a little up or down, round and round the box
+  p.x = mod(p.x + W + t * (.05 + .06 * h(id + 2.)), 2. * W) - W;
+  p.y = mod(p.y + t * .03 * (h(id + 3.) - .35), H);
+  // the dance
+  p += .2 * vec3(sin(t * (.3 + .4 * h(id + 4.)) + id), .6 * sin(t * (.25 + .3 * h(id + 5.)) + id * 1.3), cos(t * (.35 + .3 * h(id + 6.)) + id * .7));
+  p.y += .2;
+  // bright in the beam, a slow twinkle as they turn, gone at the edges of the box (no popping when they wrap)
+  float beam = length(cross(p, KEY_DIR));
+  vGlow = smoothstep(uSpot, uSpot * .15, beam) * (.55 + .45 * sin(t * (.8 + 1.6 * h(id + 7.)) + id * 3.))
+    * smoothstep(W, W * .8, abs(p.x)) * smoothstep(H + .2, H - .3, p.y) * smoothstep(.1, .4, p.y);
+  float r = .008 + .012 * h(id + 8.);
+  vUv = aCorner;
+  gl_Position = uViewProj * vec4(p + (uCamRight * aCorner.x + uCamUp * aCorner.y) * r * 2., 1.);
+}`;
+
+export const MOTE_FS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+in float vGlow;
+uniform float uHeat;
+out vec4 fragColor;
+void main() {
+  float d = dot(vUv, vUv);
+  if (d > 1.) discard;
+  // warm white in daylight, embers by the oven; a small bright core, little halo
+  vec3 c = mix(vec3(1., .94, .82), vec3(1., .5, .16), uHeat) * exp(-7. * d) * vGlow * .4;
+  fragColor = vec4(c, 1.);
+}`;
+
+/**
+ * The scene target stretched over the canvas: heat haze while the oven is on, a tilt-shift blur above
+ * and below the band the cookies sit in, a soft vignette and a little dither against banding.
+ */
 export const BLIT_FS = `#version 300 es
 precision highp float;
 uniform sampler2D uTex;
