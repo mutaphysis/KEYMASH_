@@ -64,7 +64,14 @@ globalStyle(p('#codeview span.on'), { boxShadow: '0 0 14px var(--c)', borderRadi
 
 // census and field notes
 globalStyle(p('#hud'), { color: 'rgba(205,250,240,.85)', lineHeight: 1.55, letterSpacing: 0.3 });
-globalStyle(p('#hud .sp'), { whiteSpace: 'nowrap' });
+// three rows show at a time (CENSUS_ROWS × ROW_H in player.ts), the list glides behind soft edges
+globalStyle(p('#hud .census'), {
+  maxHeight: 3 * 19,
+  overflow: 'hidden',
+  maskImage: 'linear-gradient(transparent, #000 3px, #000 calc(100% - 3px), transparent)',
+  WebkitMaskImage: 'linear-gradient(transparent, #000 3px, #000 calc(100% - 3px), transparent)',
+});
+globalStyle(p('#hud .sp'), { whiteSpace: 'nowrap', height: 19, lineHeight: '19px' });
 globalStyle(p('#hud .sp i'), { fontFamily: layout.serif, fontSize: 12.5, color: '#e4fff8' });
 globalStyle(p('#hud .sp b'), { color: '#8ff5dc', fontWeight: 'normal', marginLeft: 4 });
 globalStyle(p('#hud .sp.gone'), { opacity: 0.4 });

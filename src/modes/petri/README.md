@@ -81,7 +81,9 @@ chromosomes line up on the spindle and are pulled apart, a cleavage furrow pinch
 membrane, two nuclei form), bacteria split by binary fission (the rod doubles, the DNA
 separates, a wall grows in from the middle), ciliates split front to back. Dying cells
 swell, grey, their membrane breaks up and their contents drift away. Field notes
-record the firsts: first division, first engulfing, extinctions.
+record the firsts: first division, first engulfing, extinctions. The census in the top left
+corner lists every species, the most numerous first, three at a time: it glides slowly down
+the list and back up, resting at either end (with reduced motion it steps a row at a time).
 
 ## Taking up genes
 A meal can change the eater's genome. Engulfing a live cell passes genes on in 40 % of

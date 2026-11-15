@@ -13,6 +13,11 @@ import { t, tn } from './messages';
 import { hash } from '../../lang/rng';
 
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+/** the census shows this many species at a time and pans slowly through the rest (row height as in theme.css.ts) */
+const CENSUS_ROWS = 3;
+const ROW_H = 19;
+const PAN_SPEED = 7; // px per second: a row every few seconds
+const PAN_WAIT = 2.5; // seconds at either end
 
 export class MicroPlayer {
   audio: AudioEngine;
@@ -37,10 +42,17 @@ export class MicroPlayer {
   raf = 0;
   lastFrame = 0;
   hudTick = 0;
+  private census = document.createElement('div');
+  private censusRows = document.createElement('div');
+  private censusMeta = document.createElement('div');
+  private pan = { y: 0, dir: 1, wait: PAN_WAIT, n: 0 };
 
   constructor(audio: AudioEngine) {
     this.audio = audio;
     this.amb = new Ambient(audio);
+    this.census.className = 'census';
+    this.censusMeta.className = 'meta';
+    this.census.append(this.censusRows);
     this.r = new MicroRenderer(this.stage);
     new ResizeObserver(() => {
       if (this.active) this.fit();
@@ -94,6 +106,7 @@ export class MicroPlayer {
     this.logEl.textContent = '';
     this.firsts.clear();
     this.records = { gen: 1 };
+    this.pan = { y: 0, dir: 1, wait: PAN_WAIT, n: 0 };
     this.lastNote = 0;
     this.amb.configure(hash(src.trim() || 'empty'));
     await this.bootSequence();
@@ -176,6 +189,7 @@ export class MicroPlayer {
     this.amb.update(dt, this.petri.world.crowd);
     this.audio.readLevel();
     this.r.frame(dt, this.petri.world, this.amb.activity);
+    this.panCensus(dt);
     this.hudTick += dt;
     if (this.hudTick > 0.3) {
       this.hudTick = 0;
@@ -277,23 +291,39 @@ export class MicroPlayer {
     this.follow.show(this.spans[g0], line);
   }
 
-  /** census: each species with its colour and head count; hybrids while they live */
+  /** census: each species with its colour and head count, hybrids while they live; the most numerous first */
   private drawHud(): void {
     const p = this.petri;
     if (!p) return;
     const W = p.world;
     const hybrids = [...W.counts.keys()].filter((sp) => sp.parents && W.population(sp) > 0);
-    const rows = [...p.species, ...hybrids]
-      .map((sp) => ({ sp, n: W.population(sp) }))
-      .sort((a, b) => b.n - a.n)
-      .slice(0, 5);
-    const html = rows
+    const rows = [...p.species, ...hybrids].map((sp) => ({ sp, n: W.population(sp) })).sort((a, b) => b.n - a.n);
+    this.censusRows.innerHTML = rows
       .map(
         ({ sp, n }) =>
           `<div class="sp${n ? '' : ' gone'}"><span class="dot" style="background:hsl(${sp.hue | 0} 70% 62%)"></span><i>${sp.name.replace(/</g, '')}</i> <b>${n}</b></div>`,
       )
       .join('');
+    this.pan.n = rows.length;
     const temp = W.temp < 0.85 ? ' · ' + t('cold') : W.temp > 1.15 ? ' · ' + t('warm') : '';
-    this.hud.innerHTML = `${html}<div class="meta">${clock(W.time)} · ${tn('hudCells', W.cells.length)} · ${t('hudFood', { n: W.food.length })}${temp}</div>`;
+    this.censusMeta.textContent = `${clock(W.time)} · ${tn('hudCells', W.cells.length)} · ${t('hudFood', { n: W.food.length })}${temp}`;
+    if (this.census.parentElement !== this.hud) this.hud.replaceChildren(this.census, this.censusMeta); // the HUD is shared with the other modes
+  }
+
+  /** glide down the census and back up, resting at either end; with reduced motion a row at a time */
+  private panCensus(dt: number): void {
+    const p = this.pan,
+      max = Math.max(0, p.n - CENSUS_ROWS) * ROW_H;
+    if (p.wait > 0) p.wait -= dt;
+    else if (max > 0) {
+      p.y += p.dir * (this.r.gentle ? ROW_H : PAN_SPEED * dt);
+      if (this.r.gentle) p.wait = PAN_WAIT;
+      if (p.y <= 0 || p.y >= max) {
+        p.dir = p.y <= 0 ? 1 : -1;
+        p.wait = PAN_WAIT;
+      }
+    }
+    p.y = Math.min(max, Math.max(0, p.y));
+    this.censusRows.style.transform = `translateY(${-p.y}px)`;
   }
 }
