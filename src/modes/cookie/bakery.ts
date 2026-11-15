@@ -145,6 +145,8 @@ const ORDER: readonly Stage[] = [
   'sweep',
   'done',
 ];
+/** a coated cookie gets its chips after the coating, on top of it, just before the toppings; a plain one bakes them in */
+const COATED_ORDER: readonly Stage[] = ORDER.filter((s) => s !== 'chips').flatMap((s): Stage[] => (s === 'toppings' ? ['chips', s] : [s]));
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const sat = (v: number) => clamp(v, 0, 1);
 const ss = (a: number, b: number, x: number) => {
@@ -228,9 +230,13 @@ export class Bakery {
   /** seconds left on the oven timer as shown, minutes * 60 scaled onto the bake stage */
   timer(): number {
     const all = this.recipe.minutes * 60;
-    const i = ORDER.indexOf(this.stage);
+    const order = this.order;
     if (this.stage === 'bake') return all * (1 - sat(this.t / 4.2));
-    return i < ORDER.indexOf('bake') ? all : 0;
+    return order.indexOf(this.stage) < order.indexOf('bake') ? all : 0;
+  }
+
+  private get order(): readonly Stage[] {
+    return this.recipe.coat === 'none' ? ORDER : COATED_ORDER;
   }
 
   /** a point of the tray in a cookie's own frame (x right, y to the back) */
@@ -570,9 +576,10 @@ export class Bakery {
       else this.enter('done');
       return;
     }
-    let i = ORDER.indexOf(this.stage) + 1;
-    while (this.len(ORDER[i]!) === 0) i++;
-    this.enter(ORDER[i]!);
+    const order = this.order;
+    let i = order.indexOf(this.stage) + 1;
+    while (this.len(order[i]!) === 0) i++;
+    this.enter(order[i]!);
   }
 
   /** another batch of the same recipe, once the tray is empty */

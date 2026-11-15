@@ -469,6 +469,7 @@ export class CookieRenderer {
     f3('uInside', lin([0, 1, 2].map((k) => Math.min(1, mix(d.raw[k]!, d.baked[k]!, 0.35) * 1.1)) as RGB));
     i1('uDoughKind', DOUGHS.indexOf(r.dough));
     f1('uChips', r.chips > 0 ? 0.1 + (0.85 * r.chips) / 16 : 0);
+    f1('uChipMelt', r.coat === 'none' ? L.puff : 0);
     // per layer: kind, cell size, share of cells that hold a piece
     const tops = new Float32Array(9);
     let layer = 0;

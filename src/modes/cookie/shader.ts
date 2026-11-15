@@ -40,6 +40,7 @@ uniform vec3 uPour;      // the coating's stream: front and tail height above th
 uniform vec2 uPourAt;    // where it lands, in the cookie's frame
 uniform vec3 uColor, uAccent, uRaw, uBakedCol, uInside;
 uniform float uChips;    // share of chip cells that hold one
+uniform float uChipMelt; // 0..1 how far the chips have melted: they bake on a plain cookie, a coated one gets them fresh on top
 uniform vec3 uTop[3];   // per layer of pieces: kind (1 sprinkles, 2 sugar, 3 strands, 4 pearls, 5 coconut, 6 candy), cell size, share of cells
 uniform float uPowder;  // powdered sugar dusted over everything, 0..1
 uniform float uGlitter, uBorder, uBorderIn, uPipeOn, uEyeR, uLevel;
@@ -182,7 +183,7 @@ float pieces(vec3 L, int ci, float kind, float cs, float keep, float T, float sp
   vec2 dir = vec2(cos(a), sin(a));
   float sd;
   if (kind < .5) {
-    d.y /= 1. - .15 * uPuff;
+    d.y /= 1. - .15 * uChipMelt;
     sd = sdRoundCone(d + vec3(0., .012, 0.), .07, .025, .065);
   } else if (kind < 1.5) {
     float t = clamp(dot(d.xz, dir), -.045, .045);
@@ -466,7 +467,7 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float id, float t) {
   } else if (id < 4.5) {
     alb = uAccent; rough = .5; wrap = .3; sparkle = uGlitter;
   } else if (id < 5.5) {
-    alb = DARK_CHOC; rough = mix(.5, .15, uPuff); f0 = .06;
+    alb = DARK_CHOC; rough = mix(.5, .15, uChipMelt); f0 = .06;
   } else if (id < 7.5 || id > 12.5) {
     int layer = id > 12.5 ? 2 : id > 6.5 ? 1 : 0;
     vec3 top = uTop[layer];

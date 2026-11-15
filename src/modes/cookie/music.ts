@@ -18,11 +18,11 @@ const CHORDS = [
   { root: 7, third: 4 },
 ];
 type Mood = 'work' | 'oven' | 'dress' | 'serve' | 'quiet';
-const MOOD: Record<Stage, Mood> = {
+/** chips are not listed: they land while the dough is worked or, on a coated cookie, while it is dressed, and keep that tune */
+const MOOD: Partial<Record<Stage, Mood>> = {
   drop: 'work',
   roll: 'work',
   cut: 'work',
-  chips: 'work',
   bake: 'oven',
   cool: 'oven',
   coat: 'dress',
@@ -84,7 +84,7 @@ export class Jingle {
   }
 
   stage(s: Stage): void {
-    this.mood = MOOD[s];
+    this.mood = MOOD[s] ?? this.mood;
   }
 
   private note(inst: Instrument, midi: number, dur: number, vel: number, t: number, echo = 0, pan = 0): void {

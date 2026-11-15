@@ -73,7 +73,8 @@ piped straight on.
 The dough ball drops and is rolled out in three passes, the cutters come down, the scrap goes,
 chips land, the oven glows while the timer runs (the HUD shows it), the cookies rise and brown,
 then the coating pours down from above and spreads, pattern, toppings and the finishing
-touches, each only if the recipe has them.
+touches, each only if the recipe has them. A coated cookie gets its chips after the coating,
+on top of it, instead of baked in. A swirl is piped from its middle out.
 Each stage is announced in big round letters at the top of the stage, and the code view lights up
 the words that decide it. At the end the message appears under the cookies: big round letters in
 the cookie's colours, hopping a little, with "tap to bite!" under it until the first bite.
