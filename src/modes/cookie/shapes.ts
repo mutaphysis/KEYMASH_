@@ -148,6 +148,29 @@ function bell(skirt: number, knob: boolean): Sdf {
   return union(0.06, ...parts);
 }
 
+/** a line from (ax, ay) to (bx, by) with round ends */
+const capsule =
+  (ax: number, ay: number, bx: number, by: number, r: number): Sdf =>
+  (x, y) => {
+    const ex = bx - ax;
+    const ey = by - ay;
+    const h = Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey)));
+    return Math.hypot(x - ax - ex * h, y - ay - ey * h) - r;
+  };
+
+/** a gingerbread man: round head, a body, arms out (one may wave), legs apart */
+function man(wave: boolean, chubby: boolean): Sdf {
+  return union(
+    0.12,
+    circle(0, 0.6, 0.33),
+    ellipse(0, -0.02, chubby ? 0.42 : 0.36, 0.44),
+    capsule(-0.2, 0.22, -0.8, 0.1, 0.16),
+    wave ? capsule(0.2, 0.22, 0.72, 0.62, 0.16) : capsule(0.2, 0.22, 0.8, 0.1, 0.16),
+    capsule(-0.15, -0.3, -0.42, -0.92, 0.18),
+    capsule(0.15, -0.3, 0.42, -0.92, 0.18),
+  );
+}
+
 function base(shape: Shape, variant: number): Sdf {
   const v = variant === 1 || variant === 2 ? variant : 0;
   switch (shape) {
@@ -165,6 +188,8 @@ function base(shape: Shape, variant: number): Sdf {
       return v === 0 ? union(0.08, circle(0, -0.1, 0.78), circle(-0.6, 0.62, 0.3), circle(0.6, 0.62, 0.3)) : teddy(v === 1 ? -0.08 : 0.22);
     case 'bell':
       return v === 0 ? bell(0.95, false) : v === 1 ? bell(1.05, false) : bell(0.95, true);
+    case 'man':
+      return man(v === 1, v === 2);
     case 'round':
     default:
       if (v === 1) return (x, y) => Math.hypot(x, y) - (0.9 + 0.06 * Math.cos(12 * Math.atan2(y, x)));
@@ -188,6 +213,18 @@ export function outline(shape: Shape, variant: number, wobble: number, seed: num
 /** where eyes, letters and the mouth go; with a face the letters move down and shrink */
 export function anchors(shape: Shape, variant: number, face = false): Anchors {
   switch (shape) {
+    case 'man':
+      // the face on the head, letters on the belly
+      return {
+        eyes: [
+          [-0.12, 0.66],
+          [0.12, 0.66],
+        ],
+        eyeR: 0.075,
+        letters: [0, -0.04],
+        letterH: 0.32,
+        mouth: [0, 0.5],
+      };
     case 'tree':
       return {
         eyes: [

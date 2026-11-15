@@ -10,7 +10,7 @@ const card = (id: string, code: string, name: CookieMsg, zoom = 1.4): SheetCard 
   id,
   code,
   name: t(name),
-  at: 30,
+  at: 25, // every recipe is served by 24 s; left alone, the nibbling starts 11 s after serving, at 26 s at the earliest
   zoom,
   img: IMG[`./sheet/${id}.webp`],
 });
@@ -18,7 +18,7 @@ const card = (id: string, code: string, name: CookieMsg, zoom = 1.4): SheetCard 
 export const SHEET: Sheet = {
   intro: t('sheetIntro'),
   cards: [
-    card('round', 'butter round plain 1', 'cardRound'),
+    card('man', 'ginger man :) 1', 'cardMan'),
     card('star', 'ginger ⭐ 3', 'cardStar', 1),
     card('heart', '❤️ !! pink 1', 'cardHeart'),
     card('tree', '🎄 matcha ! green *** 1', 'cardTree'),

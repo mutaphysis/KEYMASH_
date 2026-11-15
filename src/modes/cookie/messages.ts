@@ -24,7 +24,7 @@ const en = {
   demoBurnt: '🔥 dog on the keyboard',
   // ---- cheat sheet ----
   sheetIntro: 'The whole text is one recipe: words, symbols and numbers choose dough, cutter, oven and decoration.',
-  cardRound: 'round',
+  cardMan: 'gingerbread man',
   cardStar: 'star',
   cardHeart: 'heart',
   cardTree: 'tree',
@@ -66,6 +66,7 @@ const en = {
   tree: 'tree',
   bear: 'bear',
   bell: 'bell',
+  man: 'man',
 };
 
 // casual "du", short
@@ -89,7 +90,7 @@ const de: Translation<typeof en> = {
   demoJoy: '🔤 JOY',
   demoBurnt: '🔥 Hund auf der Tastatur',
   sheetIntro: 'Der ganze Text ist ein Rezept: Wörter, Zeichen und Zahlen wählen Teig, Form, Ofen und Deko.',
-  cardRound: 'rund',
+  cardMan: 'Lebkuchenmann',
   cardStar: 'Stern',
   cardHeart: 'Herz',
   cardTree: 'Baum',
@@ -129,6 +130,7 @@ const de: Translation<typeof en> = {
   tree: 'Baum',
   bear: 'Bär',
   bell: 'Glocke',
+  man: 'Männchen',
 };
 
 export const { t, tn } = defineMessages(en, de);

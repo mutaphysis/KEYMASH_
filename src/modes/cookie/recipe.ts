@@ -5,7 +5,7 @@ import { lex, graphemes } from '../../lang/lexer';
 import { hash, mulberry32 } from '../../lang/rng';
 
 export type Dough = 'butter' | 'ginger' | 'cocoa' | 'oat' | 'matcha';
-export type Shape = 'round' | 'star' | 'heart' | 'tree' | 'bear' | 'bell';
+export type Shape = 'round' | 'star' | 'heart' | 'tree' | 'bear' | 'bell' | 'man';
 export type Coat = 'none' | 'icing' | 'chocolate' | 'glaze';
 export type Flow = 'thick' | 'smooth' | 'runny';
 export type Pattern = 'plain' | 'stripes' | 'zigzag' | 'swirl' | 'half';
@@ -66,7 +66,9 @@ export interface Recipe {
 }
 
 export const DOUGHS: readonly Dough[] = ['butter', 'ginger', 'cocoa', 'oat', 'matcha'];
-export const SHAPES: readonly Shape[] = ['round', 'star', 'heart', 'tree', 'bear', 'bell'];
+export const SHAPES: readonly Shape[] = ['round', 'star', 'heart', 'tree', 'bear', 'bell', 'man'];
+/** the cutters a text without one picks from by its longest word; kept as it was, so old texts still cut what they did */
+const PICKED: readonly Shape[] = ['round', 'star', 'heart', 'tree', 'bear', 'bell'];
 export const TOPPINGS: readonly Topping[] = ['sprinkles', 'sugar', 'strands', 'pearls', 'coconut', 'candy', 'powder'];
 /** at most this many toppings at once, of which at most PIECE_LAYERS lie on top as pieces (powder is a dusting) */
 export const MAX_TOPPINGS = 4;
@@ -154,6 +156,10 @@ const WORDS: Record<string, [Stage, Apply]> = {
   tree: kw('cut', (a) => (a.shape = 'tree')),
   bear: kw('cut', (a) => (a.shape = 'bear')),
   bell: kw('cut', (a) => (a.shape = 'bell')),
+  man: kw('cut', (a) => (a.shape = 'man')),
+  men: kw('cut', (a) => (a.shape = 'man')),
+  gingerman: kw('cut', (a) => (a.shape = 'man')),
+  gingy: kw('cut', (a) => (a.shape = 'man')),
   tiny: kw('cut', (a) => (a.size = 0.8)),
   small: kw('cut', (a) => (a.size = 0.88)),
   big: kw('cut', (a) => (a.size = 1.08)),
@@ -212,6 +218,8 @@ const EMOJI: Record<string, [Stage, Apply]> = {
   '🐻': shape('bear'),
   '🧸': shape('bear'),
   '🔔': shape('bell'),
+  '🧍': shape('man'),
+  '🕺': shape('man'),
   '🥛': kw('coat', (a) => (a.coat = 'icing')),
   '🍫': kw('coat', (a) => (a.coat = 'chocolate')),
   '🍯': kw('coat', (a) => (a.coat = 'glaze')),
@@ -380,9 +388,11 @@ export function readRecipe(src: unknown): Recipe {
   let cutter: Shape = a.shape ?? 'round';
   if (!a.shape && words.length) {
     const w = words.reduce((l, c) => (c.lower.length > l.lower.length ? c : l), words[0]!);
-    cutter = SHAPES[hash('s' + w.lower) % SHAPES.length]!;
+    cutter = PICKED[hash('s' + w.lower) % PICKED.length]!;
     marks.push({ stage: 'cut', g0: w.g0, g1: w.g1 });
   }
+  // gingerbread left to itself is cut into little men, not circles
+  if (!a.shape && cutter === 'round' && dough === 'ginger') cutter = 'man';
 
   const G = gs.reduce((n, g) => n + (/^[\n\r\u2028\u2029]+$/.test(g) ? 0 : 1), 0);
   const thickness = a.thickness ?? clamp(0.17 + (0.17 * upper) / Math.max(1, nLetters) + 0.03 * (dThick - 0.5), 0.14, 0.36);

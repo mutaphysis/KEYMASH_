@@ -47,7 +47,7 @@ and any keysmash is a recipe.
 | thickness | `thin` `thick` | more CAPITALS, thicker |
 | rise | `flat` `puffy` | held keys (`aaa`) puff it up |
 | chocolate chips | `.` (three each), `chips` | none |
-| cutter | `round` 🍪, `star` ⭐, `heart` ❤️, `tree` 🎄, `bear` 🐻, `bell` 🔔 | from the longest word |
+| cutter | `round` 🍪, `star` ⭐, `heart` ❤️, `tree` 🎄, `bear` 🐻, `bell` 🔔, `man` 🧍 🕺 (gingerbread man) | from the longest word; gingerbread that would come out round is cut into men |
 | turned | `/` and `\` (15° each) | a little |
 | size | `tiny` `small` `big` `huge` | longer text, bigger cookies |
 | oven | a number from 100: degrees; 4–99: minutes; 🔥 ❄️ ±20° | 160–200°, 9–14 min |
@@ -108,7 +108,8 @@ of it for the decoration, a lead joins when it is served. The dough picks the ba
 | oat | barn dance: plucks and an organ, a light swing |
 | matcha | rainy afternoon: slow, piano and chiptune, sevenths |
 
-Hearts and bells waltz (3/4), stars and trees march (4/4), round cookies and bears do either.
+Hearts and bells waltz (3/4), stars, trees and gingerbread men march (4/4), round cookies and bears
+do either.
 Key, tempo, chords and tune come from the text, so every recipe hums its own song (the boot text
 says which). Every thud, cut, chip, oven tick, sprinkle, bite and crumb has its own sound, and a
 burnt batch comes out of the oven to a sad trombone.

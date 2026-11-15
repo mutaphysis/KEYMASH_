@@ -113,8 +113,8 @@ const BANDS: Record<Dough, Band> = {
     sleigh: false,
   },
 };
-/** hearts and bells waltz, stars and trees march, the rest as the seed says */
-const WALTZ: Record<Shape, number> = { heart: 1, bell: 1, star: 0, tree: 0, round: 0.4, bear: 0.4 };
+/** hearts and bells waltz, stars, trees and gingerbread men march, the rest as the seed says */
+const WALTZ: Record<Shape, number> = { heart: 1, bell: 1, star: 0, tree: 0, man: 0, round: 0.4, bear: 0.4 };
 
 type Mood = 'work' | 'oven' | 'dress' | 'serve' | 'quiet';
 /** chips are not listed: they land while the dough is worked or, on a coated cookie, while it is dressed, and keep that tune */
