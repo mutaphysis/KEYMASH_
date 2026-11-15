@@ -35,7 +35,6 @@ const glitchB = keyframes({
   '100%': { clipPath: 'inset(90% 0 0 0)' },
 });
 const wrapPulse = keyframes({ '0%': { boxShadow: `0 0 40px ${rgba(fg, 0.5)} inset, 0 0 30px ${rgba(fg, 0.5)}` } });
-const nojsIn = keyframes({ to: { opacity: 1 } });
 
 // ---------- page ----------
 globalStyle(':root', { vars: { '--vh': '100dvh', '--vt': '0px' } });
@@ -352,21 +351,3 @@ globalStyle('.logo', { '@media': { '(min-width: 800px)': { fontSize: 30 } } });
 globalStyle('#app.stageonly #edit, #app.stageonly #codeview, #app.stageonly .playbtns', { display: 'none' });
 globalStyle('#app.stageonly #play', { flex: 1, vars: { '--pl': layout.safeLeft, '--pr': layout.safeRight } });
 globalStyle('#app.stageonly #stageWrap', { flex: 1, borderBottom: 0 });
-
-// ---------- fallback message: invisible for the first second so a normal start never flashes it ----------
-globalStyle('#nojs', {
-  position: 'fixed',
-  inset: 0,
-  zIndex: 100,
-  background: '#000800',
-  color: '#39ff7a',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  gap: 14,
-  padding: `calc(24px + ${layout.safeTop}) calc(24px + ${layout.safeRight}) calc(24px + ${layout.safeBottom}) calc(24px + ${layout.safeLeft})`,
-  font: `16px/1.5 ${layout.mono}`,
-  opacity: 0,
-  animation: `${nojsIn} .3s 1s forwards`,
-});
-globalStyle('#nojs p', { margin: 0, maxWidth: '34em', color: '#9fe8b6' });

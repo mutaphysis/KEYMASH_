@@ -523,5 +523,5 @@ if (link.has('mode') || link.has('code')) {
   history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
 }
 
-// everything is up: take the "waiting for JavaScript" message away
+// everything is up and themed: take the cover (dark screen, later the "waiting for JavaScript" text) away
 document.getElementById('nojs')?.remove();

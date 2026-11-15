@@ -17,13 +17,58 @@
     <meta name="apple-mobile-web-app-title" content="KEYMASH_" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>KEYMASH_ — every keystroke compiles</title>
+    <!-- Hard-coded so it applies before any script or stylesheet: the page is dark from the first
+         paint, and #nojs covers the shell until main.ts has applied the first mode's theme. -->
+    <style>
+      html {
+        background: #000800;
+      }
+      #nojs {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: #000800;
+        color: #39ff7a;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 14px;
+        padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px))
+          calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
+        font:
+          16px/1.5 'Share Tech Mono',
+          ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      /* the text only after a second, so a normal start shows a plain dark screen */
+      #nojs > * {
+        opacity: 0;
+        animation: nojs-in 0.3s 1s forwards;
+      }
+      @keyframes nojs-in {
+        to {
+          opacity: 1;
+        }
+      }
+      #nojs .logo {
+        color: #39ff7a;
+        text-shadow: 0 0 8px #39ff7a;
+      }
+      #nojs p {
+        margin: 0;
+        max-width: 34em;
+        color: #9fe8b6;
+      }
+    </style>
   </head>
   <body>
-    <!-- Shown until the script starts (it removes this). Covers JavaScript being off or blocked, and a failed load. -->
-    <!-- JavaScript switched off in the browser: show it at once, no one-second wait -->
+    <!-- Shown until the first mode is up (main.ts removes it). Covers loading, JavaScript being off or blocked, and a failed load. -->
+    <!-- JavaScript switched off in the browser: show the text at once, no one-second wait -->
     <noscript
       ><style>
-        #nojs {
+        #nojs > * {
           opacity: 1;
           animation: none;
         }
