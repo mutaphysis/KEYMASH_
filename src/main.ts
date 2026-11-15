@@ -98,8 +98,8 @@ try {
 }
 
 // ---- the current mode, its code (a chunk of its own, fetched on first use) and its player ----
-// A link can choose both: ?mode=<id>&code=<text> opens that mode with that text and plays it on the
-// whole screen (see the end of this file). An unknown mode id is ignored.
+// A link can choose both: ?mode=<id>&code=<text> opens that mode with that text on the whole screen,
+// ready to play with one tap (see the end of this file). An unknown mode id is ignored.
 const link = new URLSearchParams(location.search);
 const linkCode = link.get('code');
 let mode: ModeDef = MODES.find((m) => m.id === link.get('mode')) ?? modeById(store.mode);
@@ -177,6 +177,11 @@ function layout(): void {
   } else {
     $('edit').hidden = state.playing;
     $('play').hidden = !state.playing;
+  }
+  if (app.classList.contains('stageonly')) {
+    // only the stage, playing or waiting for ▶
+    $('edit').hidden = true;
+    $('play').hidden = false;
   }
   editor.active = !$('edit').hidden;
   const rb = $<KmButton>('btn-run');
@@ -300,7 +305,11 @@ function edit(): void {
 }
 
 $('btn-run').addEventListener('click', run);
-$('btn-idle-run').addEventListener('click', run);
+$('btn-idle-run').addEventListener('click', () => {
+  // a link opened the stage alone: fullscreen needs this tap too
+  if (app.classList.contains('stageonly')) stageOnly(true);
+  run();
+});
 $('btn-stop').addEventListener('click', edit);
 $('btn-restart').addEventListener('click', () => P().restart());
 
@@ -312,6 +321,7 @@ function stageOnly(on: boolean): void {
   fullBtn.icon = on ? '✖' : '⛶';
   if (on && document.fullscreenEnabled && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
   if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  layout();
 }
 fullBtn.addEventListener('click', () => stageOnly(!app.classList.contains('stageonly')));
 // Esc or a system gesture left fullscreen: bring the UI back as well
@@ -483,11 +493,10 @@ declare global {
 }
 window.KEYMASH = KEYMASH;
 
-// a link with code: show it, play it, only the stage. Browsers refuse real fullscreen and sound
-// without a tap, so the page fills the window and the first tap brings the sound.
+// a link with code: show it on the stage alone, ready to play. Browsers refuse sound and real
+// fullscreen without a tap, so it waits for ▶ instead of starting by itself.
 if (linkCode !== null) {
   editor.value = linkCode; // it becomes this mode's draft, like a picked demo
-  run();
   stageOnly(true);
 }
 // the link has done its job: a reload keeps the text as it is by then
