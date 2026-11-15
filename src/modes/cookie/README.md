@@ -94,8 +94,9 @@ and shape; a tap in the middle bites the nearest edge. Crumbs fall, bounce and s
 cookie or on the tray.
 A cookie that is almost gone crumbles. Left alone for ten seconds, the cookies get nibbled away
 on their own (a tap puts that off again). When the tray is empty it is swept and three buttons
-come up: **make your own** goes back to the editor, **bake again** bakes the same recipe once more,
-**share** shares a link to it (the play buttons hide meanwhile: the panel covers them).
+come up: **make your own** goes back to an empty editor (↶ UNDO brings the recipe back for a few
+seconds), **bake again** bakes the same recipe once more, **share** shares a link to it (the play
+buttons hide meanwhile: the panel covers them).
 
 ## Sound
 

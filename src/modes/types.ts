@@ -22,8 +22,8 @@ export interface ModePlayer {
 
 /** what a player may ask of the app shell */
 export interface PlayerHost {
-  /** stop and go back to the editor (out of the stage-only view too) */
-  edit(): void;
+  /** stop and go back to the editor (out of the stage-only view too); `clear` empties it, with CLEAR's undo */
+  edit(clear?: boolean): void;
   /** share a link to this mode with the program as it is now (system share sheet, else the clipboard) */
   share(): void;
 }

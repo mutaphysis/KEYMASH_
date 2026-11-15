@@ -109,9 +109,10 @@ let code!: ModeCode;
 const players = new Map<string, ModePlayer>();
 /** what a player may ask of the shell, e.g. COOKIE_'s "make your own" and "share" once the tray is empty */
 const host: PlayerHost = {
-  edit() {
+  edit(clear = false) {
     stageOnly(false);
     edit();
+    if (clear) clearCode(); // after stopping, so the empty text is not hot-swapped in
     if (isSplit()) editor.ta.focus(); // no keyboard pops up on a phone
   },
   share: shareProgram,
@@ -212,11 +213,15 @@ clearBtn.addEventListener('click', () => {
     editor.ta.focus({ preventScroll: true });
     return;
   }
+  clearCode();
+});
+/** empty the editor; CLEAR turns into UNDO for a few seconds */
+function clearCode(): void {
   if (!editor.value) return;
   undo = editor.value;
   editor.value = '';
   armUndo(true);
-});
+}
 
 // ---- modes ----
 function applyMode(m: ModeDef, c: ModeCode): void {

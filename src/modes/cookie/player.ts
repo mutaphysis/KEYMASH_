@@ -105,7 +105,7 @@ export class CookiePlayer implements ModePlayer {
     this.panel = document.createElement('div');
     this.panel.className = donePanel;
     this.wrap.append(this.panel);
-    this.button('idle', '✏️', t('makeOwn'), () => host.edit(), true);
+    this.button('idle', '✏️', t('makeOwn'), () => host.edit(true), true);
     this.button('play', '🍪', t('again'), () => this.again());
     this.button('play', '🔗', t('share'), () => host.share());
     this.r = new CookieRenderer(this.canvas);
