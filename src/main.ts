@@ -189,7 +189,7 @@ function layout(): void {
   rb.text = t(split && state.playing ? 'stop' : 'run');
   requestAnimationFrame(() => {
     editor.resize();
-    P().fit();
+    if (code) P().fit(); // a resize while the first mode's code is still loading: nothing to fit yet
   });
 }
 window.addEventListener('resize', layout);
