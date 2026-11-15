@@ -798,6 +798,42 @@ export class AudioEngine {
         (s.dest as BiquadFilterNode).frequency.linearRampToValueAtTime(700, t + 0.55);
         break;
       }
+      case 'wahwah': {
+        // the sad trombone: three wahs a semitone apart going down, then a long one that wobbles and sags;
+        // the lowpass opens and closes on each like a plunger mute
+        const f = 196 * p;
+        for (let i = 0; i < 4; i++) {
+          const last = i === 3;
+          const k = t + i * 0.42;
+          const d = last ? 1.5 : 0.38;
+          const s = this.sweep('sawtooth', f * 2 ** (-i / 12), f * 2 ** ((-i - (last ? 0.7 : 0.15)) / 12), k, d, v, pan, {
+            lp: 400,
+            q: 4,
+            a: 0.05,
+            rev: 0.35,
+          });
+          // blown, not plucked: it holds, then lets go
+          s.g.gain.cancelScheduledValues(k);
+          s.g.gain.setValueAtTime(0.0001, k);
+          s.g.gain.linearRampToValueAtTime(v * 0.9, k + 0.05);
+          s.g.gain.setTargetAtTime(0.0001, k + d * 0.6, d * 0.1); // all but silent before the oscillator stops
+          const lp = (s.dest as BiquadFilterNode).frequency;
+          lp.setValueAtTime(350, k);
+          lp.linearRampToValueAtTime(1700, k + 0.12);
+          lp.linearRampToValueAtTime(500, k + d);
+          if (!last) continue;
+          const l = this.c.createOscillator();
+          l.frequency.value = 5.5;
+          const cents = this.gain(0);
+          cents.gain.setValueAtTime(0, k);
+          cents.gain.linearRampToValueAtTime(40, k + 0.4);
+          l.connect(cents);
+          cents.connect(s.osc.detune);
+          l.start(k);
+          l.stop(k + d + 0.1);
+        }
+        break;
+      }
       case 'moo': {
         const s = this.sweep('sawtooth', 120, 95, t, 0.9, v * 1.2, pan, { lp: 400, q: 4, a: 0.1 });
         (s.dest as BiquadFilterNode).frequency.linearRampToValueAtTime(900, t + 0.4);

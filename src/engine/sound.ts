@@ -32,6 +32,7 @@ export type SfxKind =
   | 'drop'
   | 'squish'
   | 'siren'
+  | 'wahwah'
   | 'bark'
   | 'meow'
   | 'moo'
