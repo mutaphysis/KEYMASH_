@@ -12,7 +12,7 @@ The 📖 button in the header shows these cards in the app; tap one to add its s
 <!-- sheet:start (bun scripts/sheet.ts writes this table) -->
 <table>
 <tr>
-<td width="33%"><img src="sheet/round.webp" alt=""><br><b>round</b> <code>butter round plain 1</code></td>
+<td width="33%"><img src="sheet/man.webp" alt=""><br><b>gingerbread man</b> <code>ginger man :) 1</code></td>
 <td width="33%"><img src="sheet/star.webp" alt=""><br><b>star</b> <code>ginger ⭐ 3</code></td>
 <td width="33%"><img src="sheet/heart.webp" alt=""><br><b>heart</b> <code>❤️ !! pink 1</code></td>
 </tr>
