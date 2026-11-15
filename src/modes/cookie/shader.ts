@@ -372,8 +372,29 @@ float pinShadow(vec3 ro, vec3 rd) {
   return 9. * d / max(t, .02);
 }
 
+// The coating streams' shadows in closed form, for the same reason: next to a cookie the march creeps
+// along its side and gave up before reaching the stream, so a lit line ran round the cookie in its shadow.
+float pourShadow(vec3 ro, vec3 rd) {
+  float res = 1.;
+  float H = uThick * (1. + .6 * uRise * uPuff);
+  for (int i = 0; i < 3; i++) {
+    if (i >= uCount) break;
+    vec4 k = uCookie[i];
+    if (k.z > .5) continue;
+    vec2 r = uRot[i];
+    vec2 v = vec2(r.x * uPourAt.x - r.y * uPourAt.y, r.y * uPourAt.x + r.x * uPourAt.y); // the cookie's frame back to the tray's
+    vec2 o = ro.xz - (k.xy + v * vec2(1., -1.) * uSize);
+    float t = max(-dot(o, rd.xz) / max(dot(rd.xz, rd.xz), 1e-6), 0.); // nearest to the stream's axis
+    float y = ro.y + rd.y * t;
+    float d = length(vec2(length(o + rd.xz * t), y - clamp(y, H + uPour.x, H + uPour.y))) - uPour.z;
+    res = min(res, 9. * d / max(t, .02));
+  }
+  return res;
+}
+
 float shadow(vec3 ro, vec3 rd) {
   float res = uPin > 0. ? pinShadow(ro, rd) : 1., t = .02;
+  if (uPour.z > 0.) res = min(res, pourShadow(ro, rd));
   for (int i = 0; i < 18; i++) {
     vec3 p = ro + rd * t;
     if (p.y > uTopY) break;
