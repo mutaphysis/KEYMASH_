@@ -1,6 +1,6 @@
 // MYCELIUM_: bone and moss on dark humus. No scanlines, soft shapes, quiet.
 import { createTheme, globalStyle, keyframes, style } from '@vanilla-extract/css';
-import { vars } from '../../styles/theme.css';
+import { layout, vars } from '../../styles/theme.css';
 import { variant } from '../../ui/components/button.css';
 
 export const myceliumTheme = createTheme(vars, {
@@ -49,6 +49,28 @@ export const stage3d = style({
   touchAction: 'none',
   cursor: 'grab',
   selectors: { '&.on': { display: 'block' }, '&.drag': { cursor: 'grabbing' } },
+});
+
+/** dev builds: the wireframe button, a corner button left of fullscreen (on while the wireframe draws) */
+export const debugCorner = style({});
+globalStyle(`${debugCorner} > ${variant.corner}`, { right: 'calc(50px + var(--pr, 0px))' });
+globalStyle(`${debugCorner}[aria-pressed="true"] > ${variant.corner}`, { opacity: 1, color: vars.color.text });
+
+/** dev builds: what the wireframe's colours mean, top left while it draws */
+export const wireLegend = style({
+  position: 'absolute',
+  top: `calc(8px + ${layout.safeTop})`,
+  left: 8,
+  zIndex: 6,
+  display: 'none',
+  padding: '6px 9px',
+  borderRadius: 8,
+  background: 'rgba(0,0,0,.55)',
+  color: vars.color.text,
+  font: '11px/1.6 ui-monospace, monospace',
+  pointerEvents: 'none',
+  whiteSpace: 'pre',
+  selectors: { '&.on': { display: 'block' } },
 });
 
 const p = (sel: string) => `${myceliumTheme} ${sel}`;

@@ -10,7 +10,7 @@ import type { Assets } from './assets';
 import { readGround, WORLD } from './ground';
 import { ForestRenderer } from './render';
 import { t } from './messages';
-import { stage3d } from './theme.css';
+import { debugCorner, stage3d, wireLegend } from './theme.css';
 
 /** view units per metre (3.75 per cm, ASSETS.md) */
 const PER_M = 375;
@@ -40,6 +40,8 @@ export class ForestPlayer implements ModePlayer {
   private gesture: { x: number; y: number; spread: number; t: number } | null = null;
   private vx = 0;
   private vy = 0;
+  /** dev builds only: the wireframe button and its legend */
+  private debug: { button: HTMLElementTagNameMap['km-button']; legend: HTMLDivElement } | null = null;
 
   constructor(_audio: AudioEngine, _host: PlayerHost) {
     this.canvas = document.createElement('canvas');
@@ -65,6 +67,44 @@ export class ForestPlayer implements ModePlayer {
       { passive: false },
     );
     this.loop = this.loop.bind(this);
+    if (import.meta.env.DEV) this.debug = this.debugTools();
+  }
+
+  /** dev builds: a corner button that toggles the renderer's wireframe, and a legend of its colours */
+  private debugTools(): NonNullable<ForestPlayer['debug']> {
+    const legend = document.createElement('div');
+    legend.className = wireLegend;
+    const button = document.createElement('km-button');
+    button.className = debugCorner;
+    button.setAttribute('variant', 'corner');
+    button.setAttribute('icon', 'grid');
+    button.button.title = t('debugWire');
+    button.button.setAttribute('aria-label', t('debugWire'));
+    button.style.display = 'none'; // shown while this mode plays
+    button.addEventListener('click', () => {
+      const on = (this.r.wire = !this.r.wire);
+      button.setAttribute('aria-pressed', String(on));
+      button.button.setAttribute('aria-pressed', String(on));
+      legend.classList.toggle('on', on);
+      legend.replaceChildren(
+        ...this.r.wireLegend().map((m) => {
+          const row = document.createElement('div');
+          const [r, g, b, a] = m.color.map((c, i) => (i < 3 ? Math.round(c * 255) : c));
+          row.style.color = `rgba(${r},${g},${b},${a})`;
+          row.textContent = `■ ${m.name}  ${m.tris} △`;
+          return row;
+        }),
+      );
+    });
+    this.wrap.append(button, legend);
+    return { button, legend };
+  }
+
+  /** the wireframe button belongs to this mode's stage: shown while it plays, the legend while the wireframe draws */
+  private showDebug(on: boolean): void {
+    if (!this.debug) return;
+    this.debug.button.style.display = on ? '' : 'none';
+    this.debug.legend.classList.toggle('on', on && this.r.wire);
   }
 
   fit(): void {
@@ -83,6 +123,7 @@ export class ForestPlayer implements ModePlayer {
     this.active = true;
     this.src = src;
     this.canvas.classList.add('on');
+    this.showDebug(true);
     this.fit();
     this.codeview.textContent = src;
     this.codeview.scrollTop = 0;
@@ -133,6 +174,7 @@ export class ForestPlayer implements ModePlayer {
     this.gesture = null;
     cancelAnimationFrame(this.raf);
     this.canvas.classList.remove('on', 'drag');
+    this.showDebug(false);
     this.boot.classList.remove('on');
   }
 

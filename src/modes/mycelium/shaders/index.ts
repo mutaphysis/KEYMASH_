@@ -11,6 +11,8 @@ import groundFrag from './ground.frag?raw';
 import screenVert from './screen.vert?raw';
 import skyFrag from './sky.frag?raw';
 import postFrag from './post.frag?raw';
+import wireVert from './wire.vert?raw';
+import wireFrag from './wire.frag?raw';
 
 const HEAD = '#version 300 es\nprecision highp float;\nprecision highp int;\n';
 const glsl = (...parts: string[]) => HEAD + parts.join('\n');
@@ -20,3 +22,6 @@ export const GROUND_FS = glsl(noise, blend, hex, soil, strip, groundFrag);
 export const SCREEN_VS = glsl(camera, screenVert);
 export const SKY_FS = glsl(noise, skyFrag);
 export const POST_FS = glsl(noise, postFrag);
+// debug: mesh edges (WIRE_VS) and the full-screen triangle's edges (SCREEN_VS), flat colour
+export const WIRE_VS = glsl(camera, wireVert);
+export const WIRE_FS = glsl(wireFrag);

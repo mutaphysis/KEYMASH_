@@ -12,6 +12,7 @@ const en = {
   bootLoad: 'soil: {pct}%',
   bootFailed: 'the soil did not arrive ({err}); RUN tries again',
   bootGround: 'forest floor: {m} m wide, humus {cm} cm deep',
+  debugWire: 'wireframe (dev)',
   // ---- demo names ----
   demoHollow: '🌲 spruce hollow',
   demoHill: '⛰️ mossy hill',
@@ -31,6 +32,7 @@ const de: Translation<typeof en> = {
   bootLoad: 'Boden: {pct}%',
   bootFailed: 'der Boden kam nicht an ({err}); RUN versucht es nochmal',
   bootGround: 'Waldboden: {m} m breit, Humus {cm} cm tief',
+  debugWire: 'Drahtgitter (dev)',
   demoHollow: '🌲 Fichtensenke',
   demoHill: '⛰️ Mooshügel',
   demoDog: '🐾 Hund auf der Tastatur',

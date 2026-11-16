@@ -33,6 +33,7 @@ const ICONS: Record<string, string> = {
   up: 'up-fill',
   down: 'down-fill',
   enter: 'corner-down-left-fill',
+  grid: 'grid-fill',
 };
 
 const ROOT = new URL('..', import.meta.url).pathname;

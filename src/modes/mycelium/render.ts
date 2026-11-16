@@ -3,16 +3,31 @@
 //   sky     the air behind everything (full screen)
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
 //   post    contrast, vignette, grain
+//   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
 // Shaders live in shaders/, one file per piece.
 import type { Assets } from './assets';
 import { WORLD, heightAt, mixGround, mossAt } from './ground';
 import type { Ground } from './ground';
 import { freeTarget, program, target, texture, textureArray } from './gl';
 import type { GL, Program, Target } from './gl';
-import { GROUND_FS, GROUND_VS, POST_FS, SCREEN_VS, SKY_FS } from './shaders';
+import { GROUND_FS, GROUND_VS, POST_FS, SCREEN_VS, SKY_FS, WIRE_FS, WIRE_VS } from './shaders';
 import { PixelBudget } from '../../ui/budget';
 
 type RGB = [number, number, number];
+type RGBA = [number, number, number, number];
+
+/** debug wireframe: one colour per shader or material (straight RGBA); `tris` per draw, as drawn */
+export interface WireMaterial {
+  name: string;
+  color: RGBA;
+  tris: number;
+}
+const WIRE_COLOR: Record<'sky' | 'strip' | 'soil' | 'post', RGBA> = {
+  sky: [0.35, 0.8, 1, 0.9],
+  strip: [0.55, 1, 0.35, 0.85],
+  soil: [1, 0.62, 0.2, 0.85],
+  post: [1, 0.35, 0.85, 0.9],
+};
 
 /** view units from the top of the stage to the bottom, whatever its size */
 export const VIEW_H = 720;
@@ -76,6 +91,8 @@ export class ForestRenderer {
   cam = { x: 0, y: 0 };
   /** 1: VIEW_H units tall; pinch or ctrl + wheel changes it */
   zoom = 1;
+  /** debug: draw every draw's edges over the picture (dev builds' wireframe button) */
+  wire = false;
 
   private cv: HTMLCanvasElement;
   private gl: GL | null;
@@ -94,6 +111,12 @@ export class ForestRenderer {
   private mesh: WebGLVertexArrayObject | null = null;
   private vbo: WebGLBuffer | null = null;
   private count = 0;
+  private wireP: Program | null = null;
+  private wireScreen: Program | null = null;
+  private wireVao: WebGLVertexArrayObject | null = null;
+  /** line indices: the strip rows' edges first, then the soil rows' */
+  private wireStrip = 0;
+  private wireSoil = 0;
   private strip: WebGLTexture | null = null;
   private soils: WebGLTexture | null = null;
   private stripW = 1;
@@ -163,6 +186,31 @@ export class ForestRenderer {
     this.count = idx.length;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    // debug wireframe: the same vertices, their edges as lines; row 1's horizontals count as strip
+    this.wireP = program(gl, WIRE_VS, WIRE_FS);
+    this.wireScreen = program(gl, SCREEN_VS, WIRE_FS);
+    this.wireVao = gl.createVertexArray();
+    gl.bindVertexArray(this.wireVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, B, 0);
+    const strip: number[] = [];
+    const soil: number[] = [];
+    for (let i = 0; i < this.cols; i++) {
+      const a = i * 3;
+      const b = a + 3;
+      strip.push(a, a + 1);
+      soil.push(a + 1, a + 2);
+      if (i + 1 < this.cols) {
+        strip.push(a, b, a + 1, b + 1, a + 1, b);
+        soil.push(a + 2, b + 2, a + 2, b + 1);
+      }
+    }
+    this.wireStrip = strip.length;
+    this.wireSoil = soil.length;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...strip, ...soil]), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
   }
 
@@ -377,6 +425,45 @@ export class ForestRenderer {
     gl.uniform1f(post.u.uSeed!, this.gentle ? 0 : (this.time * 97.13) % 1000);
     gl.bindVertexArray(this.empty);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (this.wire) this.drawWire(hw, hh);
     gl.bindVertexArray(null);
+  }
+
+  /** the materials the wireframe colours, with their triangles: what the legend lists */
+  wireLegend(): WireMaterial[] {
+    const quads = this.cols - 1;
+    return [
+      { name: 'sky.frag · full-screen', color: WIRE_COLOR.sky, tris: 1 },
+      { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
+      { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
+      { name: 'post.frag · full-screen', color: WIRE_COLOR.post, tris: 1 },
+    ];
+  }
+
+  /**
+   * Every draw's edges, on the canvas over the finished picture, in its layer's colour. The full-screen
+   * triangles of sky and post are the same one (corners -1,-1 / 3,-1 / -1,3): its edges run along the screen's
+   * left and bottom borders and off screen, so at most a line on the border shows; the legend lists them anyway.
+   */
+  private drawWire(hw: number, hh: number): void {
+    const gl = this.gl!;
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    const s = this.wireScreen!;
+    gl.useProgram(s.prog);
+    gl.bindVertexArray(this.empty);
+    for (const c of [WIRE_COLOR.post, WIRE_COLOR.sky]) {
+      gl.uniform4f(s.u.uColor!, ...c);
+      gl.drawArrays(gl.LINE_LOOP, 0, 3);
+    }
+    const w = this.wireP!;
+    gl.useProgram(w.prog);
+    gl.uniform4f(w.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    gl.bindVertexArray(this.wireVao);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.strip);
+    gl.drawElements(gl.LINES, this.wireStrip, gl.UNSIGNED_SHORT, 0);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.soil);
+    gl.drawElements(gl.LINES, this.wireSoil, gl.UNSIGNED_SHORT, this.wireStrip * 2);
+    gl.disable(gl.BLEND);
   }
 }

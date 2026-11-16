@@ -9,6 +9,7 @@ import enter from './enter.svg?url';
 import fullscreen from './fullscreen.svg?url';
 import fullscreenExit from './fullscreenExit.svg?url';
 import globe from './globe.svg?url';
+import grid from './grid.svg?url';
 import left from './left.svg?url';
 import mute from './mute.svg?url';
 import open from './open.svg?url';
@@ -36,6 +37,7 @@ export const ICONS = {
   fullscreen,
   fullscreenExit,
   globe,
+  grid,
   left,
   mute,
   open,

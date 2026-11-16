@@ -59,6 +59,13 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 - Colours are premultiplied throughout; the bitmaps are decoded premultiplied, so mipmaps don't bleed transparent
   texels' colour into the moss edges.
 
+## Debugging
+
+In dev builds (`bun run dev`) a grid button sits left of fullscreen while the mode plays. It draws every draw's
+edges over the picture in one colour per shader or material (sky, ground strip, ground soil, post), with a legend
+of triangle counts in the top left. The full-screen triangle of sky and post runs off screen, so only its legend
+line shows. Off, it costs nothing; on, about 4,400 line segments in two draws.
+
 ## Assets
 
 `assets/` is the forest library as `scripts/forest/matte/pack.py` packs it (`scripts/forest/samples/pack`): atlases,
