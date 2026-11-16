@@ -26,6 +26,9 @@ Both scripts use playwright-core (headless Chromium) under bun — no python. Fi
 CI (`.github/workflows/check.yml`) runs lint, format:check, typecheck, test. Pushing to `main` deploys to GitHub Pages.
 Git hooks (lefthook): pre-commit formats + lints staged files, pre-push runs tests.
 
+Environment: macOS, zsh. A dev server stopped on purpose (killed after a check) exits with code 143 (SIGTERM):
+that is a normal shutdown, not a crash; nothing to fix. Port 5173 is often taken, Vite then picks the next one (5174).
+
 ## Layout
 
 - `index.html` — all markup (edit section with header/editor/keybar/controls, play section with stage/hud/log/boot/codeview, the program drawer, the cheat-sheet drawer, toast).
