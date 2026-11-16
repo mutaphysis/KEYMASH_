@@ -2325,6 +2325,30 @@
    "h": 479,
    "bytes": 73990
   },
+  "moss-0": {
+   "file": "tex-moss-0.webp",
+   "w": 480,
+   "h": 480,
+   "bytes": 89472
+  },
+  "moss-1": {
+   "file": "tex-moss-1.webp",
+   "w": 480,
+   "h": 480,
+   "bytes": 90248
+  },
+  "moss-2": {
+   "file": "tex-moss-2.webp",
+   "w": 480,
+   "h": 480,
+   "bytes": 83810
+  },
+  "moss-3": {
+   "file": "tex-moss-3.webp",
+   "w": 480,
+   "h": 480,
+   "bytes": 82748
+  },
   "ground-b": {
    "file": "tex-ground-b.webp",
    "w": 1376,
@@ -2347,5 +2371,5 @@
    "wrap": "mirror"
   }
  },
- "bytes": 5182960
+ "bytes": 5529238
 }

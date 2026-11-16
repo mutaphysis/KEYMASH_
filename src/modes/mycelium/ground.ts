@@ -17,17 +17,18 @@ export interface Ground {
   drift: [number, number];
   /** how thick the moss is along the floor, as waves around 1 (the strip as photographed): amplitude, frequency, phase */
   moss: [number, number, number][];
-  /** the mossy hill behind the floor: its waves (amplitude, frequency, phase), how far they reach (view units per unit
-   * of normalised wave) and the wave level at the floor, so the hill shows over it RIDGE_SHOWS of the way */
-  ridge: [number, number, number][];
-  ridgeAmp: number;
-  ridgeLevel: number;
+  /** the mossy hill behind the floor: its cushions (centre x, half width left, half width right, top y): each a dome
+   * standing RIDGE_RISE-ish over the floor at its centre, the hill between them sunk well under the floor */
+  ridge: [number, number, number, number][];
 }
 
-/** how much of the floor's length the hill behind it shows over it, and how far above the floor it rises at most
- * (about 11 cm: its moss band in render.ts, RIDGE_STRETCH, must still reach down behind the floor's moss) */
-export const RIDGE_SHOWS = 0.3;
-export const RIDGE_RISE = 40;
+/** how many view units apart the hill's cushions stand, how far they rise over the floor, how tall a dome is from
+ * its foot (taller than it shows: only its rounded top clears the floor) */
+export const RIDGE_SPACING = 650;
+export const RIDGE_RISE = 80;
+const RIDGE_DOME = 200;
+/** where two cushions meet, their outlines round into each other over about this many view units */
+const RIDGE_MERGE = 12;
 
 /** the ground of a text */
 export function readGround(src: string): Ground {
@@ -53,37 +54,49 @@ export function readGround(src: string): Ground {
     [span(0.18, 0.3), span(0.0018, 0.0035), span(0, 6.3)],
     [span(0.08, 0.14), span(0.007, 0.012), span(0, 6.3)],
   ];
-  const ridge: [number, number, number][] = [
-    [1, span(0.004, 0.006), span(0, 6.3)],
-    [span(0.3, 0.5), span(0.009, 0.013), span(0, 6.3)],
-  ];
-  // the level the hill's waves top RIDGE_SHOWS of the way, and the reach that puts its highest crest RIDGE_RISE up
-  const ws: number[] = [];
-  for (let x = WORLD.x0; x <= WORLD.x1; x += 4) ws.push(ridgeWave(ridge, x));
-  ws.sort((a, b) => a - b);
-  const ridgeLevel = ws[Math.floor((1 - RIDGE_SHOWS) * (ws.length - 1))]!;
-  const ridgeAmp = RIDGE_RISE / Math.max(0.05, ws[ws.length - 1]! - ridgeLevel);
-  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, ridgeAmp, ridgeLevel };
-}
-
-/** the hill's waves at x, normalised to -1 … 1 */
-function ridgeWave(ridge: [number, number, number][], x: number): number {
-  let w = 0;
-  let sum = 0;
-  for (const [a, f, p] of ridge) {
-    w += a * Math.sin(x * f + p);
-    sum += a;
+  // moss cushions of a similar size, spaced a little unevenly, each a little lopsided; each top stands about
+  // RIDGE_RISE over the floor under it, so they all show, as rounded caps
+  const ridge: [number, number, number, number][] = [];
+  const n = Math.round((WORLD.x1 - WORLD.x0) / RIDGE_SPACING) + 2; // one more past each side
+  const centres: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const c = WORLD.x0 + (i - 0.5 + span(-0.25, 0.25)) * RIDGE_SPACING;
+    centres.push(c);
+    ridge.push([c, span(172, 218), span(172, 218), heightAt({ waves, bumps }, c) + RIDGE_RISE * span(0.85, 1.15)]);
   }
-  return w / sum;
+  // between two of them one more, smaller and lower: the hill stays bumpy instead of running flat between the big
+  // ones (always one per gap, so every ground has as many cushions and can ease into another)
+  for (let i = 0; i + 1 < n; i++) {
+    const c = centres[i]! + (centres[i + 1]! - centres[i]!) * span(0.4, 0.6);
+    ridge.push([c, span(126, 167), span(126, 167), heightAt({ waves, bumps }, c) + RIDGE_RISE * span(0.25, 0.6)]);
+  }
+  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge };
 }
 
-/** the top of the mossy hill behind the floor at x: the floor's curve, raised and lowered by larger waves */
+/** cushion i's dome at x: its top, falling RIDGE_DOME to its foot as an ellipse over its half widths, so it ends at
+ * its edges even where the floor in front dips */
+function dome([c, wl, wr, top]: [number, number, number, number], x: number): number {
+  const d = (x - c) / (x < c ? wl : wr);
+  return top - RIDGE_DOME * (1 - Math.sqrt(Math.max(0, 1 - d * d)));
+}
+
+/**
+ * The top of the mossy hill behind the floor at x: its cushions' domes over a base sunk well under the floor (the
+ * floor's long swells, a dome's height down), joined by a smooth maximum, so cushions nestle against each other
+ * with a soft crease instead of adding up into one lump with a dip on top.
+ */
 export function ridgeAt(g: Ground, x: number): number {
-  return heightAt(g, x) + g.ridgeAmp * (ridgeWave(g.ridge, x) - g.ridgeLevel);
+  let base = -RIDGE_DOME;
+  for (const [a, f, p] of g.waves) base += a * Math.sin(x * f + p);
+  let top = base;
+  for (const r of g.ridge) top = Math.max(top, dome(r, x));
+  let sum = Math.exp((base - top) / RIDGE_MERGE);
+  for (const r of g.ridge) sum += Math.exp((dome(r, x) - top) / RIDGE_MERGE);
+  return top + RIDGE_MERGE * Math.log(sum);
 }
 
 /** the top of the forest floor at x */
-export function heightAt(g: Ground, x: number): number {
+export function heightAt(g: Pick<Ground, 'waves' | 'bumps'>, x: number): number {
   let y = 0;
   for (const [a, f, p] of g.waves) y += a * Math.sin(x * f + p);
   for (const [c, w, h] of g.bumps) y += h * Math.exp(-(((x - c) / w) ** 2));
@@ -109,7 +122,5 @@ export function mixGround(a: Ground, b: Ground, k: number): Ground {
     drift: row(a.drift, b.drift),
     moss: a.moss.map((w, i) => row(w, b.moss[i]!)),
     ridge: a.ridge.map((w, i) => row(w, b.ridge[i]!)),
-    ridgeAmp: m(a.ridgeAmp, b.ridgeAmp),
-    ridgeLevel: m(a.ridgeLevel, b.ridgeLevel),
   };
 }

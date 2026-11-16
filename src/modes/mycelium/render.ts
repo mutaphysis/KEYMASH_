@@ -1,8 +1,8 @@
 // MYCELIUM_'s picture: a side view of the forest floor in WebGL2, panned in x and y. Layers are drawn back to
 // front into a target sized by the pixel budget, then finished onto the canvas:
 //   sky     the air behind everything (full screen)
-//   ridge   a mossy hill behind the floor: the moss band of a second strip on larger waves, showing over the floor
-//           along part of it (ground.ts, RIDGE_SHOWS); the floor in front hides where its moss ends
+//   ridge   a mossy hill behind the floor: rounded moss cushions whose tops clear the floor (ground.ts, ridgeAt),
+//           a second strip's moss band handing over to a hex-tiled moss carpet below
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
 //   post    contrast, vignette, grain
 //   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
@@ -24,9 +24,10 @@ export interface WireMaterial {
   color: RGBA;
   tris: number;
 }
-const WIRE_COLOR: Record<'sky' | 'ridge' | 'strip' | 'soil' | 'post', RGBA> = {
+const WIRE_COLOR: Record<'sky' | 'band' | 'body' | 'strip' | 'soil' | 'post', RGBA> = {
   sky: [0.35, 0.8, 1, 0.9],
-  ridge: [0.25, 1, 0.85, 0.85],
+  band: [0.25, 1, 0.85, 0.85],
+  body: [0.2, 0.55, 1, 0.85],
   strip: [0.55, 1, 0.35, 0.85],
   soil: [1, 0.62, 0.2, 0.85],
   post: [1, 0.35, 0.85, 0.9],
@@ -53,11 +54,8 @@ const LIFT = 0.1;
 const MOSS = 0.57;
 /** where the moss ends in the hill's strip picture (assets/tex-ground-c.webp: green down to about here, then stones) */
 const RIDGE_MOSS = 0.38;
-/**
- * The hill's moss band is drawn this much taller than photographed: its opaque part must reach from above the
- * hill's highest crest (RIDGE_RISE over the floor) down behind the floor's moss, or sky would show under it.
- */
-const RIDGE_STRETCH = 1.4;
+/** how far below the floor's top the hill's moss body reaches: behind the floor's opaque moss, where it is hidden */
+const RIDGE_BURY = 30;
 /** the hill is a little darker: further back, more shaded */
 const RIDGE_SHADE = 0.82;
 /** the hill's strip cells are seeded apart from the floor's, so their seams don't line up */
@@ -140,7 +138,9 @@ export class ForestRenderer {
   private ridgeVbo: WebGLBuffer | null = null;
   private ridgeCount = 0;
   private wireRidgeVao: WebGLVertexArrayObject | null = null;
-  private wireRidge = 0;
+  /** line indices: the band rows' edges first, then the body rows' */
+  private wireBand = 0;
+  private wireBody = 0;
   private wireP: Program | null = null;
   private wireScreen: Program | null = null;
   private wireVao: WebGLVertexArrayObject | null = null;
@@ -156,13 +156,16 @@ export class ForestRenderer {
   private ridgeTex: WebGLTexture | null = null;
   /** the hill strip's height in view units, as photographed */
   private ridgeH = 1;
+  private mossFill: WebGLTexture | null = null;
+  private mossTile = 1;
+  private mossGain: RGB = [1, 1, 1];
 
   /** the ground drawn now, the one it eases toward, and how long that still takes */
   private shown: Ground | null = null;
   private goal: Ground | null = null;
   private morph = 0;
   private verts: Float32Array;
-  /** the hill: per column its top and the bottom of its moss band; position, uv */
+  /** the hill: per column its top, the bottom of its moss band, the bottom of its body; position, uv */
   private ridgeVerts: Float32Array;
   private cols: number;
 
@@ -173,7 +176,7 @@ export class ForestRenderer {
     this.budget = new PixelBudget(undefined, typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches ? 0 : TOUCH);
     this.cols = Math.floor((WORLD.x1 - WORLD.x0 + 2 * MARGIN) / COL) + 1;
     this.verts = new Float32Array(this.cols * 3 * STRIDE);
-    this.ridgeVerts = new Float32Array(this.cols * 2 * 4);
+    this.ridgeVerts = new Float32Array(this.cols * 3 * 4);
     cv.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.lost = true;
@@ -248,7 +251,7 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...strip, ...soil]), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    // the hill: two rows per column, one quad per column pair; pos xy, uv
+    // the hill: three rows per column (band, body), two quads per column pair; pos xy, uv
     this.ridge = program(gl, RIDGE_VS, RIDGE_FS);
     this.ridgeVao = gl.createVertexArray();
     this.ridgeVbo = gl.createBuffer();
@@ -259,28 +262,32 @@ export class ForestRenderer {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
-    const ridx: number[] = [];
-    const rlines: number[] = [];
+    const ridx = new Uint16Array((this.cols - 1) * 12);
+    const band: number[] = [];
+    const body: number[] = [];
     for (let i = 0; i < this.cols; i++) {
-      const a = i * 2;
-      const b = a + 2;
-      rlines.push(a, a + 1);
+      const a = i * 3;
+      const b = a + 3;
+      band.push(a, a + 1);
+      body.push(a + 1, a + 2);
       if (i + 1 < this.cols) {
-        ridx.push(a, a + 1, b, b, a + 1, b + 1);
-        rlines.push(a, b, a + 1, b + 1, a + 1, b);
+        for (const r of [0, 1]) ridx.set([a + r, a + r + 1, b + r, b + r, a + r + 1, b + r + 1], i * 12 + r * 6);
+        band.push(a, b, a + 1, b + 1, a + 1, b);
+        body.push(a + 2, b + 2, a + 2, b + 1);
       }
     }
     this.ridgeCount = ridx.length;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ridx), gl.STATIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ridx, gl.STATIC_DRAW);
     this.wireRidgeVao = gl.createVertexArray();
     gl.bindVertexArray(this.wireRidgeVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
-    this.wireRidge = rlines.length;
+    this.wireBand = band.length;
+    this.wireBody = body.length;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(rlines), gl.STATIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...band, ...body]), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
   }
 
@@ -301,9 +308,19 @@ export class ForestRenderer {
     const s = soilColor(a.ground, FADE[0], 1);
     const l = soilColor(a['soil-3'], 0, 1);
     this.soilGain = s.map((v, k) => Math.max(0.6, Math.min(1.6, v / Math.max(0.01, l[k]!)))) as RGB;
-    // the hill behind: another strip at the same texel scale, only its moss band is drawn
+    // the hill behind: another strip at the same texel scale, its moss band over a hex-tiled moss carpet, whose
+    // colour is matched to the band's moss (rows 15–34 % of the picture: under the tufts, above the stones)
     this.ridgeTex = texture(gl, a['ground-c'], 'clamp', 'clamp');
     this.ridgeH = (STRIP_TILE * a['ground-c'].height) / a['ground-c'].width;
+    const mosses = [a['moss-0'], a['moss-1'], a['moss-2'], a['moss-3']];
+    this.mossFill = textureArray(gl, mosses);
+    this.mossTile = (mosses[0]!.width * STRIP_TILE) / a.ground.width;
+    const band = soilColor(a['ground-c'], 0.15, 0.34);
+    const carpets = mosses.map((m) => soilColor(m, 0, 1));
+    this.mossGain = band.map((v, k) => {
+      const mean = carpets.reduce((s, c) => s + c[k]!, 0) / carpets.length;
+      return Math.max(0.5, Math.min(1.5, v / Math.max(0.01, mean)));
+    }) as RGB;
   }
 
   /** a new ground: eases in from the one shown, or snaps (`now`, or nothing shown yet) */
@@ -410,12 +427,16 @@ export class ForestRenderer {
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
   }
 
-  /** the hill behind: per column the top of its strip on ridgeAt, and the bottom of its (stretched) moss band */
+  /**
+   * The hill behind: per column the top of its strip on ridgeAt, the bottom of its moss band along the normal, and
+   * straight below that the bottom of its body, RIDGE_BURY under the floor's top (or the band's bottom, if that is
+   * lower already: then the floor hides it all and the body is empty).
+   */
   private buildRidge(g: Ground): void {
     const gl = this.gl;
     const v = this.ridgeVerts;
     const lift = LIFT * this.ridgeH;
-    const band = RIDGE_MOSS * this.ridgeH * RIDGE_STRETCH;
+    const band = RIDGE_MOSS * this.ridgeH;
     let arc = 0;
     let u0 = 0;
     let px = 0;
@@ -428,9 +449,12 @@ export class ForestRenderer {
       px = x;
       py = y;
       const [nx, ny] = inward((x) => ridgeAt(g, x), x);
-      v.set([x, y, arc, 0, x + nx * band, y + ny * band, arc, 1], i * 8);
+      const bx = x + nx * band;
+      const by = y + ny * band;
+      const fy = Math.min(by, heightAt(g, bx) - RIDGE_BURY);
+      v.set([x, y, arc, 0, bx, by, arc, 1, bx, fy, arc, 1 + (by - fy) / band], i * 12);
     }
-    for (let i = 0; i < this.cols * 2; i++) v[i * 4 + 2] = (v[i * 4 + 2]! - u0) / STRIP_TILE;
+    for (let i = 0; i < this.cols * 3; i++) v[i * 4 + 2] = (v[i * 4 + 2]! - u0) / STRIP_TILE;
     if (!gl || this.lost || !this.ridgeVbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
@@ -450,7 +474,7 @@ export class ForestRenderer {
 
   frame(dt: number): void {
     const gl = this.gl;
-    if (!gl || this.lost || !this.shown || !this.strip || !this.soils || !this.ridgeTex) return;
+    if (!gl || this.lost || !this.shown || !this.strip || !this.soils || !this.ridgeTex || !this.mossFill) return;
     this.time += dt;
     this.budget.frame(dt);
     if (this.morph > 0 && this.goal) {
@@ -495,6 +519,11 @@ export class ForestRenderer {
     gl.uniform1f(ri.u.uMossEnd!, RIDGE_MOSS);
     gl.uniform1f(ri.u.uShade!, RIDGE_SHADE);
     gl.uniform3f(ri.u.uTint!, ...AIR.tint);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.mossFill);
+    gl.uniform1i(ri.u.uMossFill!, 1);
+    gl.uniform1f(ri.u.uMossTile!, this.mossTile);
+    gl.uniform3f(ri.u.uMossGain!, ...this.mossGain);
     gl.bindVertexArray(this.ridgeVao);
     gl.drawElements(gl.TRIANGLES, this.ridgeCount, gl.UNSIGNED_SHORT, 0);
 
@@ -541,7 +570,8 @@ export class ForestRenderer {
     const quads = this.cols - 1;
     return [
       { name: 'sky.frag · full-screen', color: WIRE_COLOR.sky, tris: 1 },
-      { name: 'ridge.frag · moss hill', color: WIRE_COLOR.ridge, tris: quads * 2 },
+      { name: 'ridge.frag · moss band', color: WIRE_COLOR.band, tris: quads * 2 },
+      { name: 'ridge.frag · moss body', color: WIRE_COLOR.body, tris: quads * 2 },
       { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
       { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
       { name: 'post.frag · full-screen', color: WIRE_COLOR.post, tris: 1 },
@@ -568,8 +598,10 @@ export class ForestRenderer {
     gl.useProgram(w.prog);
     gl.uniform4f(w.u.uCam!, this.cam.x, this.cam.y, hw, hh);
     gl.bindVertexArray(this.wireRidgeVao);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.ridge);
-    gl.drawElements(gl.LINES, this.wireRidge, gl.UNSIGNED_SHORT, 0);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.body);
+    gl.drawElements(gl.LINES, this.wireBody, gl.UNSIGNED_SHORT, this.wireBand * 2);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.band);
+    gl.drawElements(gl.LINES, this.wireBand, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.strip);
     gl.drawElements(gl.LINES, this.wireStrip, gl.UNSIGNED_SHORT, 0);
