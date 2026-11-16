@@ -73,11 +73,14 @@ RUN rolls, cuts, bakes and decorates it in 3D, then every tap is a bite.</td>
 </tr>
 </table>
 
+<b><a href="src/modes/mycelium/README.md">MYCELIUM_</a></b> (under construction) — the forest floor from the side,
+drawn from photographs: the text shapes the ground and its soil horizons; drag to look around, pinch to zoom.
+
 ### Links
 `?mode=<id>&code=<text>` opens a mode with that text with only the stage showing, waiting for one
 tap on RUN (the close button or Esc brings the editor back), e.g.
 [`?mode=cookie&code=round%20!!!%20blue%201`](https://mutaphysis.github.io/KEYMASH_/?mode=cookie&code=round%20!!!%20blue%201).
-Mode ids: `keymash`, `petri`, `cookie`; `code` is URL-encoded. Without `code` the link only picks
+Mode ids: `keymash`, `petri`, `cookie`, `mycelium`; `code` is URL-encoded. Without `code` the link only picks
 the mode. It does not start by itself: browsers allow sound and real fullscreen only after a tap,
 so RUN starts both.
 The text becomes the mode's draft, like a picked demo; the parameters leave the address bar.
@@ -114,6 +117,8 @@ src/modes/keymash/       KEYMASH_: interpreter (vm.ts), event protocol (types.ts
 src/modes/petri/         PETRI_: genome, sim, culture, renderer, ambient, player, backdrop, demos, cheat sheet, messages, theme, README
 src/modes/cookie/        COOKIE_: recipe, shapes (distance fields), bakery (timeline, bites, crumbs), WebGL2 renderer + shaders,
                          music, player, backdrop, demos, cheat sheet, messages, theme, README
+src/modes/mycelium/      MYCELIUM_: ground (read from the text), asset preloader + the forest library (assets/),
+                         WebGL2 renderer, shaders/ (one file per piece), player, backdrop, demos, messages, theme, README
 src/lang/lexer.ts        shared by every mode: total tokenizer (graphemes -> tokens), math evaluator
 src/lang/keys.ts         shared: QWERTZ geometry (position, pitch, adjacency)
 src/lang/rng.ts          shared: seeded hash + PRNG

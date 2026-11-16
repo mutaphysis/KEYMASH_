@@ -1,8 +1,9 @@
 # CLAUDE.md
 
-KEYMASH_ is a live-coding toy: any text is a valid program (no syntax errors, ever). Three modes:
-KEYMASH_ (lines → threads → visuals, music, speech), PETRI_ (lines → genomes → a cell culture) and
-COOKIE_ (the whole text → one recipe → cookies baked in 3D, eaten by tapping).
+KEYMASH_ is a live-coding toy: any text is a valid program (no syntax errors, ever). Four modes:
+KEYMASH_ (lines → threads → visuals, music, speech), PETRI_ (lines → genomes → a cell culture),
+COOKIE_ (the whole text → one recipe → cookies baked in 3D, eaten by tapping) and MYCELIUM_ (under construction:
+the whole text → a photographic forest floor seen from the side).
 README.md is the user-facing doc (running, architecture, conventions); each mode's language reference
 lives in `src/modes/<id>/README.md`. Read them before larger changes.
 
@@ -11,7 +12,7 @@ lives in `src/modes/<id>/README.md`. Read them before larger changes.
 ```sh
 bun run dev          # Vite dev server; tsc + oxlint + oxfmt problems show in terminal and in-page overlay
 bun run build        # tsc + vite build -> dist/ (index.html, main chunk, one chunk per mode; served by GitHub Pages, needs http)
-bun test             # test/vm.test.ts (fuzz: the VM must never throw), test/petri.test.ts, test/cookie.test.ts
+bun test             # test/vm.test.ts (fuzz: the VM must never throw), test/petri.test.ts, test/cookie.test.ts, test/mycelium.test.ts
 bun run typecheck    # tsc (TypeScript 7, strict, noUnusedLocals, noImplicitOverride)
 bun run lint         # oxlint (scripts/ is ignored)
 bun run format       # oxfmt: printWidth 140, single quotes; *.md and public/ are not formatted
@@ -33,6 +34,7 @@ Git hooks (lefthook): pre-commit formats + lints staged files, pre-push runs tes
 - `src/modes/keymash/` — `vm.ts` (the interpreter: `VM.tick()` returns timed `VMEvent`s), `types.ts` (`VMEvent` union, ops, shapes), `powers.ts` (emoji → op), `Player` (VM on the audio clock, 0.12 s lookahead) + `Renderer` (canvas 2D, world coords ±hw/±hh with `s` px per unit, `handle(VMEvent)`, `frame(dt, level, bass)`).
 - `src/modes/petri/` — `genome.ts` (`readCulture`, `kindOf()`), `hybrid.ts` (`hybridise()`: a meal's gene transfer into a new genome with `parents`; `genomeDistance()`), `culture.ts` (`Petri`: feeder + `World`, fixed 30 Hz steps), `sim.ts` (`World`, `DISH_R = 420`; `takeUp()` on engulfing and on eating debris, which keeps its cell's `sp`. `SPECIATION` switches how hybrids arise: `'meal'` (on) founds a species per transfer; `'drift'` keeps the genome a variant (`Species.variantOf`) until `SPLIT_DRIFT`; identity — counts, census, kin, extinction — goes through `kindOf(sp)`, traits through `sp`), `render.ts` (`MicroRenderer`: `cx/cy/R/k` camera, `frame(dt, world, activity)`; the water is a small canvas stretched over the dish, vignette + rim are cached per dish size, repeated strokes go into one path), `ambient.ts` (music). The simulation costs microseconds per frame; drawing pixels is what costs.
 - `src/modes/cookie/` — pure and DOM-free: `recipe.ts` (`readRecipe`, `recipeKey`), `shapes.ts` (cutter SDFs, `anchors`, `Field`: one cookie's footprint/bites/piping as a 128² distance tile), `bakery.ts` (`Bakery`: stage timeline → `Look`, `swap`, `bite`, idle nibbling, crumbs, `again()` once `done`; emits `BakeEvent`s). Drawing: `gl.ts` (WebGL2 helpers), `shader.ts` (the raymarched scene, crumbs, motes, the blit with heat haze and tilt-shift), `render.ts` (`CookieRenderer`: `frame(dt, bakery, level)`, `ray()` for taps, a scene target that steps down when frames are slow). `music.ts` (`Jingle`: a band per dough). The player adds its own `<canvas class="stage3d">` after `#stage` (WebGL needs a canvas without a 2D context) and hides it in `stop()`. Shader tuning: look at frames (`bun scripts/sheet.ts`), headless Chromium renders it with SwiftShader; for GPU timings launch it with `--use-angle=metal --enable-gpu` (macOS: the real GPU).
+- `src/modes/mycelium/` — `ground.ts` (pure: `readGround(src)` → the curve's swells and mounds, soil horizon depths, noise drift; `heightAt`, `mixGround` for easing edits), `assets.ts` (`fetchAssets()`: only the textures the scene uses, byte progress, decoded premultiplied; started when `mode.ts` loads), `assets/` (the forest library copied from `scripts/forest/samples/pack`, as pack.py wrote it; ignored by oxfmt), `gl.ts` (WebGL2 helpers), `render.ts` (`ForestRenderer`: 2D camera `cam` + `zoom`, `pan`, `zoomAt`; layers sky → ground → post into a budget-sized target), `shaders/` (one GLSL piece per file, imported `?raw`, assembled in `shaders/index.ts`: `noise`, `camera`, `blend` (height blend), `hex` (hex tiling), `soil` (horizons), `strip` (the ground strip in 1D Voronoi cells, no mirror axes), then each stage's `main()`), `player.ts` (drag/scroll pans, pinch/ctrl+scroll zooms). No language and no cheat-sheet cards yet.
 - `src/modes/<id>/sheet.ts` — `SHEET` (the cheat sheet behind the book button: a one-sentence intro + exactly 12 `SheetCard`s per mode — the grid in `card.css.ts` uses 2/3/4/6 columns so rows stay full, 6 × 2 on desktop — with snippet, short name — no explanations, the user wants it terse —, capture time `at`, camera `zoom`; one-line snippets only); pictures in `sheet/<card>.webp`, loaded via `import.meta.glob` (URLs; the files load lazily when the sheet opens). `src/modes/<id>/README.md` — the mode's language reference.
 - `src/lang/` — shared by every mode, pure and DOM-free: `lexer.ts` (syntax only: graphemes, words, numbers, runs, quotes, math; meaning is per mode), `keys.ts` (QWERTZ geometry), `rng.ts` (seeded hash + PRNG).
 - `src/engine/sound.ts` — the `Sound` vocabulary (`note`/`drum`/`sfx`/`dtmf`, instruments, sfx kinds); `src/engine/audio.ts` — the shared WebAudio engine (`play(Panned)`), speech, typing sounds. Neither knows any mode.
