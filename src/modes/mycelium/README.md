@@ -16,6 +16,10 @@ The whole text seeds the ground. The same text always gives the same ground; any
 
 Editing while it runs eases the old ground into the new one (about half a second; at once with reduced motion).
 
+**Note:** a different text doesn't need a smooth transition to its ground. Later the forest will drop away and be
+recreated for the new text, so there is no need to make changes between texts smooth now (the easing above is a
+stopgap, and seeding texture details by the text is fine even where it jumps).
+
 Drag (or scroll) to look around, the camera moves left, right, up and down; pinch (or ctrl + scroll, a trackpad pinch)
 zooms between twice as far and four times as close.
 
@@ -37,11 +41,15 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
   brighter leaf wins and stays whole.
 - **The soil** (`soil.glsl`) is the library's four soil textures as one texture array, hex-tiled (Mikkelsen's
   luminance-weighted blend, `hex.glsl`; research in `scripts/forest/README.md`, step 14). Each hex vertex picks its
-  horizon by its own depth plus slow noise, so borders interlock patch by patch. Offsets and left-right mirroring
-  only: the soil is lit from above. Deeper, it darkens.
-- **Strip into soil**: toward the strip's bottom its soil hands over to the horizons in a height blend along a
-  wandering line: pebbles and crumbs of the strip stand out of the soil below, its dark gaps fill with soil first.
-  The soil's colour is matched to the strip where they meet (geometric means, so bright pebbles don't count).
+  horizon by its own depth, bent by noise at two scales (broad swells, narrower tongues), so borders rise and dip
+  instead of following the floor, and interlock patch by patch. Pockets (noise blobs a few patches across) take a
+  horizon from above or below: gravel in the humus, humus washed down into the gravel. Offsets and left-right
+  mirroring only: the soil is lit from above. Deeper, it darkens.
+- **Strip into soil**: toward the strip's bottom its soil hands over to the horizons in a height blend: pebbles and
+  crumbs of the strip stand out of the soil below, its dark gaps fill with soil first. The line rises and dips over
+  long stretches and frays into blotches up close, so the strip's gravel band changes thickness and never ends along
+  a ruled line. The soil's colour is matched to the strip over the hand-over band (geometric means, so bright pebbles
+  don't count).
 - Colours are premultiplied throughout; the bitmaps are decoded premultiplied, so mipmaps don't bleed transparent
   texels' colour into the moss edges.
 

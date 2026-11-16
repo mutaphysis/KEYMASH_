@@ -27,8 +27,8 @@ const COL = 8;
 const MARGIN = 320;
 /** the strip's top edge sits this far above the curve: its clear rows above the moss */
 const LIFT = 22;
-/** the strip gives way to the soil from v FADE[0] to FADE[1], along a line wandering FADE[2] */
-const FADE: RGB = [0.68, 0.92, 0.14];
+/** the strip gives way to the soil from v FADE[0] to FADE[1], the line rising and dipping by up to FADE[2] / 2 */
+const FADE: RGB = [0.6, 0.98, 0.5];
 /** seconds a ground needs to settle into an edited one */
 const MORPH = 0.6;
 /** a desktop starts at the top of the pixel ladder (src/ui/budget.ts), a touch screen this many steps down */
@@ -169,7 +169,7 @@ export class ForestRenderer {
     this.soils = textureArray(gl, soils);
     this.soilTile = (soils[0]!.width * STRIP_TILE) / a.ground.width;
     // where the strip meets the soil it meets leafy humus (soil-3): match its colour there, the horizons keep their differences
-    const s = soilColor(a.ground, 0.8, 1);
+    const s = soilColor(a.ground, FADE[0], 1);
     const l = soilColor(a['soil-3'], 0, 1);
     this.soilGain = s.map((v, k) => Math.max(0.6, Math.min(1.6, v / Math.max(0.01, l[k]!)))) as RGB;
   }
