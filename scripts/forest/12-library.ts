@@ -51,6 +51,8 @@ type Rule = {
   /** ink: an ink-and-wash illustration (mushrooms and critters stand out against the photographic world, step 13);
    * kept out of the set grade, which would pull it toward the photographs */
   look?: 'ink';
+  /** kept out of the set grade too: its colour is the point (gems; the grade would pull an amethyst toward brown) */
+  keep?: boolean;
   /** how the cut pipeline treats it */
   kind: 'sprites' | 'growth' | 'textures' | 'ribbon';
 };
@@ -65,6 +67,7 @@ export const TYPES = {
   stone: { group: 'ground', density: 2, scale: 'sheet', size: cm(15), base: true, kind: 'sprites' },
   litter: { group: 'ground', density: 2, scale: 'cell', base: true, kind: 'sprites' },
   inclusion: { group: 'underground', density: 2, scale: 'cell', base: true, kind: 'sprites' },
+  gem: { group: 'underground', density: 2, scale: 'cell', base: true, keep: true, kind: 'sprites' },
   deadwood: { group: 'wood', density: 2, scale: 'sequence', kind: 'growth' },
   landmark: { group: 'wood', density: 2, scale: 'cell', base: true, kind: 'sprites' },
   // one type for every tree, whole or leaving the top, living or snapped: the same sprite in every layer, the far ones
@@ -441,6 +444,24 @@ export const LIBRARY: Record<string, Sheet> = {
     // mammoth tooth, shark tooth, amber, turtle shell, snail shell
     sizes: { 0: 15, 1: 5, 2: 30, 3: 12, 4: 20, 5: 12, 6: 5, 7: 15, 8: 12, 9: 10, 10: 20, 11: 20, 12: 7, 13: 5, 14: 15, 15: 3 },
   },
+  crystals: {
+    why: 'Raw gemstones in the soil: a rare, bright find among the treasure, in colours nothing else down there has.',
+    type: 'gem',
+    prompt:
+      STYLE +
+      '16 different raw gemstones and crystals as they would be dug out of forest soil, side view, each alone, unpolished, ' +
+      'with a little earth in their cracks, their colours clear and saturated: half an amethyst geode with deep purple crystals inside, ' +
+      'a cluster of amethyst points, a raw ruby, a cluster of dark red garnets, a raw emerald in grey rock, a raw blue sapphire, ' +
+      'a cluster of clear quartz points, a smoky quartz point, a chunk of rose quartz, a yellow citrine point, a raw golden topaz, ' +
+      'a pale blue aquamarine crystal, a green and pink tourmaline crystal, a piece of opal in brown rock, a lump of blue lapis lazuli, ' +
+      'a green jade pebble. All at one scale true to their real sizes. ' +
+      GRID(4, 4),
+    aspect: '1:1',
+    grid: [4, 4],
+    // geode, amethyst cluster, ruby, garnets, emerald, sapphire, quartz cluster, smoky quartz, rose quartz, citrine,
+    // topaz, aquamarine, tourmaline, opal, lapis, jade
+    sizes: { 0: 15, 1: 12, 2: 4, 3: 6, 4: 6, 5: 4, 6: 14, 7: 10, 8: 8, 9: 7, 10: 5, 11: 7, 12: 8, 13: 6, 14: 7, 15: 5 },
+  },
 
   // -- wood -------------------------------------------------------------------------------------------------------
   deadwood: {
@@ -648,7 +669,7 @@ for (const r of made) {
 const sprites = active
   .filter(([name, s]) => {
     const t: Rule = TYPES[s.type];
-    return t.kind !== 'textures' && t.kind !== 'ribbon' && !t.look && existsSync(join(OUT, name));
+    return t.kind !== 'textures' && t.kind !== 'ribbon' && !t.look && !t.keep && existsSync(join(OUT, name));
   })
   .flatMap(([name]) =>
     readdirSync(join(OUT, name))

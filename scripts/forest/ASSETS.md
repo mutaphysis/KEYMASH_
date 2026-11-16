@@ -65,6 +65,7 @@ about 3.4 × 1.9 m. Anchor: a mature fly agaric (about 20 cm) is at most 75 unit
 | `stone` | focus plane | sheet, largest 15 cm (56 u) | 2 | none | – | ground |
 | `litter` | falls from above | per cell, 2–15 cm (8–56 u) | 2 | none: procedural fall | – | ground |
 | `inclusion` | in the soil | per cell, 2–70 cm (8–262 u) | 2 | none | – | underground |
+| `gem` | in the soil | per cell, 4–15 cm (15–56 u) | 2 | none | – | underground |
 | `deadwood` | focus plane | per sequence, 80–100 cm (300–375 u) | 2 | **decay**: 4 frames | – | wood |
 | `landmark` | behind the focus | per asset, 50–80 cm (188–300 u) | 2 | none | – | wood |
 | `tree` | every depth layer | 900 u at the nearest layer (snags 450) | 2 | none | top | trees |
@@ -116,7 +117,7 @@ by a shader wave. So the library holds only what that animation needs:
   flat at the bottom. Strips run the full width (both sides may touch), one per row with empty grey between rows.
 - All static; the shader sways plants and shrubs.
 
-### stone, litter, inclusion
+### stone, litter, inclusion, gem
 
 - Stones: one sheet at one scale, from pebbles to a 15 cm stone. The old boulder is a stone too, at 15 cm (56 units,
   112 px): packed at 900 px it was four times the largest stone.
@@ -127,6 +128,9 @@ by a shader wave. So the library holds only what that animation needs:
   bones, an antler, fossils, amber). Photographs, dirty and weathered, with bits of earth on them (they are in it).
   Treasure is sized in storybook proportions, not museum ones: the chest is the prize (70 cm), pots, the helmet, the
   bottle and the lantern are big enough to read (30–45 cm), the broken sword is a blade, not a landmark (35 cm).
+- Gems: raw crystals and gemstones (an amethyst geode, a ruby, garnets, an emerald, quartz, opal, lapis, jade…),
+  true sizes per cell, a little earth in their cracks. Kept out of the set grade (`keep`): it moves every asset
+  halfway to the set's palette, and their colour is the point.
 
 ### deadwood and landmark
 

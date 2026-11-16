@@ -293,7 +293,11 @@ def grid_bands(rgb: np.ndarray, axis: int, n: int) -> list[tuple[int, int]]:
     cuts = [0]
     for k in range(1, n):
         lo, hi = int(size * (k / n - 0.1)), int(size * (k / n + 0.1))
-        cuts.append(lo + int(np.argmin(content[lo:hi])))
+        # of the emptiest places, the one nearest the division: the first one hugs the left subject's edge, and the
+        # 6 px inset then clips it (gems in a 4 x 4 sheet lost up to a quarter of their right side)
+        seg = content[lo:hi]
+        empty = np.nonzero(seg <= seg.min())[0]
+        cuts.append(lo + int(empty[np.argmin(np.abs(lo + empty - size * k / n))]))
     cuts.append(size)
     return [(cuts[i], cuts[i + 1]) for i in range(n)]
 
