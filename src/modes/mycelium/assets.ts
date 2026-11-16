@@ -2,11 +2,11 @@
 // as scripts/forest/matte/pack.py packs it (manifest.json lists every file and its size); only what the scene
 // uses is fetched. The download starts when the mode's code loads, so it runs while the user types; RUN waits
 // for it with a byte count on #boot.
-import { textures } from './assets/manifest.json';
+import { atlases, textures } from './assets/manifest.json';
 
 /** what the scene uses: the ground strip, the strip of the moss hill behind it (star moss, lichen, clover) and the
  * moss carpets of its body, and the soil horizons in layer order (leafy humus is 3, stony 1) */
-export const USED = [
+const TEXTURES = [
   'ground',
   'ground-c',
   'moss-0',
@@ -18,10 +18,23 @@ export const USED = [
   'soil-2',
   'soil-3',
 ] as const satisfies readonly (keyof typeof textures)[];
+/** and the atlases of what lies buried (buried.ts): treasure and pebbles, and the stones */
+export const ATLASES = ['underground-0', 'ground-0'] as const satisfies readonly (keyof typeof atlases)[];
+export type AtlasKey = (typeof ATLASES)[number];
+const USED = [...TEXTURES, ...ATLASES];
 export type AssetKey = (typeof USED)[number];
 
+const FILES: Record<AssetKey, { file: string; bytes: number }> = { ...textures, ...atlases };
+
 const URLS = import.meta.glob<string>(
-  ['./assets/tex-ground.webp', './assets/tex-ground-c.webp', './assets/tex-moss-*.webp', './assets/tex-soil-*.webp'],
+  [
+    './assets/tex-ground.webp',
+    './assets/tex-ground-c.webp',
+    './assets/tex-moss-*.webp',
+    './assets/tex-soil-*.webp',
+    './assets/atlas-underground-0.webp',
+    './assets/atlas-ground-0.webp',
+  ],
   {
     eager: true,
     query: '?url',
@@ -35,7 +48,7 @@ export type Progress = (loaded: number, total: number) => void;
 let pending: Promise<Assets> | undefined;
 let loaded = 0;
 const listeners = new Set<Progress>();
-const total = USED.reduce((s, k) => s + textures[k].bytes, 0);
+const total = USED.reduce((s, k) => s + FILES[k].bytes, 0);
 
 /** every picture the scene uses, decoded; asking again returns the same download (a failed one is tried again) */
 export function fetchAssets(onProgress?: Progress): Promise<Assets> {
@@ -57,7 +70,7 @@ async function download(): Promise<Assets> {
   const out = {} as Assets;
   await Promise.all(
     USED.map(async (key) => {
-      const file = textures[key].file;
+      const file = FILES[key].file;
       const url = URLS[`./assets/${file}`];
       if (!url) throw new Error(`${file}: not bundled`);
       const res = await fetch(url);

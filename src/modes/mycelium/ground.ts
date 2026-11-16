@@ -1,7 +1,9 @@
 // MYCELIUM_'s ground, read from the text: the curve of the forest floor and where the soil horizons lie.
-// Pure and DOM-free. Any text gives a ground (the same text always the same one); every field is a number,
-// so one ground can ease into another while the program is edited.
+// Pure and DOM-free. Any text gives a ground (the same text always the same one); every field but what lies buried
+// is a number, so one ground can ease into another while the program is edited.
 import { hash, mulberry32 } from '../../lang/rng';
+import { readBuried } from './buried';
+import type { Buried } from './buried';
 
 /** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. 10 m wide. */
 export const WORLD = { x0: -1875, x1: 1875, top: 1100, bottom: -2200 } as const;
@@ -20,6 +22,8 @@ export interface Ground {
   /** the mossy hill behind the floor: its cushions (centre x, half width left, half width right, top y): each a dome
    * standing RIDGE_RISE-ish over the floor at its centre, the hill between them sunk well under the floor */
   ridge: [number, number, number, number][];
+  /** treasure and stones in the soil (buried.ts); an edit swaps them for the new ones instead of easing them */
+  buried: Buried[];
 }
 
 /** how many view units apart the hill's cushions stand, how far they rise over the floor, how tall a dome is from
@@ -70,7 +74,9 @@ export function readGround(src: string): Ground {
     const c = centres[i]! + (centres[i + 1]! - centres[i]!) * span(0.4, 0.6);
     ridge.push([c, span(126, 167), span(126, 167), heightAt({ waves, bumps }, c) + RIDGE_RISE * span(0.25, 0.6)]);
   }
-  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge };
+  // its own random stream, so the ground's shape doesn't change with how many tries the scattering takes
+  const buried = readBuried(mulberry32(hash(src) ^ 0x9e3779b9), [b0, b1, b2], WORLD.x0, WORLD.x1);
+  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, buried };
 }
 
 /** cushion i's dome at x: its top, falling RIDGE_DOME to its foot as an ellipse over its half widths, so it ends at
@@ -122,5 +128,6 @@ export function mixGround(a: Ground, b: Ground, k: number): Ground {
     drift: row(a.drift, b.drift),
     moss: a.moss.map((w, i) => row(w, b.moss[i]!)),
     ridge: a.ridge.map((w, i) => row(w, b.ridge[i]!)),
+    buried: k < 0.5 ? a.buried : b.buried,
   };
 }

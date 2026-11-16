@@ -4,15 +4,20 @@
 //   ridge   a mossy hill behind the floor: rounded moss cushions whose tops clear the floor (ground.ts, ridgeAt),
 //           a second strip's moss band handing over to a hex-tiled moss carpet below
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
+//   buried  treasure and stones in the soil (buried.ts): one quad each from the library's atlases, over a soft shadow
 //   post    contrast, vignette, grain
 //   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
 // Shaders live in shaders/, one file per piece.
-import type { Assets } from './assets';
+import { ATLASES } from './assets';
+import type { Assets, AtlasKey } from './assets';
+import { atlases, frames } from './assets/manifest.json';
+import { BURIED_MAX, TREASURE_MAX, isTreasure } from './buried';
+import type { Buried } from './buried';
 import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
 import { freeTarget, program, target, texture, textureArray } from './gl';
 import type { GL, Program, Target } from './gl';
-import { GROUND_FS, GROUND_VS, POST_FS, RIDGE_FS, RIDGE_VS, SCREEN_VS, SKY_FS, WIRE_FS, WIRE_VS } from './shaders';
+import { BURIED_FS, BURIED_VS, GROUND_FS, GROUND_VS, POST_FS, RIDGE_FS, RIDGE_VS, SCREEN_VS, SKY_FS, WIRE_FS, WIRE_VS } from './shaders';
 import { PixelBudget } from '../../ui/budget';
 
 type RGB = [number, number, number];
@@ -24,12 +29,14 @@ export interface WireMaterial {
   color: RGBA;
   tris: number;
 }
-const WIRE_COLOR: Record<'sky' | 'band' | 'body' | 'strip' | 'soil' | 'post', RGBA> = {
+const WIRE_COLOR: Record<'sky' | 'band' | 'body' | 'strip' | 'soil' | 'halo' | 'buried' | 'post', RGBA> = {
   sky: [0.35, 0.8, 1, 0.9],
   band: [0.25, 1, 0.85, 0.85],
   body: [0.2, 0.55, 1, 0.85],
   strip: [0.55, 1, 0.35, 0.85],
   soil: [1, 0.62, 0.2, 0.85],
+  halo: [0.75, 0.45, 1, 0.8],
+  buried: [1, 0.9, 0.25, 0.95],
   post: [1, 0.35, 0.85, 0.9],
 };
 
@@ -70,6 +77,24 @@ const MORPH = 0.6;
 const TOUCH = 3;
 /** how far out and in the camera zooms (1: VIEW_H tall) */
 const ZOOM = [0.5, 4] as const;
+/** a buried thing's quad reaches this many texels past its picture: room for its blurred shadow (the atlases leave
+ * 16 texels between pictures, and the shadow's mip level reads about 4 further, so no neighbour bleeds in) */
+const PAD = 6;
+/** floats per buried vertex: position, uv, depth, the picture's rect in its atlas, the halo's reach */
+const BURIED_STRIDE = 10;
+/** how dark a buried thing's shadow is, and how far below it it falls (view units: light comes from above) */
+const SHADOW = 0.55;
+const SHADOW_DROP = 3;
+/** the darkened soil around a treasure follows its outline: its silhouette spread by this share of its narrow side
+ * plus this many view units (so a ring gets one too), this dark where it is thickest; it fades out toward the
+ * floor, never over the moss */
+const HALO_REACH = 0.3;
+const HALO_PAD = 14;
+const HALO_DARK = 0.5;
+/** buried things lie out of the sun, in the soil's shade */
+const BURIED_DIM = 0.8;
+/** the passes of buried.frag */
+const PASS = { picture: 0, shadow: 1, halo: 2 } as const;
 
 /** The air. Neutral daylight for now; the assets carry no mood of their own, so this is where it will change. */
 const AIR = {
@@ -159,6 +184,18 @@ export class ForestRenderer {
   private mossFill: WebGLTexture | null = null;
   private mossTile = 1;
   private mossGain: RGB = [1, 1, 1];
+  /** the atlases of what lies buried, in ATLASES order */
+  private atlasTex: WebGLTexture[] = [];
+  private buried: Program | null = null;
+  private buriedVao: WebGLVertexArrayObject | null = null;
+  private buriedVbo: WebGLBuffer | null = null;
+  private wireBuriedVao: WebGLVertexArrayObject | null = null;
+  /** quads per atlas (ATLASES order), one after the other in the buffer */
+  private buriedCount: number[] = ATLASES.map(() => 0);
+  /** treasures' halos per atlas: quads after every thing's own, grouped the same way */
+  private haloCount: number[] = ATLASES.map(() => 0);
+  /** the soil's colour (straight), what buried things are stained toward */
+  private earth: RGB = [0.3, 0.22, 0.15];
 
   /** the ground drawn now, the one it eases toward, and how long that still takes */
   private shown: Ground | null = null;
@@ -167,6 +204,8 @@ export class ForestRenderer {
   private verts: Float32Array;
   /** the hill: per column its top, the bottom of its moss band, the bottom of its body; position, uv */
   private ridgeVerts: Float32Array;
+  /** what lies buried: four corners per thing, grouped by atlas; position, uv, depth */
+  private buriedVerts = new Float32Array((BURIED_MAX + TREASURE_MAX) * 4 * BURIED_STRIDE);
   private cols: number;
 
   constructor(cv: HTMLCanvasElement) {
@@ -289,6 +328,44 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...band, ...body]), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
+    // what lies buried: a quad per thing (two triangles), then one per treasure's halo; pos xy, uv, depth, the
+    // picture's rect in its atlas, how far the halo reaches (texels)
+    this.buried = program(gl, BURIED_VS, BURIED_FS);
+    this.buriedVao = gl.createVertexArray();
+    this.buriedVbo = gl.createBuffer();
+    gl.bindVertexArray(this.buriedVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buriedVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, this.buriedVerts.byteLength, gl.DYNAMIC_DRAW);
+    const BB = BURIED_STRIDE * 4;
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, BB, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, BB, 8);
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, BB, 16);
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(3, 4, gl.FLOAT, false, BB, 20);
+    gl.enableVertexAttribArray(4);
+    gl.vertexAttribPointer(4, 1, gl.FLOAT, false, BB, 36);
+    // corners: top left, top right, bottom left, bottom right
+    const quads = BURIED_MAX + TREASURE_MAX;
+    const bidx = new Uint16Array(quads * 6);
+    const blines = new Uint16Array(quads * 10);
+    for (let i = 0; i < quads; i++) {
+      const a = i * 4;
+      bidx.set([a, a + 2, a + 1, a + 1, a + 2, a + 3], i * 6);
+      blines.set([a, a + 1, a + 1, a + 3, a + 3, a + 2, a + 2, a, a + 1, a + 2], i * 10);
+    }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, bidx, gl.STATIC_DRAW);
+    this.wireBuriedVao = gl.createVertexArray();
+    gl.bindVertexArray(this.wireBuriedVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buriedVbo);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, BB, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, blines, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
   }
 
   /** the pictures as textures; the soils' scale and colour follow the strip they meet */
@@ -308,6 +385,7 @@ export class ForestRenderer {
     const s = soilColor(a.ground, FADE[0], 1);
     const l = soilColor(a['soil-3'], 0, 1);
     this.soilGain = s.map((v, k) => Math.max(0.6, Math.min(1.6, v / Math.max(0.01, l[k]!)))) as RGB;
+    this.earth = s;
     // the hill behind: another strip at the same texel scale, its moss band over a hex-tiled moss carpet, whose
     // colour is matched to the band's moss (rows 15–34 % of the picture: under the tufts, above the stones)
     this.ridgeTex = texture(gl, a['ground-c'], 'clamp', 'clamp');
@@ -321,6 +399,8 @@ export class ForestRenderer {
       const mean = carpets.reduce((s, c) => s + c[k]!, 0) / carpets.length;
       return Math.max(0.5, Math.min(1.5, v / Math.max(0.01, mean)));
     }) as RGB;
+    // what lies buried: sprites packed 16 texels apart, the quads padded into that gap
+    this.atlasTex = ATLASES.map((k) => texture(gl, a[k], 'clamp', 'clamp'));
   }
 
   /** a new ground: eases in from the one shown, or snaps (`now`, or nothing shown yet) */
@@ -422,9 +502,79 @@ export class ForestRenderer {
     // arc length → strip repeats, from x = 0
     for (let i = 0; i < this.cols * 3; i++) v[i * STRIDE + 2] = (v[i * STRIDE + 2]! - u0) / this.stripW;
     this.buildRidge(g);
+    this.buildBuried(g);
     if (!gl || this.lost || !this.vbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
+  }
+
+  /**
+   * What lies buried: a quad per thing, its depth below the floor right above it (so it rides along while an edited
+   * floor eases), turned by its tilt, padded by PAD texels; grouped by atlas, so each atlas is one draw. Then a halo
+   * quad per treasure, padded by as far as its halo reaches, grouped the same way.
+   */
+  private buildBuried(g: Ground): void {
+    const gl = this.gl;
+    let o = 0;
+    ATLASES.forEach((atlas, a) => {
+      let n = 0;
+      for (const b of g.buried) {
+        if (frames[b.frame].atlas !== atlas) continue;
+        o = this.buriedQuad(g, b, PAD, 0, o);
+        n++;
+      }
+      this.buriedCount[a] = n;
+    });
+    ATLASES.forEach((atlas, a) => {
+      let n = 0;
+      for (const b of g.buried) {
+        const f = frames[b.frame];
+        if (f.atlas !== atlas || !isTreasure(b.frame)) continue;
+        const k = f.s * b.scale;
+        const reach = HALO_REACH * Math.min(f.w, f.h) + HALO_PAD / k;
+        o = this.buriedQuad(g, b, reach, reach, o);
+        n++;
+      }
+      this.haloCount[a] = n;
+    });
+    if (!gl || this.lost || !this.buriedVbo) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buriedVbo);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.buriedVerts, 0, o);
+  }
+
+  /** one quad over thing b's picture, `pad` texels past it, turned with it, at offset o; `reach` as the halo's.
+   * Each corner carries its own depth below the floor. Returns the next offset. */
+  private buriedQuad(g: Ground, b: Buried, pad: number, reach: number, o: number): number {
+    const v = this.buriedVerts;
+    const f = frames[b.frame];
+    const A = atlases[f.atlas as AtlasKey];
+    const k = f.s * b.scale;
+    const hx = (f.w / 2 + pad) * k;
+    const hy = (f.h / 2 + pad) * k;
+    const cy = heightAt(g, b.x) - b.depth;
+    const cos = Math.cos(b.tilt);
+    const sin = Math.sin(b.tilt);
+    const u0 = (b.flip ? f.x + f.w + pad : f.x - pad) / A.w;
+    const u1 = (b.flip ? f.x - pad : f.x + f.w + pad) / A.w;
+    const vt = (f.y - pad) / A.h;
+    const vb = (f.y + f.h + pad) / A.h;
+    for (let c = 0; c < 4; c++) {
+      const px = c & 1 ? hx : -hx;
+      const py = c < 2 ? hy : -hy;
+      const x = b.x + px * cos - py * sin;
+      const y = cy + px * sin + py * cos;
+      v[o++] = x;
+      v[o++] = y;
+      v[o++] = c & 1 ? u1 : u0;
+      v[o++] = c < 2 ? vt : vb;
+      v[o++] = heightAt(g, x) - y;
+      v[o++] = f.x / A.w;
+      v[o++] = f.y / A.h;
+      v[o++] = (f.x + f.w) / A.w;
+      v[o++] = (f.y + f.h) / A.h;
+      v[o++] = reach;
+    }
+    return o;
   }
 
   /**
@@ -474,7 +624,7 @@ export class ForestRenderer {
 
   frame(dt: number): void {
     const gl = this.gl;
-    if (!gl || this.lost || !this.shown || !this.strip || !this.soils || !this.ridgeTex || !this.mossFill) return;
+    if (!gl || this.lost || !this.shown || !this.strip || !this.soils || !this.ridgeTex || !this.mossFill || !this.atlasTex.length) return;
     this.time += dt;
     this.budget.frame(dt);
     if (this.morph > 0 && this.goal) {
@@ -548,6 +698,39 @@ export class ForestRenderer {
     gl.bindVertexArray(this.mesh);
     gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_SHORT, 0);
 
+    // what lies buried, over the soil: the treasures' halos, every shadow (dropped a little, blurred), then the
+    // pictures; an atlas a draw
+    const bu = this.buried!;
+    gl.useProgram(bu.prog);
+    gl.uniform4f(bu.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    gl.uniform1f(bu.u.uDim!, BURIED_DIM);
+    gl.uniform3f(bu.u.uEarth!, ...this.earth);
+    gl.uniform2f(bu.u.uDrift!, ...g.drift);
+    gl.uniform3f(bu.u.uTint!, ...AIR.tint);
+    gl.uniform3f(bu.u.uDeep!, ...AIR.deep);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(bu.u.uAtlas!, 0);
+    gl.bindVertexArray(this.buriedVao);
+    // halos first, then every shadow, then the pictures: the things' quads per atlas, then the halos' per atlas
+    const things = this.buriedCount.reduce((s, n) => s + n, 0);
+    const passes = [
+      [PASS.halo, HALO_DARK, this.haloCount, things],
+      [PASS.shadow, SHADOW, this.buriedCount, 0],
+      [PASS.picture, 0, this.buriedCount, 0],
+    ] as const;
+    for (const [pass, dark, counts, start] of passes) {
+      gl.uniform1i(bu.u.uPass!, pass);
+      gl.uniform1f(bu.u.uDark!, dark);
+      gl.uniform2f(bu.u.uOffset!, 0, pass === PASS.shadow ? -SHADOW_DROP : 0);
+      let first = start;
+      counts.forEach((n, a) => {
+        if (!n) return;
+        gl.bindTexture(gl.TEXTURE_2D, this.atlasTex[a]!);
+        gl.drawElements(gl.TRIANGLES, n * 6, gl.UNSIGNED_SHORT, first * 12);
+        first += n;
+      });
+    }
+
     // post: onto the canvas
     gl.disable(gl.BLEND);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -574,6 +757,9 @@ export class ForestRenderer {
       { name: 'ridge.frag · moss body', color: WIRE_COLOR.body, tris: quads * 2 },
       { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
       { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
+      { name: 'buried.frag · treasure halos', color: WIRE_COLOR.halo, tris: this.haloCount.reduce((s, n) => s + n, 0) * 2 },
+      // drawn twice: shadow, then picture
+      { name: 'buried.frag · treasure, stones', color: WIRE_COLOR.buried, tris: this.buriedCount.reduce((s, n) => s + n, 0) * 4 },
       { name: 'post.frag · full-screen', color: WIRE_COLOR.post, tris: 1 },
     ];
   }
@@ -607,6 +793,12 @@ export class ForestRenderer {
     gl.drawElements(gl.LINES, this.wireStrip, gl.UNSIGNED_SHORT, 0);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.soil);
     gl.drawElements(gl.LINES, this.wireSoil, gl.UNSIGNED_SHORT, this.wireStrip * 2);
+    gl.bindVertexArray(this.wireBuriedVao);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.buried);
+    const things = this.buriedCount.reduce((s, n) => s + n, 0);
+    gl.drawElements(gl.LINES, things * 10, gl.UNSIGNED_SHORT, 0);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.halo);
+    gl.drawElements(gl.LINES, this.haloCount.reduce((s, n) => s + n, 0) * 10, gl.UNSIGNED_SHORT, things * 20);
     gl.disable(gl.BLEND);
   }
 }
