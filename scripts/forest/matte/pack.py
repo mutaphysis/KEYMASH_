@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["numpy", "pillow"]
+# dependencies = ["numpy", "pillow", "scipy", "onnxruntime>=1.18", "huggingface-hub"]
 # ///
 """Packs the library into what the mode loads: a few sprite atlases, the repeating textures, and a manifest.
 
@@ -13,8 +13,10 @@ sheet's type, atlas group, size, density, sequences and drops. Per cell it
 - records `s`, view units per texel, so renderers draw it at its on-screen size whatever its texel size.
 
 Groups become atlases (one GL texture each, so a layer draws from one texture). Sprites are shelf-packed, tallest
-first, 16 px apart, so the mip blur (depth of field) of one sprite never reaches its neighbour. Repeating textures
-(soils) stay single images: GL repeat works on whole textures only.
+first, 16 px apart, so the mip blur (depth of field) of one sprite never reaches its neighbour. Trees each get a page
+of their own instead: they are big, and a scene shows a few of them, so it fetches only those. Each tree page has a
+relief page beside it, same layout (relief.py: normal and depth, for merging its foot into the ground). Repeating
+textures (soils) stay single images: GL repeat works on whole textures only.
 
 Usage: uv run scripts/forest/matte/pack.py <library-dir> <out-dir> [--ts <manifest.ts>]
 """
@@ -27,11 +29,13 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from relief import relief  # beside this script: uv run puts its folder on the path
 
 GAP = 16
 MAX_SIDE = 2048
-# trees are big: a 4096 page holds the trunks in one shelf
-PAGE = {"trees": 4096}
+# groups whose sprites each get a page of their own (and pages with a relief beside them)
+ALONE = {"trees"}
+RELIEF = {"trees"}
 CUT = 0.03  # share of a side a subject may touch before it counts as crossing the grid
 FRAGMENT = 0.1  # of the sheet's median area
 WIDE_BASE = 0.7
@@ -162,11 +166,19 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
                     manifest["sequences"][f"{name}.{seq}"] = frames
         if not sprites:
             continue
-        page = PAGE.get(group, 2048)
-        places = shelf_pack([s[1].size for s in sprites], page)
-        pages = [np.zeros((page, page, 4), np.uint8) for _ in range(max(p for p, _, _ in places) + 1)]
+        if group in ALONE:
+            # in plan order, each at GAP on a page of its own
+            places = [(i, GAP, GAP) for i in range(len(sprites))]
+            pages = [np.zeros((img.height + 2 * GAP, img.width + 2 * GAP, 4), np.uint8) for _, img, *_ in sprites]
+        else:
+            page = 2048
+            places = shelf_pack([s[1].size for s in sprites], page)
+            pages = [np.zeros((page, page, 4), np.uint8) for _ in range(max(p for p, _, _ in places) + 1)]
+        reliefs = [np.zeros((*arr.shape[:2], 3), np.uint8) for arr in pages] if group in RELIEF else None
         for (frame, img, anchor, foot, s), (p, x, y) in zip(sprites, places):
             pages[p][y : y + img.height, x : x + img.width] = np.asarray(img)
+            if reliefs is not None:
+                reliefs[p][y : y + img.height, x : x + img.width] = relief(img)
             manifest["frames"][frame] = {
                 "atlas": f"{group}-{p}",
                 "x": x,
@@ -184,7 +196,12 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
             arr = crop_page(arr)
             file = f"atlas-{group}-{p}.webp"
             Image.fromarray(arr, "RGBA").save(out / file, quality=86, method=6, exact=False)
-            manifest["atlases"][f"{group}-{p}"] = {"file": file, "w": arr.shape[1], "h": arr.shape[0], "bytes": (out / file).stat().st_size}
+            entry = {"file": file, "w": arr.shape[1], "h": arr.shape[0], "bytes": (out / file).stat().st_size}
+            if reliefs is not None:
+                rfile = f"relief-{group}-{p}.webp"
+                Image.fromarray(reliefs[p][: arr.shape[0], : arr.shape[1]], "RGB").save(out / rfile, quality=92, method=6)
+                entry["relief"] = {"file": rfile, "bytes": (out / rfile).stat().st_size}
+            manifest["atlases"][f"{group}-{p}"] = entry
             print(f"{file}: {arr.shape[1]} x {arr.shape[0]}, {(out / file).stat().st_size // 1024} KB")
 
     for name, sheet in plan["sheets"].items():
@@ -209,7 +226,8 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
             # strips laid along curves: repeat mirrored (they are not seamless), with alpha
             manifest["textures"][key] = {"file": file, "w": img.width, "h": img.height, "bytes": (out / file).stat().st_size, "wrap": "mirror"}
 
-    total = sum(a["bytes"] for a in manifest["atlases"].values()) + sum(t["bytes"] for t in manifest["textures"].values())
+    total = sum(a["bytes"] + a.get("relief", {}).get("bytes", 0) for a in manifest["atlases"].values())
+    total += sum(t["bytes"] for t in manifest["textures"].values())
     manifest["bytes"] = total
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
     (out / "report.json").write_text(json.dumps(report, indent=1))

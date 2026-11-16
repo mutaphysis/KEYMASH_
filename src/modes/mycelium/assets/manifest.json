@@ -39,15 +39,103 @@
   },
   "trees-0": {
    "file": "atlas-trees-0.webp",
-   "w": 3928,
-   "h": 3648,
-   "bytes": 2252166
+   "w": 424,
+   "h": 612,
+   "bytes": 46882,
+   "relief": {
+    "file": "relief-trees-0.webp",
+    "bytes": 35778
+   }
   },
   "trees-1": {
    "file": "atlas-trees-1.webp",
-   "w": 1472,
+   "w": 308,
+   "h": 696,
+   "bytes": 51956,
+   "relief": {
+    "file": "relief-trees-1.webp",
+    "bytes": 37012
+   }
+  },
+  "trees-2": {
+   "file": "atlas-trees-2.webp",
+   "w": 1692,
    "h": 1832,
-   "bytes": 313078
+   "bytes": 427366,
+   "relief": {
+    "file": "relief-trees-2.webp",
+    "bytes": 360490
+   }
+  },
+  "trees-3": {
+   "file": "atlas-trees-3.webp",
+   "w": 596,
+   "h": 1832,
+   "bytes": 173602,
+   "relief": {
+    "file": "relief-trees-3.webp",
+    "bytes": 140090
+   }
+  },
+  "trees-4": {
+   "file": "atlas-trees-4.webp",
+   "w": 1668,
+   "h": 1832,
+   "bytes": 358366,
+   "relief": {
+    "file": "relief-trees-4.webp",
+    "bytes": 308370
+   }
+  },
+  "trees-5": {
+   "file": "atlas-trees-5.webp",
+   "w": 720,
+   "h": 1832,
+   "bytes": 168674,
+   "relief": {
+    "file": "relief-trees-5.webp",
+    "bytes": 149912
+   }
+  },
+  "trees-6": {
+   "file": "atlas-trees-6.webp",
+   "w": 888,
+   "h": 1832,
+   "bytes": 522838,
+   "relief": {
+    "file": "relief-trees-6.webp",
+    "bytes": 264816
+   }
+  },
+  "trees-7": {
+   "file": "atlas-trees-7.webp",
+   "w": 928,
+   "h": 1832,
+   "bytes": 303944,
+   "relief": {
+    "file": "relief-trees-7.webp",
+    "bytes": 211368
+   }
+  },
+  "trees-8": {
+   "file": "atlas-trees-8.webp",
+   "w": 895,
+   "h": 1832,
+   "bytes": 244494,
+   "relief": {
+    "file": "relief-trees-8.webp",
+    "bytes": 184384
+   }
+  },
+  "trees-9": {
+   "file": "atlas-trees-9.webp",
+   "w": 770,
+   "h": 1832,
+   "bytes": 215444,
+   "relief": {
+    "file": "relief-trees-9.webp",
+    "bytes": 160910
+   }
   }
  },
  "frames": {
@@ -2244,8 +2332,8 @@
    "s": 0.5
   },
   "snags/00": {
-   "atlas": "trees-1",
-   "x": 1064,
+   "atlas": "trees-0",
+   "x": 16,
    "y": 16,
    "w": 392,
    "h": 581,
@@ -2255,7 +2343,7 @@
   },
   "snags/03": {
    "atlas": "trees-1",
-   "x": 770,
+   "x": 16,
    "y": 16,
    "w": 278,
    "h": 666,
@@ -2264,7 +2352,7 @@
    "s": 0.67568
   },
   "trees-a/00": {
-   "atlas": "trees-0",
+   "atlas": "trees-2",
    "x": 16,
    "y": 16,
    "w": 1661,
@@ -2274,8 +2362,8 @@
    "s": 0.5
   },
   "trees-a/01": {
-   "atlas": "trees-0",
-   "x": 1693,
+   "atlas": "trees-3",
+   "x": 16,
    "y": 16,
    "w": 566,
    "h": 1800,
@@ -2284,8 +2372,8 @@
    "s": 0.5
   },
   "trees-a/02": {
-   "atlas": "trees-0",
-   "x": 2275,
+   "atlas": "trees-4",
+   "x": 16,
    "y": 16,
    "w": 1636,
    "h": 1800,
@@ -2294,9 +2382,9 @@
    "s": 0.5
   },
   "trees-a/03": {
-   "atlas": "trees-0",
+   "atlas": "trees-5",
    "x": 16,
-   "y": 1832,
+   "y": 16,
    "w": 688,
    "h": 1800,
    "ax": 344.2,
@@ -2304,9 +2392,9 @@
    "s": 0.5
   },
   "trees-b/00": {
-   "atlas": "trees-0",
-   "x": 720,
-   "y": 1832,
+   "atlas": "trees-6",
+   "x": 16,
+   "y": 16,
    "w": 857,
    "h": 1800,
    "ax": 428.4,
@@ -2314,9 +2402,9 @@
    "s": 0.5
   },
   "trees-b/01": {
-   "atlas": "trees-0",
-   "x": 1593,
-   "y": 1832,
+   "atlas": "trees-7",
+   "x": 16,
+   "y": 16,
    "w": 897,
    "h": 1800,
    "ax": 448.4,
@@ -2324,9 +2412,9 @@
    "s": 0.5
   },
   "trunks-b/00": {
-   "atlas": "trees-0",
-   "x": 2506,
-   "y": 1832,
+   "atlas": "trees-8",
+   "x": 16,
+   "y": 16,
    "w": 863,
    "h": 1800,
    "ax": 431.7,
@@ -2334,7 +2422,7 @@
    "s": 0.5
   },
   "trunks-b/01": {
-   "atlas": "trees-1",
+   "atlas": "trees-9",
    "x": 16,
    "y": 16,
    "w": 738,
@@ -2531,5 +2619,5 @@
    "wrap": "mirror"
   }
  },
- "bytes": 5560316
+ "bytes": 7361768
 }

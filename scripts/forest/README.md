@@ -32,13 +32,15 @@ bun scripts/forest/proto.ts --library      # stills of every page of the library
 bun scripts/forest/proto.ts --tiling       # soil anti-tiling techniques side by side (proto/tiling.html) → samples/14-tiling/
 bun scripts/forest/13-styles.ts            # illustrated mushrooms and critters in five styles, composited into a prototype still
 uv run scripts/forest/matte/matte.py compare samples/8-matte <raw.png>...      # matting models side by side, edges zoomed
+uv run scripts/forest/matte/relief.py <in.png> <out.png>   # a cut-out's relief map (normal, depth), as pack.py makes one per tree
 bun scripts/forest/proto.ts                # captures the prototype into samples/7-proto/ (PARAMS="theme=night&graded")
 bun scripts/forest/proto.ts --serve        # http://localhost:5180/proto/ (keys 1–4 = atmospheres, mouse = parallax,
                                            # ?theme=amber|moss|dusk|night, ?graded, ?hide=far,mid,back,snags,ridge,near,front)
 ```
 
-`matte/` is Python because the matting models are: `matte.py` declares its dependencies inline, and `uv run`
-installs them into a cached environment on first use (nothing global). `vision.swift` is compiled once by it.
+`matte/` is Python because the matting and depth models are: each script declares its dependencies inline, and
+`uv run` installs them into a cached environment on first use (nothing global). `vision.swift` is compiled once by
+`matte.py`; `relief.py` downloads its depth model (50 MB) into the Hugging Face cache once, and `pack.py` uses it.
 
 - `replicate.ts`: the client. It runs official models by name and community models by their latest version,
   keeps a ledger with estimated prices, refuses a call that would pass `BUDGET` ($5.00), and retries
@@ -203,7 +205,9 @@ What nano-banana-2 does with "sprite sheet" prompts, and the answers:
 
 ```
 src/modes/forest/assets/      written by matte/pack.py from the library; committed (the real assets)
-  atlas-<group>-<n>.webp      sprites per group (mushrooms, critters, plants, ground, underground, wood, trees), 16 px apart
+  atlas-<group>-<n>.webp      sprites per group (mushrooms, critters, plants, ground, underground, wood), 16 px apart;
+                              trees one per page
+  relief-trees-<n>.webp       beside each tree page, same layout: normal + depth (matte/relief.py)
   tex-soil-<n>.webp           repeating textures: own images (GL repeat needs a whole texture)
   manifest.ts                 atlases, frames (atlas rect, anchor, s = view units per texel), sequences, textures (--ts)
 src/modes/forest/preload.ts   proto/preload.ts as it is
@@ -211,7 +215,9 @@ src/modes/forest/preload.ts   proto/preload.ts as it is
 
 - **Groups → atlases**: one GL texture per type group (`TYPES` in `12-library.ts`), so a layer draws from one
   texture. Shelf-packed tallest first, 16 px apart, so the mip-bias depth of field of one sprite never reaches its
-  neighbour; 2048 pages, 4096 for trees.
+  neighbour; 2048 pages. **Trees get a page each** (16 px around them) instead of sharing 4096 pages: a scene shows a
+  few of them and fetches only those (a 4096 page was 2.25 MB for seven trees), and each page has a relief page
+  beside it (step 15).
 - **Sizes come from the rules** (ASSETS.md, Scale): every frame is packed at its on-screen size × 2 texels, and
   carries `s` (view units per texel), so a renderer draws it at `w·s × h·s`. A fly agaric is 150 px, a tree 1800.
   The whole library: 213 frames, 14 sequences, 8 atlases, 4 soils and 3 ground strips, 5.2 MB (7.3 MB before, with
