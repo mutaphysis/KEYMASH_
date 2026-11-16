@@ -72,6 +72,8 @@ about 3.4 × 1.9 m. Anchor: a mature fly agaric (about 20 cm) is at most 75 unit
 | `soil` | fill below the ribbon | tile | – | none (seamless) | all | texture |
 | `moss-fill` | body of mossy hills behind the floor | tile, about 30 cm | – | none (seamless) | all | texture |
 | `ribbon` | the ground curves | strip | – | none (mirrored repeat) | left, right | texture |
+| `canopy` | the leaf cover over the tree tops, its lower edge | strip, leaves at life size (160–275 cm wide) | – | none (mirrored repeat) | top, left, right | texture |
+| `leaf-fill` | the leaf cover's body above its edge | tile, leaves at life size (50–110 cm) | – | none (seamless) | all | texture |
 
 ### mushroom: the life cycle
 
@@ -167,6 +169,23 @@ toward the trees that are actually there.
 - The moss carpets (`mosses`, type `moss-fill`) are seamless tiles of a moss-covered slope seen from the front, four
   variants (star moss, feather moss with lichen, darker shade moss, moss with clover), about 30 cm per tile. They fill
   the body of mossy hills below a strip's moss band; packed as `tex-moss-<n>` (textures are named by their type).
+
+### canopy, leaf-fill
+
+The leaf cover hides where trunks leave the top of the view, made like the ground upside down: an edge strip that
+hangs from above (`canopy`, a ribbon cut from the bottom up) and a seamless fill above it (`leaf-fill`).
+
+- Four kinds of tree, one strip each and one fill tile each, in the same order: birch, oak, beech, maple
+  (`canopy-birch` … `canopy-maple`, `leaves` tiles 0–3). A strip's fill is the tile of the same tree.
+- Leaves at life size at the focus plane (a birch leaf 5 cm, oak 10, beech 8, maple 15), seen from the side and a
+  little from below, in the same neutral light: no sky, no light shining through, no trunks or thick branches.
+- Strips: the dense leaf mass fills the top edge without gaps, the lower edge hangs down in sprays and single leaves to
+  about two thirds of the height, plain grey below and in every gap. Gaps between leaves stay transparent (not filled
+  like holes in a ground strip). Packed as `tex-canopy-<tree>`, `wrap: mirror`, `hangs: true`.
+- Fills: overlapping leaves in several layers, deeper ones darker, scattered evenly: nothing in the middle of a tile
+  (a rosette, a hero leaf) that would repeat as a grid. Packed as `tex-leaf-<n>`.
+- The model doesn't keep leaf size between pictures, so each strip and fill tile carries `s` (view units per texel),
+  from the plan's `leaf` (a typical leaf in cm and in source pixels): strip and fill draw their leaves the same size.
 
 ## Checks
 

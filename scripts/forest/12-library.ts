@@ -7,7 +7,7 @@
 // its own (matte.py cells), and graded as a set; soil textures are split by grid and made seamless instead.
 //
 // Resolution per sheet: enough for the type's size at 2 texels per view unit (ASSETS.md, Scale). 4K for
-// trunks and trees, 1K for the rest (a mature fly agaric is packed at 150 px).
+// trunks and trees, 2K for the leaf cover (strips wider than the view), 1K for the rest (a mature fly agaric is packed at 150 px).
 // Google's rates: $0.067 (1K), $0.101 (2K), $0.151 (4K); the guard counts $0.08 / $0.12 / $0.18.
 //
 // A sheet whose raw picture exists is accepted and not generated again, even after its prompt changed;
@@ -53,6 +53,8 @@ type Rule = {
   look?: 'ink';
   /** kept out of the set grade too: its colour is the point (gems; the grade would pull an amethyst toward brown) */
   keep?: boolean;
+  /** a ribbon that hangs from above (the canopy's lower edge): attached to the top, the grey background below it */
+  hangs?: boolean;
   /** how the cut pipeline treats it */
   kind: 'sprites' | 'growth' | 'textures' | 'ribbon';
 };
@@ -77,6 +79,10 @@ export const TYPES = {
   // the body of mossy hills: what a moss-covered slope looks like seen from the front, tiled like the soils
   'moss-fill': { density: 1, scale: 'cell', kind: 'textures' },
   ribbon: { density: 1, scale: 'cell', kind: 'ribbon' },
+  // the leaf cover over the tree tops: its lower edge (a ribbon hanging from above, mirrored along the top of the
+  // view) and the dense foliage above it (tiled like the soils)
+  canopy: { density: 1, scale: 'cell', hangs: true, kind: 'ribbon' },
+  'leaf-fill': { density: 1, scale: 'cell', kind: 'textures' },
 } satisfies Record<string, Rule>;
 type TypeName = keyof typeof TYPES;
 
@@ -108,6 +114,16 @@ const STRIP = (top: string) =>
   'A long horizontal slice of forest floor seen exactly from the side, spanning the full width edge to edge: ' +
   `on top ${top}, below it an even band of ${SOIL}, reaching down to the bottom edge of the image. Seamlessly tileable left and right edges. ` +
   'Above the moss a perfectly plain flat even light grey background. ' +
+  NO_TEXT;
+/** The leaves of the canopy edges and the leaf fills, so they match: about life size at the focus plane (a beech leaf
+ * 8 cm, 30 units), seen from below at a slant like boughs hanging into the view, in the same neutral light. */
+const CANOPY = (leaves: string) =>
+  STYLE +
+  'The lower edge of a dense canopy of tree foliage, seen from the side and a little from below, spanning the full width edge to edge: ' +
+  `${leaves}. The dense leaf mass fills the top edge of the image completely, with no gaps along the top; its lower edge hangs down ` +
+  'irregularly in sprays of leaves on thin twigs and single dangling leaves, reaching about two thirds of the way down. ' +
+  'No trunks, no thick branches, no sky, no light shining through. Seamlessly tileable left and right edges. ' +
+  'Below the leaves and in every gap between them a perfectly plain flat even light grey background, down to the bottom edge. ' +
   NO_TEXT;
 const GRID = (cols: number, rows: number) =>
   `Arrange them as a sprite sheet: a strict grid of ${cols} columns and ${rows} rows of equal cells, one subject per cell, ` +
@@ -150,6 +166,10 @@ type Sheet = {
   sequences?: Record<string, { frames: [number, number]; size: number }>;
   /** cells left out, with the reason (what the eye caught) */
   drop?: Record<number, string>;
+  /** leaf cover textures (a strip: one; a fill sheet: one per tile): a typical leaf's length in cm and in source texels,
+   * measured by eye where strip and fill meet (the strip's dense top). It gives the texture's `s` (view units per texel),
+   * so strip and fill draw their leaves the same size: the model draws them at whatever size it likes. */
+  leaf?: { cm: number; px: number }[];
   /** superseded or against the rules: kept for the record, not generated or packed */
   retired?: string;
 };
@@ -168,6 +188,9 @@ const life = (size: number) => ({
   grow: { frames: [0, 8] as [number, number], size },
   decay: { frames: [7, 12] as [number, number], size },
 });
+
+/** Leaf length by tree, in cm. */
+const LEAF_CM = { birch: 5, oak: 10, beech: 8, maple: 15 };
 
 export const LIBRARY: Record<string, Sheet> = {
   // -- mushrooms: the life cycle, the heart of the mode ---------------------------------------------------------
@@ -576,6 +599,66 @@ export const LIBRARY: Record<string, Sheet> = {
     aspect: '1:1',
     grid: [2, 2],
   },
+  leaves: {
+    why: 'Fill for the leaf cover over the tree tops: its body above the canopy edges (made seamless locally, hex-tiled at runtime).',
+    type: 'leaf-fill',
+    prompt:
+      STYLE +
+      'Four square textures of dense tree foliage, looking up into the lower crown from below at a slant, as a 2 by 2 grid separated ' +
+      'by thin pure white lines, each filling its square completely with overlapping leaves in several layers at different angles and ' +
+      'depths, the deeper layers in darker shade, no sky, no trunks, no branches thicker than a thin twig, evenly lit, ' +
+      'no light shining through the leaves. The leaves scattered evenly at their real size, about 60 cm of foliage per square: ' +
+      'no leaf, rosette or cluster in the centre stands out, nothing radiates from the middle. ' +
+      'One kind of tree per square: small toothed birch leaves, lobed oak leaves, smooth oval beech leaves, five-lobed maple leaves. ' +
+      'Each texture seamlessly tileable. ' +
+      NO_TEXT,
+    aspect: '1:1',
+    grid: [2, 2],
+    res: '2K',
+    // matched to each strip's dense top by eye, side by side at the manifest scale (automatic measures disagreed: step 16)
+    leaf: [
+      { cm: LEAF_CM.birch, px: 90 },
+      { cm: LEAF_CM.oak, px: 150 },
+      { cm: LEAF_CM.beech, px: 105 },
+      { cm: LEAF_CM.maple, px: 150 },
+    ],
+  },
+  'canopy-birch': {
+    why: 'The leaf cover over the tree tops: its lower edge, birch.',
+    type: 'canopy',
+    prompt: CANOPY('small toothed triangular green birch leaves on thin drooping twigs that hang down in long loose curtains'),
+    aspect: '16:9',
+    grid: [1, 1],
+    res: '2K',
+    leaf: [{ cm: LEAF_CM.birch, px: 50 }],
+  },
+  'canopy-oak': {
+    why: 'The leaf cover over the tree tops: its lower edge, oak.',
+    type: 'canopy',
+    prompt: CANOPY('lobed green oak leaves in dense clusters on short gnarled twigs, a few twigs with grey-green lichen'),
+    aspect: '16:9',
+    grid: [1, 1],
+    res: '2K',
+    leaf: [{ cm: LEAF_CM.oak, px: 125 }],
+  },
+  'canopy-beech': {
+    why: 'The leaf cover over the tree tops: its lower edge, beech.',
+    type: 'canopy',
+    prompt: CANOPY('smooth oval green beech leaves with wavy edges, arranged flat in layered sprays along thin zigzag twigs'),
+    aspect: '16:9',
+    grid: [1, 1],
+    res: '2K',
+    leaf: [{ cm: LEAF_CM.beech, px: 130 }],
+  },
+  'canopy-maple': {
+    why: 'The leaf cover over the tree tops: its lower edge, maple.',
+    type: 'canopy',
+    prompt: CANOPY('large five-lobed green maple leaves on long leaf stalks, overlapping in broad layers, a few winged seed pairs'),
+    aspect: '16:9',
+    grid: [1, 1],
+    res: '2K',
+    leaf: [{ cm: LEAF_CM.maple, px: 260 }],
+  },
   'soils-roots': retired('Four different soils, full of roots, none matching the ground strip: tree roots are procedural.'),
   'ground-strip-b': {
     why: 'A second ground strip: leafy.',
@@ -649,7 +732,10 @@ for (const r of made) {
     continue;
   }
   if (kind === 'ribbon') {
-    if (!existsSync(join(dir, 'ribbon.png'))) await Bun.$`uv run --quiet ${MATTE} ribbon ${r.file} ${join(dir, 'ribbon.png')}`.quiet();
+    const rule: Rule = TYPES[r.sheet.type];
+    const hang = rule.hangs ? ['--hang'] : [];
+    if (!existsSync(join(dir, 'ribbon.png')))
+      await Bun.$`uv run --quiet ${MATTE} ribbon ${r.file} ${join(dir, 'ribbon.png')} ${hang}`.quiet();
     continue;
   }
   // Cells by the grid the model drew, each matted on its own (matte.py cells); sequence frames share one cell size.
@@ -701,10 +787,12 @@ writeFileSync(
               measure: t.measure ?? 'longest',
               edges: t.edges ?? [],
               base: t.base ?? false,
+              ...(t.hangs && { hangs: true }),
               grid: s.grid,
               ...(s.sizes && { sizes: Object.fromEntries(Object.entries(s.sizes).map(([k, v]) => [k, v * UNITS_PER_CM * (t.zoom ?? 1)])) }),
               ...(s.sequences && { sequences: s.sequences }),
               ...(s.drop && { drop: s.drop }),
+              ...(s.leaf && { s: s.leaf.map((l) => +((l.cm * UNITS_PER_CM) / l.px).toFixed(5)) }),
             },
           ];
         }),

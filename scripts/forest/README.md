@@ -33,6 +33,7 @@ bun scripts/forest/proto.ts --tiling       # soil anti-tiling techniques side by
 bun scripts/forest/13-styles.ts            # illustrated mushrooms and critters in five styles, composited into a prototype still
 uv run scripts/forest/matte/matte.py compare samples/8-matte <raw.png>...      # matting models side by side, edges zoomed
 uv run scripts/forest/matte/relief.py <in.png> <out.png>   # a cut-out's relief map (normal, depth), as pack.py makes one per tree
+uv run scripts/forest/matte/canopy.py samples/pack samples/16-canopy/seam-blend.webp   # leaf cover seams: fill hex-tiled over each canopy strip, at manifest scale
 bun scripts/forest/proto.ts                # captures the prototype into samples/7-proto/ (PARAMS="theme=night&graded")
 bun scripts/forest/proto.ts --serve        # http://localhost:5180/proto/ (keys 1–4 = atmospheres, mouse = parallax,
                                            # ?theme=amber|moss|dusk|night, ?graded, ?hide=far,mid,back,snags,ridge,near,front)
@@ -172,7 +173,8 @@ critters with legs we can't move, and mushrooms that grew, decayed onto a moss t
 grid, kind (sprites, growth sequence, textures) and resolution. Families: stones, full trees and tall trunks (4K, two
 per square sheet: drawn big and sharp), grass and small plants, bushes, moss pieces and long moss strips (to lay over
 seams), growth sequences (porcini, bonnets, glowing cluster), decay (fly agaric, a dead trunk, a fallen branch),
-litter that drops from above (leaves, cones, seeds, a samara), soil textures, and things buried in the soil.
+litter that drops from above (leaves, cones, seeds, a samara), soil textures, the leaf cover (step 16), and things
+buried in the soil.
 1K for everything drawn small; the whole library cost about $1.90.
 
 The good pictures of earlier steps are **imports** in the same plan (an entry with `source` instead of a prompt):
@@ -313,6 +315,57 @@ picture's high-passed luminance) and the depth. The mode merges the foot with th
   moss) was dropped: it looked like moss pasted along the outline, no better than behind. In front, eroding to
   transparent shows the sky through the trunk above the strip's tufts: whatever is eaten has to turn into something.
 - Behind, the strip's opaque moss already hides the cut, so a merge only matters where the tree stands clear of it.
+
+### Leaf cover over the tree tops (step 16)
+
+Trunks leave the top of the view, and the cut shows. The leaf cover hides it, made like the ground upside down: four
+edge strips that hang from above (type `canopy`: birch, oak, beech, maple, one 2K 16:9 picture each) and a 2 × 2
+sheet of seamless leaf fills for the body above them (type `leaf-fill`, `leaves`, the same four trees in the same
+order). All in `12-library.ts`; $0.72 with one re-roll of the fills. Not packed into the mode yet.
+`matte/canopy.py` previews the seam from a packed library (`seam-blend.webp`); older composites, made with throwaway
+scripts, are beside it in `samples/16-canopy/`: `cover.webp` (the first fills over two trunks, zoomed out),
+`seam.webp` (fill graded or not), `native.png` (strip top and fill at their source pixels).
+
+- **The strips work at the first try.** nano-banana-2 draws convincing photographic canopy edges on flat grey:
+  dense at the top, sprays and single leaves hanging below, birch in long curtains. No grid problems (one subject).
+- **Cut**: `matte.py ribbon --hang` cuts the strip upside down. Two changes against the ground strips:
+  - Enclosed clear areas are gaps between leaves, not pale spots: the ground strip's hole fill turned 100–260 k pixels
+    per strip into opaque grey. Measured, nearly every enclosed area is plain grey (median distance 0.01–0.06).
+    So no hole fill for hanging strips. Pale lichen on oak twigs may thin out (not checked at 1:1).
+  - The grey in deep gaps is darker than the open grey (the model shades it) and stayed a grey veil. Alpha is measured
+    against the local grey (the normalised blur of nearby clear pixels) instead of the grey at the bottom.
+- **The fill needs saying how it is seen.** The first fill sheet (`16-canopy/leaves-v1.png`) drew flat beds of leaves
+  from straight above, brighter and more saturated than the strips' dense tops, and oak and maple each had a rosette
+  in the middle that repeated as a grid. Grading each tile to its strip's top fifth (Lab mean and spread) fixed the
+  colour, not the wallpaper look. The re-roll asks for "looking up into the lower crown", "several layers, the deeper
+  ones in darker shade" and "nothing in the centre stands out": it matches the strips without grading (`seam.webp`:
+  raw left, graded right, nearly the same) and keeps no centre motif. So no grade step in the pipeline.
+- **Leaf size differs between strip and fill**, and between the four fills: the model draws leaves at whatever size it
+  likes (a maple strip's leaf is 260 px, a birch strip's 50). So every leaf cover texture carries **`s`, view units per
+  texel**, like the sprite frames: the plan's `leaf` gives a typical leaf's length in cm and in source pixels
+  (`s = cm × 3.75 / px`), `pack.py` writes it into the manifest. The strips' pixels are read by eye on their dense top
+  (where the fill meets them), each fill tile matched to its strip side by side at the manifest scale.
+  - Automatic measures didn't agree with the eye: the autocorrelation length of the luminance (veins and edges, not
+    leaves: ratios 0.7–1.2 where the eye saw 0.5–1.25), the size of lit blobs (strip leaves merge into one blob), and
+    a texture scale (high-passed contrast over mean gradient) that agreed on three trees but put maple 25 % off and
+    did not converge when the fill was rescaled by it.
+  - The absolute size is rough (±30 %); the match between a strip and its fill is what the seam needs.
+  - At life size (birch leaf 5 cm, oak 10, beech 8, maple 15) a strip spans 595–1030 units (160–275 cm) and is
+    300–490 units tall, a fill tile 190–345. A strip is wider than the view, so its mirror axis is rarely on screen;
+    its fringe reaches a third to half of the 720-unit view height if hung from the top edge: draw it partly above the
+    view, or farther back.
+- **The seam** (`seam-blend.webp`: per tree the fill hex-tiled as the moss carpets are, `shaders/hex.glsl` and
+  `mossfill.glsl` ported to numpy, the strip below it at the same leaf size; left the strip's straight top edge, right
+  a height blend over the strip's solid band, its brightest leaves first, as the tree foot's merge in step 15).
+  With matched leaf sizes and hex tiling the fill reads as the same canopy, no repeats show. The height blend hides
+  the straight edge on oak and beech; birch and maple keep a step in brightness there (the strip's top is lighter than
+  its fill), which a gain like the moss carpets' `uMossGain` (matching the fill to the strip's top) would close.
+  The fill must not reach below the strip's solid band: its straight bottom edge shows through the gaps. Rows ≥ 97 %
+  opaque: birch 29 % of the strip's height, beech 27 %, maple 15 %, oak 9 % (oak is open almost from the top).
+- **Size**: packed as they are (2752 px wide, 0.5–0.84 MB each, 2.8 MB for four) the strips weigh more than all
+  soils and mosses. At 1 texel per view unit they would be 595–1030 px wide; the packer doesn't scale textures yet.
+- Not tried: the gain above; a canopy edge per depth layer; sway in the shader; autumn colours (the theme could tint,
+  but leaves would need their own hue shift).
 
 ## Recommended pipeline for the mode
 

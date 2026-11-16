@@ -16,7 +16,8 @@ Groups become atlases (one GL texture each, so a layer draws from one texture). 
 first, 16 px apart, so the mip blur (depth of field) of one sprite never reaches its neighbour. Trees each get a page
 of their own instead: they are big, and a scene shows a few of them, so it fetches only those. Each tree page has a
 relief page beside it, same layout (relief.py: normal and depth, for merging its foot into the ground). Repeating
-textures (soils) stay single images: GL repeat works on whole textures only.
+textures (soils) stay single images: GL repeat works on whole textures only. A texture carries `s` (view units per
+texel) where the plan gives one: the leaf cover's strips and fills, scaled by their leaf size so the leaves match.
 
 Usage: uv run scripts/forest/matte/pack.py <library-dir> <out-dir> [--ts <manifest.ts>]
 """
@@ -205,26 +206,42 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
             print(f"{file}: {arr.shape[1]} x {arr.shape[0]}, {(out / file).stat().st_size // 1024} KB")
 
     for name, sheet in plan["sheets"].items():
+        # view units per texel where the plan knows it (leaf cover: by leaf size, so strip and fill leaves match)
+        scales = sheet.get("s") or []
         if sheet["kind"] == "textures":
-            # soil → soil-0 … soil-3, moss-fill → moss-0 … moss-3
+            # soil → soil-0 … soil-3, moss-fill → moss-0 … moss-3, leaf-fill → leaf-0 … leaf-3
             prefix = sheet["type"].removesuffix("-fill")
             for k, tile in enumerate(sorted((lib / name).glob("tile-*.png"))):
                 file = f"tex-{prefix}-{k}.webp"
                 img = Image.open(tile).convert("RGB")
                 img.save(out / file, quality=84, method=6)
-                manifest["textures"][f"{prefix}-{k}"] = {"file": file, "w": img.width, "h": img.height, "bytes": (out / file).stat().st_size}
+                manifest["textures"][f"{prefix}-{k}"] = {
+                    "file": file,
+                    "w": img.width,
+                    "h": img.height,
+                    "bytes": (out / file).stat().st_size,
+                    **({"s": scales[k]} if k < len(scales) else {}),
+                }
         elif sheet["kind"] == "ribbon":
             src = lib / name / "ribbon.png"
             if not src.exists():
                 continue
             img = Image.open(src).convert("RGBA")
             img = img.crop(img.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox())
-            # ground-strip → ground, ground-strip-b → ground-b
+            # ground-strip → ground, ground-strip-b → ground-b; canopy-oak stays canopy-oak
             key = name.replace("ground-strip", "ground")
             file = f"tex-{key}.webp"
             img.save(out / file, quality=86, method=6, exact=False)
-            # strips laid along curves: repeat mirrored (they are not seamless), with alpha
-            manifest["textures"][key] = {"file": file, "w": img.width, "h": img.height, "bytes": (out / file).stat().st_size, "wrap": "mirror"}
+            # strips laid along curves: repeat mirrored (they are not seamless), with alpha; a canopy edge hangs from its top
+            manifest["textures"][key] = {
+                "file": file,
+                "w": img.width,
+                "h": img.height,
+                "bytes": (out / file).stat().st_size,
+                "wrap": "mirror",
+                **({"hangs": True} if sheet.get("hangs") else {}),
+                **({"s": scales[0]} if scales else {}),
+            }
 
     total = sum(a["bytes"] + a.get("relief", {}).get("bytes", 0) for a in manifest["atlases"].values())
     total += sum(t["bytes"] for t in manifest["textures"].values())

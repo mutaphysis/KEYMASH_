@@ -433,15 +433,22 @@ def cells(raw: Path, out_dir: Path, cols: int, rows: int, growth: bool, model: s
 # ---- ground strips --------------------------------------------------------------------------------------------
 
 
-def ribbon(src: Path, out: Path) -> None:
+def ribbon(src: Path, out: Path, hang: bool = False) -> None:
     """A ground strip cut by its colour: the salient-object models see a strip that fills the frame edge to edge down
     to the bottom as background (InSPyReNet and BiRefNet gave an empty mask). The background is flat grey and only
     above the strip, so alpha is the distance from that grey (read in the top rows), kept where it connects to the
-    bottom edge, and the grey is taken out of the edges as for every cut-out."""
+    bottom edge, and the grey is taken out of the edges as for every cut-out. A hanging strip (the canopy's lower
+    edge: leaves from the top, grey below) is cut upside down the same way."""
     rgb = load_rgb(src)
+    if hang:
+        rgb = rgb[::-1]
     h = rgb.shape[0]
     bg = np.median(rgb[: max(4, h // 20)].reshape(-1, 3), 0)
     d = np.abs(rgb - bg).max(-1)
+    if hang:
+        # The grey in the gaps between leaves is darker than the open grey below (the model shades it): measured
+        # against the open grey it stays a grey veil. Measure against the grey nearby instead.
+        d = np.abs(rgb - local_background(rgb, (d > 0.1).astype(np.float32))).max(-1)
     a = np.clip((d - 0.04) / 0.08, 0, 1)
     a = a * a * (3 - 2 * a)
     lab, n = _label(a > 0.5)
@@ -449,10 +456,13 @@ def ribbon(src: Path, out: Path) -> None:
     keep = np.isin(lab, list(bottom))
     a *= gaussian_filter(keep.astype(np.float32), 1.5) > 0.2
     # Light spots inside the strip (a pale leaf vein) are near the grey too: what clear area doesn't reach the sky is a hole.
-    clear, _ = _label(a < 0.5)
-    sky = set(np.unique(clear[:3])) - {0}
-    a[(clear > 0) & ~np.isin(clear, list(sky))] = 1
-    save_rgba(decontaminate(rgb, a), out)
+    # Not in foliage: there every enclosed clear area is a gap between leaves (nearly all of them plain grey).
+    if not hang:
+        clear, _ = _label(a < 0.5)
+        sky = set(np.unique(clear[:3])) - {0}
+        a[(clear > 0) & ~np.isin(clear, list(sky))] = 1
+    rgba = decontaminate(rgb, a)
+    save_rgba(rgba[::-1] if hang else rgba, out)
     print(f"{out}: {(a > 0.5).mean():.0%} opaque")
 
 
@@ -595,7 +605,7 @@ if __name__ == "__main__":
         model = rest[rest.index("--model") + 1] if "--model" in rest else "inspyrenet"
         cells(Path(rest[0]), Path(rest[1]), int(rest[2]), int(rest[3]), "--growth" in rest, model, "--rows" in rest)
     elif cmd == "ribbon":
-        ribbon(Path(rest[0]), Path(rest[1]))
+        ribbon(Path(rest[0]), Path(rest[1]), "--hang" in rest)
     elif cmd == "tiles":
         tiles(Path(rest[0]), Path(rest[1]), int(rest[2]), int(rest[3]))
     elif cmd == "grade":
