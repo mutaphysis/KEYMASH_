@@ -71,6 +71,8 @@ export const TYPES = {
   // drawn smaller, blurred and fogged; so it is made for the nearest layer
   tree: { group: 'trees', density: 2, scale: 'cell', size: 900, edges: ['top'], base: true, kind: 'sprites' },
   soil: { density: 1, scale: 'cell', kind: 'textures' },
+  // the body of mossy hills: what a moss-covered slope looks like seen from the front, tiled like the soils
+  'moss-fill': { density: 1, scale: 'cell', kind: 'textures' },
   ribbon: { density: 1, scale: 'cell', kind: 'ribbon' },
 } satisfies Record<string, Rule>;
 type TypeName = keyof typeof TYPES;
@@ -535,6 +537,20 @@ export const LIBRARY: Record<string, Sheet> = {
       'Four square soil textures in cross-section, as a 2 by 2 grid separated by thin pure white lines, each filling its square ' +
       `completely, evenly lit, flat, no perspective, no objects on top. All four are the same ${SOIL}, in four variants: ` +
       'plain, with more small stones, darker and denser, with a few buried leaf fragments. Each texture seamlessly tileable. ' +
+      NO_TEXT,
+    aspect: '1:1',
+    grid: [2, 2],
+  },
+  mosses: {
+    why: "Fill for mossy hills behind the floor: their body below the strip's moss band (made seamless locally, hex-tiled at runtime).",
+    type: 'moss-fill',
+    prompt:
+      STYLE +
+      'Four square textures of a dense forest moss carpet covering a gentle slope, seen straight on from the front, as a 2 by 2 ' +
+      'grid separated by thin pure white lines, each filling its square completely with moss, evenly lit, flat, no perspective, ' +
+      'no sky, no soil, no stones, no leaves on top. The same small mosses as the ground strips, about 30 cm of moss per square: ' +
+      'bright star moss cushions, feather moss with a little grey-green lichen, darker denser moss in the shade, moss with a few ' +
+      'tiny clover leaves. Each texture seamlessly tileable. ' +
       NO_TEXT,
     aspect: '1:1',
     grid: [2, 2],

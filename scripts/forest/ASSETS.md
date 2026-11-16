@@ -69,6 +69,7 @@ about 3.4 × 1.9 m. Anchor: a mature fly agaric (about 20 cm) is at most 75 unit
 | `landmark` | behind the focus | per asset, 50–80 cm (188–300 u) | 2 | none | – | wood |
 | `tree` | every depth layer | 900 u at the nearest layer (snags 450) | 2 | none | top | trees |
 | `soil` | fill below the ribbon | tile | – | none (seamless) | all | texture |
+| `moss-fill` | body of mossy hills behind the floor | tile, about 30 cm | – | none (seamless) | all | texture |
 | `ribbon` | the ground curves | strip | – | none (mirrored repeat) | left, right | texture |
 
 ### mushroom: the life cycle
@@ -159,6 +160,9 @@ toward the trees that are actually there.
   and known, so alpha is the distance from it, kept where it connects to the bottom, holes filled.
 - The soil textures are seamless tiles of that same soil, four variants (plain, stonier, darker, with buried
   leaves), so the fill below the ribbon continues the strip's soil band.
+- The moss carpets (`mosses`, type `moss-fill`) are seamless tiles of a moss-covered slope seen from the front, four
+  variants (star moss, feather moss with lichen, darker shade moss, moss with clover), about 30 cm per tile. They fill
+  the body of mossy hills below a strip's moss band; packed as `tex-moss-<n>` (textures are named by their type).
 
 ## Checks
 

@@ -10,9 +10,9 @@ export const SAMPLES = join(import.meta.dir, 'samples');
 const LEDGER = join(SAMPLES, 'ledger.json');
 const API = 'https://api.replicate.com/v1';
 
-/** Dollars. The spike had 5 EUR (about $5.40); collecting the real assets added $5 more. The guard stays
- * a little below the total, with room for estimates that run low. */
-export const BUDGET = 10.0;
+/** Dollars. The spike had 5 EUR (about $5.40); collecting the real assets added $5 more, the mycelium mode's moss
+ * fill $3. The guard stays a little below the total, with room for estimates that run low. */
+export const BUDGET = 13.0;
 
 /** Estimated price per run in dollars. Replicate does not publish these through the API,
  * so they are read from the model pages and rounded up. Unknown models are refused. */

@@ -189,11 +189,13 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
 
     for name, sheet in plan["sheets"].items():
         if sheet["kind"] == "textures":
+            # soil → soil-0 … soil-3, moss-fill → moss-0 … moss-3
+            prefix = sheet["type"].removesuffix("-fill")
             for k, tile in enumerate(sorted((lib / name).glob("tile-*.png"))):
-                file = f"tex-soil-{k}.webp"
+                file = f"tex-{prefix}-{k}.webp"
                 img = Image.open(tile).convert("RGB")
                 img.save(out / file, quality=84, method=6)
-                manifest["textures"][f"soil-{k}"] = {"file": file, "w": img.width, "h": img.height, "bytes": (out / file).stat().st_size}
+                manifest["textures"][f"{prefix}-{k}"] = {"file": file, "w": img.width, "h": img.height, "bytes": (out / file).stat().st_size}
         elif sheet["kind"] == "ribbon":
             src = lib / name / "ribbon.png"
             if not src.exists():
