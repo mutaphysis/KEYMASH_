@@ -3,8 +3,8 @@
 // so one ground can ease into another while the program is edited.
 import { hash, mulberry32 } from '../../lang/rng';
 
-/** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. */
-export const WORLD = { x0: -3200, x1: 3200, top: 1100, bottom: -2200 } as const;
+/** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. 10 m wide. */
+export const WORLD = { x0: -1875, x1: 1875, top: 1100, bottom: -2200 } as const;
 
 export interface Ground {
   /** gentle swells, long to short: amplitude, frequency (per unit), phase */
@@ -30,7 +30,7 @@ export function readGround(src: string): Ground {
     [span(2, 5), span(0.02, 0.03), span(0, 6.3)],
   ];
   const bumps: [number, number, number][] = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 5; i++) {
     const w = span(90, 260);
     // at most this steep, so the strip hanging from the curve doesn't fold over
     bumps.push([span(WORLD.x0, WORLD.x1), w, sign() * span(0.1, 0.3) * w]);

@@ -35,8 +35,10 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 | ground | one mesh: per column the strip's top on the curve, its bottom along the curve's normal (blended with straight down, so steep bits don't fold), the bottom of the world | `ground.vert`, `ground.frag` with `strip.glsl`, `soil.glsl` |
 | post | a gentle contrast curve, vignette, film grain | `post.frag` |
 
-- **The strip** (`assets/tex-ground.webp`, moss over soil) is laid along the curve by arc length, 520 view units per
-  strip width. It isn't seamless, and a mirrored repeat shows a Rorschach axis every repeat, so `strip.glsl` cuts the
+- **The strip** (`assets/tex-ground.webp`, moss over soil) is laid along the curve by arc length, 335 view units per
+  strip width: about 0.65 mm per pixel, measured off its clover (2–3 cm, 35–49 px) and its oak and beech leaves
+  (120 and 78 px), so the strip is about 38 cm tall, not the 60 cm ASSETS.md planned for strips. The world is 10 m
+  wide. It isn't seamless, and a mirrored repeat shows a Rorschach axis every repeat, so `strip.glsl` cuts the
   curve into cells (a 1D Voronoi: jittered borders that also wander with depth). Each cell shows its own stretch of
   the strip, mirrored half the time, and neighbours meet in a height blend (`blend.glsl`): the taller tuft or the
   brighter leaf wins and stays whole.

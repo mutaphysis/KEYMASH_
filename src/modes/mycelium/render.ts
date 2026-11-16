@@ -18,15 +18,19 @@ type RGB = [number, number, number];
 export const VIEW_H = 720;
 /** where the forest floor sits when the camera is at rest: this share of the view from the top */
 const FLOOR_AT = 0.38;
-/** one strip width covers this much of the curve: 0.378 units per texel, the scale the soils are packed at too */
-const STRIP_TILE = 520;
+/**
+ * One strip width covers this much of the curve: 0.243 units per texel, so the strip's 589 rows are about 38 cm
+ * (3.75 units per cm). Measured off the picture: its clover leaves (2–3 cm, 35–49 px) and oak and beech leaves
+ * (7–12 and 5–10 cm, 120 and 78 px) give about 0.65 mm per pixel. The soils take the same scale.
+ */
+const STRIP_TILE = 335;
 /** columns of the ground mesh, this far apart */
 const COL = 8;
 /** the mesh reaches this far past the world's sides: the strip's bottom leans with the slope, so where the columns end
  * the soil below them would stop short of the view's edge */
 const MARGIN = 320;
-/** the strip's top edge sits this far above the curve: its clear rows above the moss */
-const LIFT = 22;
+/** the strip's top edge sits this share of its height above the curve: its clear rows above the moss */
+const LIFT = 0.1;
 /** where the moss ends in the strip picture (v, measured off assets/tex-ground.webp: below it, no green) */
 const MOSS = 0.57;
 /** floats per ground vertex: position, uv, depth, where the moss ends in its column */
@@ -253,13 +257,14 @@ export class ForestRenderer {
     const gl = this.gl;
     const v = this.verts;
     const H = this.stripH;
+    const lift = LIFT * H;
     let arc = 0;
     let u0 = 0;
     let px = 0;
     let py = 0;
     for (let i = 0; i < this.cols; i++) {
       const x = WORLD.x0 - MARGIN + i * COL;
-      const y = heightAt(g, x) + LIFT;
+      const y = heightAt(g, x) + lift;
       if (i > 0) arc += Math.hypot(x - px, y - py);
       // u counts from x = 0, so an edited ground slides the texture least where the camera starts
       if (x <= 0) u0 = arc;
@@ -279,7 +284,7 @@ export class ForestRenderer {
       const bx = x + nx * Hc;
       const by = y + ny * Hc;
       const o = i * 3 * STRIDE;
-      v.set([x, y, arc, 0, -LIFT, m], o);
+      v.set([x, y, arc, 0, -lift, m], o);
       v.set([bx, by, arc, 1, heightAt(g, bx) - by, m], o + STRIDE);
       v.set([bx, WORLD.bottom, arc, 1 + (by - WORLD.bottom) / Hc, heightAt(g, bx) - WORLD.bottom, m], o + 2 * STRIDE);
     }
