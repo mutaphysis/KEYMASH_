@@ -49,6 +49,7 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 | sky | the air behind everything: haze toward the floor, a soft light, slow mist; a placeholder until the backdrop comes | `screen.vert`, `sky.frag` |
 | ridge | a mossy hill behind the floor, same distance (no parallax), on its own waves: the moss band of a second strip (`tex-ground-c.webp`: star moss, lichen, clover) for its outline, a hex-tiled moss carpet (`tex-moss-*.webp`) for its body, a little darker | `ridge.vert`, `ridge.frag` with `strip.glsl`, `mossfill.glsl` |
 | ground | one mesh: per column the strip's top on the curve, its bottom along the curve's normal (blended with straight down, so steep bits don't fold), the bottom of the world | `ground.vert`, `ground.frag` with `strip.glsl`, `soil.glsl` |
+| tree | one tree (a beech trunk, `trees-a/03` from the library, 92 cm wide, 2.4 m of it) standing 140 units right of where the camera starts, drawn after the ground, its foot 45 units (12 cm) under the floor's curve, about 7 cm into the dense moss. Its mesh's foot rows bend with the floor under them. The ground is projected onto its foot in world space: the moss carpet climbs it (thick at the floor, in cushions, most on what faces up), and below the floor the ground strip takes over. Each hands over in a height blend rather than a cross-fade, the tree's height being its local relief (its depth against the depth around it): every texel is bark, moss or strip whole, the hollows between roots mossed first, so nothing ghosts. The same relief shades the hollows (moss down to 40 %, bark to 75 %). Its relief page (normal, depth) and the floor at any point (`groundat.glsl`: the ground mesh's columns as a float texture) feed it | `tree.vert`, `tree.frag` with `strip.glsl`, `mossfill.glsl`, `groundat.glsl` |
 | buried | treasure and stones: a quad each from the library's atlases (`atlas-underground-0`, `atlas-ground-0`), in four passes: a halo of damp, disturbed earth around each treasure in its own shape (its alpha tapped over a disc of 48 taps reaching about a third of its narrow side plus 4 cm, so a sword gets a long narrow halo and a pot a round one; ragged by noise, the soil's colour darkened rather than black, at 40 % strength in the light upper soil rising to full deep down, fading out before the moss), a soft shadow under each thing (its alpha at a fixed mip level, dropped 3 units), then the picture: stained toward the soil's colour, earth clinging in blotches, in the soil's shade and darker with depth like it (gems stained a quarter as much, a little less shaded, darkening half as much: their colour is the find), then the gems' glints (a four-pointed star on a bright texel of the gem, its rays growing and fading over half a second, added over the picture on the halo quads, which leave the rays room) | `buried.vert`, `buried.frag` |
 | post | a gentle contrast curve, vignette, film grain | `post.frag` |
 
@@ -86,13 +87,15 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 
 In dev builds (`bun run dev`) a grid button sits left of fullscreen while the mode plays. It draws every draw's
 edges over the picture in one colour per shader or material (sky, moss band, moss body, ground strip, ground soil,
-treasure halos, buried things, post), with a legend of triangle counts in the top left. The full-screen triangle of sky
-and post runs off screen, so only its legend line shows. Off, it costs nothing; on, about 8,000 line segments in six
-draws.
+tree, treasure halos, buried things, post), with a legend of triangle counts in the top left. The full-screen triangle
+of sky and post runs off screen, so only its legend line shows. Off, it costs nothing; on, about 8,000 line segments in
+seven draws.
 
 ## Assets
 
 `assets/` is the forest library as `scripts/forest/matte/pack.py` packs it (`scripts/forest/samples/pack`): atlases,
 textures, `manifest.json`, `report.json`. It is copied as it is (`oxfmt` leaves it alone). Only what the scene uses is
-bundled and fetched (`assets.ts`: two ground strips, four moss carpets and four soils, and the two atlases of what lies
-buried, about 1.7 MB); the download starts when the mode's code loads and shows its byte count on the boot screen.
+bundled and fetched (`assets.ts`: two ground strips, four moss carpets and four soils, the two atlases of what lies
+buried, and the tree's page with its relief, about 2 MB); the download starts when the mode's code loads and shows its
+byte count on the boot screen. Trees come one per page, each with a relief page beside it (normal, depth: see
+`scripts/forest/README.md`, step 15), so the scene fetches only the trees it shows.

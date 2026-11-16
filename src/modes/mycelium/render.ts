@@ -4,11 +4,13 @@
 //   ridge   a mossy hill behind the floor: rounded moss cushions whose tops clear the floor (ground.ts, ridgeAt),
 //           a second strip's moss band handing over to a hex-tiled moss carpet below
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
+//   tree    one tree standing in the floor, its foot sunk into the moss, the ground projected onto it and handed over
+//           in height blends (shaders/tree.frag)
 //   buried  treasure and stones in the soil (buried.ts): one quad each from the library's atlases, over a soft shadow
 //   post    contrast, vignette, grain
 //   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
 // Shaders live in shaders/, one file per piece.
-import { ATLASES } from './assets';
+import { ATLASES, TREE, TREE_PAGE } from './assets';
 import type { Assets, AtlasKey } from './assets';
 import { atlases, frames } from './assets/manifest.json';
 import { BURIED_MAX, TREASURE_MAX, isGem, isTreasure } from './buried';
@@ -17,7 +19,21 @@ import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
 import { freeTarget, program, target, texture, textureArray } from './gl';
 import type { GL, Program, Target } from './gl';
-import { BURIED_FS, BURIED_VS, GROUND_FS, GROUND_VS, POST_FS, RIDGE_FS, RIDGE_VS, SCREEN_VS, SKY_FS, WIRE_FS, WIRE_VS } from './shaders';
+import {
+  BURIED_FS,
+  BURIED_VS,
+  GROUND_FS,
+  GROUND_VS,
+  POST_FS,
+  RIDGE_FS,
+  RIDGE_VS,
+  SCREEN_VS,
+  SKY_FS,
+  TREE_FS,
+  TREE_VS,
+  WIRE_FS,
+  WIRE_VS,
+} from './shaders';
 import { PixelBudget } from '../../ui/budget';
 
 type RGB = [number, number, number];
@@ -29,10 +45,11 @@ export interface WireMaterial {
   color: RGBA;
   tris: number;
 }
-const WIRE_COLOR: Record<'sky' | 'band' | 'body' | 'strip' | 'soil' | 'halo' | 'buried' | 'post', RGBA> = {
+const WIRE_COLOR: Record<'sky' | 'band' | 'body' | 'tree' | 'strip' | 'soil' | 'halo' | 'buried' | 'post', RGBA> = {
   sky: [0.35, 0.8, 1, 0.9],
   band: [0.25, 1, 0.85, 0.85],
   body: [0.2, 0.55, 1, 0.85],
+  tree: [1, 1, 1, 0.8],
   strip: [0.55, 1, 0.35, 0.85],
   soil: [1, 0.62, 0.2, 0.85],
   halo: [0.75, 0.45, 1, 0.8],
@@ -99,6 +116,21 @@ const HALO_DARK = 0.5;
 const BURIED_DIM = 0.8;
 /** the passes of buried.frag */
 const PASS = { picture: 0, shadow: 1, halo: 2, glint: 3 } as const;
+
+/** where the tree (assets.ts: TREE, its frame in the manifest; its page of the trees atlas) stands */
+const TREE_X = 140;
+/** its mesh: this many columns; the rows below KNEE (a share of the picture from the top) bend with the floor */
+const TREE_COLS = 16;
+const KNEE = 0.82;
+/** the mesh's rows, down the picture: its top, the knee, its foot */
+const TREE_ROWS = [0, KNEE, 1] as const;
+/** how far the foot is sunk under the floor's curve: the strip's dense moss starts about 17 units under it (its top
+ * rows are clear, then tufts), so this is the foot about 7 cm into the moss */
+const SINK = 45;
+/** floats per tree vertex: position, uv in the picture */
+const TREE_STRIDE = 4;
+/** floats per column of the ground lookup (shaders/groundat.glsl): the curve's y, u, the strip's height, its moss */
+const AT_STRIDE = 4;
 
 /** The air. Neutral daylight for now; the assets carry no mood of their own, so this is where it will change. */
 const AIR = {
@@ -200,6 +232,21 @@ export class ForestRenderer {
   private haloCount: number[] = ATLASES.map(() => 0);
   /** the soil's colour (straight), what buried things are stained toward */
   private earth: RGB = [0.3, 0.22, 0.15];
+  /** the tree: its picture and relief, its mesh (TREE_COLS + 1 columns of TREE_ROWS), its edges for the wireframe */
+  private tree: Program | null = null;
+  private treeTex: WebGLTexture | null = null;
+  private reliefTex: WebGLTexture | null = null;
+  private treeVao: WebGLVertexArrayObject | null = null;
+  private treeVbo: WebGLBuffer | null = null;
+  private treeCount = 0;
+  private wireTreeVao: WebGLVertexArrayObject | null = null;
+  private wireTree = 0;
+  private treeVerts = new Float32Array((TREE_COLS + 1) * TREE_ROWS.length * TREE_STRIDE);
+  /** the moss carpets' colour matched to the floor strip's moss: what climbs the tree's foot */
+  private floorMossGain: RGB = [1, 1, 1];
+  /** the ground mesh's columns for shaders that need the floor at a point (shaders/groundat.glsl) */
+  private groundAtTex: WebGLTexture | null = null;
+  private groundAt: Float32Array;
 
   /** the ground drawn now, the one it eases toward, and how long that still takes */
   private shown: Ground | null = null;
@@ -220,6 +267,7 @@ export class ForestRenderer {
     this.cols = Math.floor((WORLD.x1 - WORLD.x0 + 2 * MARGIN) / COL) + 1;
     this.verts = new Float32Array(this.cols * 3 * STRIDE);
     this.ridgeVerts = new Float32Array(this.cols * 3 * 4);
+    this.groundAt = new Float32Array(this.cols * AT_STRIDE);
     cv.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.lost = true;
@@ -372,6 +420,50 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, blines, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
+    // the tree: TREE_ROWS per column, a quad per cell
+    this.tree = program(gl, TREE_VS, TREE_FS);
+    this.treeVao = gl.createVertexArray();
+    this.treeVbo = gl.createBuffer();
+    gl.bindVertexArray(this.treeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, this.treeVerts.byteLength, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, TREE_STRIDE * 4, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, TREE_STRIDE * 4, 8);
+    const tidx: number[] = [];
+    const tlines: number[] = [];
+    const R = TREE_ROWS.length;
+    for (let i = 0; i <= TREE_COLS; i++) {
+      const a = i * R;
+      const b = a + R;
+      for (let r = 0; r + 1 < R; r++) {
+        tlines.push(a + r, a + r + 1);
+        if (i < TREE_COLS) {
+          tidx.push(a + r, a + r + 1, b + r, b + r, a + r + 1, b + r + 1);
+          tlines.push(a + r, b + r, a + r + 1, b + r);
+        }
+      }
+      if (i < TREE_COLS) tlines.push(a + R - 1, b + R - 1);
+    }
+    this.treeCount = tidx.length;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tidx), gl.STATIC_DRAW);
+    this.wireTreeVao = gl.createVertexArray();
+    gl.bindVertexArray(this.wireTreeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, TREE_STRIDE * 4, 0);
+    this.wireTree = tlines.length;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tlines), gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    // the floor at a point: a float texel per ground column, read exactly (texelFetch), filled by build()
+    this.groundAtTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.groundAtTex);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, this.cols, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   }
 
   /** the pictures as textures; the soils' scale and colour follow the strip they meet */
@@ -405,8 +497,17 @@ export class ForestRenderer {
       const mean = carpets.reduce((s, c) => s + c[k]!, 0) / carpets.length;
       return Math.max(0.5, Math.min(1.5, v / Math.max(0.01, mean)));
     }) as RGB;
+    // the moss climbing the tree's foot matches the floor strip's moss (rows 15–50 %: under the tufts, above the soil)
+    const floorMoss = soilColor(a.ground, 0.15, 0.5);
+    this.floorMossGain = floorMoss.map((v, k) => {
+      const mean = carpets.reduce((s, c) => s + c[k]!, 0) / carpets.length;
+      return Math.max(0.5, Math.min(1.5, v / Math.max(0.01, mean)));
+    }) as RGB;
     // what lies buried: sprites packed 16 texels apart, the quads padded into that gap
     this.atlasTex = ATLASES.map((k) => texture(gl, a[k], 'clamp', 'clamp'));
+    // the tree and its relief (data: mipmapped like a picture, the normals average out with distance)
+    this.treeTex = texture(gl, a.tree, 'clamp', 'clamp');
+    this.reliefTex = texture(gl, a['tree-relief'], 'clamp', 'clamp');
   }
 
   /** a new ground: eases in from the one shown, or snaps (`now`, or nothing shown yet) */
@@ -504,13 +605,47 @@ export class ForestRenderer {
       v.set([x, y, arc, 0, -lift, m], o);
       v.set([bx, by, arc, 1, heightAt(g, bx) - by, m], o + STRIDE);
       v.set([bx, WORLD.bottom, arc, 1 + (by - WORLD.bottom) / Hc, heightAt(g, bx) - WORLD.bottom, m], o + 2 * STRIDE);
+      this.groundAt.set([y - lift, arc, Hc, m], i * AT_STRIDE);
     }
     // arc length → strip repeats, from x = 0
     for (let i = 0; i < this.cols * 3; i++) v[i * STRIDE + 2] = (v[i * STRIDE + 2]! - u0) / this.stripW;
+    for (let i = 0; i < this.cols; i++) this.groundAt[i * AT_STRIDE + 1] = (this.groundAt[i * AT_STRIDE + 1]! - u0) / this.stripW;
     this.buildRidge(g);
     this.buildBuried(g);
+    this.buildTree(g);
     if (!gl || this.lost || !this.vbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
+    gl.bindTexture(gl.TEXTURE_2D, this.groundAtTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.cols, 1, gl.RGBA, gl.FLOAT, this.groundAt);
+  }
+
+  /**
+   * The tree's mesh: its picture at the library's size, its foot (the manifest's anchor) SINK under the floor under
+   * its centre. Above KNEE it stands upright; below, each column bends toward the floor under it, so the foot follows
+   * a slope instead of floating over one side of it.
+   */
+  private buildTree(g: Ground): void {
+    const gl = this.gl;
+    const f = frames[TREE];
+    const w = f.w * f.s;
+    const h = f.h * f.s;
+    const foot = f.ay / f.h;
+    const base = heightAt(g, TREE_X) - SINK;
+    const v = this.treeVerts;
+    for (let i = 0; i <= TREE_COLS; i++) {
+      const u = i / TREE_COLS;
+      const x = TREE_X + (u - f.ax / f.w) * w;
+      const bend = heightAt(g, x) - heightAt(g, TREE_X);
+      TREE_ROWS.forEach((r, k) => {
+        const y = base + (foot - r) * h + bend * Math.min(1, Math.max(0, (r - KNEE) / (foot - KNEE)));
+        // u, v in its page (the picture sits GAP texels in, the relief page has the same layout)
+        const uv = [(f.x + u * f.w) / TREE_PAGE.w, (f.y + r * f.h) / TREE_PAGE.h];
+        v.set([x, y, ...uv], (i * TREE_ROWS.length + k) * TREE_STRIDE);
+      });
+    }
+    if (!gl || this.lost || !this.treeVbo) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
   }
 
@@ -631,7 +766,18 @@ export class ForestRenderer {
 
   frame(dt: number): void {
     const gl = this.gl;
-    if (!gl || this.lost || !this.shown || !this.strip || !this.soils || !this.ridgeTex || !this.mossFill || !this.atlasTex.length) return;
+    if (
+      !gl ||
+      this.lost ||
+      !this.shown ||
+      !this.strip ||
+      !this.soils ||
+      !this.ridgeTex ||
+      !this.mossFill ||
+      !this.atlasTex.length ||
+      !this.treeTex
+    )
+      return;
     this.time += dt;
     this.budget.frame(dt);
     if (this.morph > 0 && this.goal) {
@@ -705,6 +851,9 @@ export class ForestRenderer {
     gl.bindVertexArray(this.mesh);
     gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_SHORT, 0);
 
+    // the tree, after the ground: its foot takes the ground over in height blends
+    this.drawTree(hw, hh, g);
+
     // what lies buried, over the soil: the treasures' halos, every shadow (dropped a little, blurred), then the
     // pictures; an atlas a draw
     const bu = this.buried!;
@@ -760,6 +909,41 @@ export class ForestRenderer {
     gl.bindVertexArray(null);
   }
 
+  /** the tree's mesh, the ground projected onto its foot */
+  private drawTree(hw: number, hh: number, g: Ground): void {
+    const gl = this.gl!;
+    const tr = this.tree!;
+    gl.useProgram(tr.prog);
+    gl.uniform4f(tr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    gl.uniform1f(tr.u.uSink!, SINK);
+    gl.uniform3f(tr.u.uTint!, ...AIR.tint);
+    gl.uniform2f(tr.u.uDrift!, ...g.drift);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.treeTex);
+    gl.uniform1i(tr.u.uTree!, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.reliefTex);
+    gl.uniform1i(tr.u.uRelief!, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.strip);
+    gl.uniform1i(tr.u.uStrip!, 2);
+    gl.uniform1f(tr.u.uCellSeed!, 0);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.mossFill);
+    gl.uniform1i(tr.u.uMossFill!, 3);
+    gl.uniform1f(tr.u.uMossTile!, this.mossTile);
+    gl.uniform3f(tr.u.uMossGain!, ...this.floorMossGain);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, this.groundAtTex);
+    gl.uniform1i(tr.u.uGroundAt!, 4);
+    gl.uniform2f(tr.u.uGroundCols!, WORLD.x0 - MARGIN, COL);
+    gl.uniform1f(tr.u.uLift!, LIFT * this.stripH);
+    gl.uniform1f(tr.u.uMossV!, MOSS);
+    gl.bindVertexArray(this.treeVao);
+    gl.drawElements(gl.TRIANGLES, this.treeCount, gl.UNSIGNED_SHORT, 0);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
   /** the materials the wireframe colours, with their triangles: what the legend lists */
   wireLegend(): WireMaterial[] {
     const quads = this.cols - 1;
@@ -769,6 +953,7 @@ export class ForestRenderer {
       { name: 'ridge.frag · moss body', color: WIRE_COLOR.body, tris: quads * 2 },
       { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
       { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
+      { name: 'tree.frag · tree', color: WIRE_COLOR.tree, tris: TREE_COLS * (TREE_ROWS.length - 1) * 2 },
       // drawn twice unless motion is reduced: halo, then the gems' glints
       {
         name: 'buried.frag · halos, glints',
@@ -810,6 +995,9 @@ export class ForestRenderer {
     gl.drawElements(gl.LINES, this.wireStrip, gl.UNSIGNED_SHORT, 0);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.soil);
     gl.drawElements(gl.LINES, this.wireSoil, gl.UNSIGNED_SHORT, this.wireStrip * 2);
+    gl.bindVertexArray(this.wireTreeVao);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.tree);
+    gl.drawElements(gl.LINES, this.wireTree, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireBuriedVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.buried);
     const things = this.buriedCount.reduce((s, n) => s + n, 0);

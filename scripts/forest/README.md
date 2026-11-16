@@ -289,6 +289,31 @@ and one bright pebble or leaf in the tile turns into a grid. `proto/tiling.ts` d
   vertex from depth + noise, a slow tone on top; leaves and stones as scattered sprites. Three taps per soil pixel.
   The prototype does this now (`gl.soil()`).
 
+### A tree's foot in the ground (step 15)
+
+Where a tree stands in the moss, the cut along its picture's bottom shows. `pack.py` gives every tree a relief page
+beside its own page (`matte/relief.py`): the normal (large shapes from the depth's blurred slope, bark from the
+picture's high-passed luminance) and the depth. The mode merges the foot with them (`shaders/tree.frag`).
+
+- **Depth**: Depth Anything V2 Small, run locally (ONNX, about 2 s a tree on the CPU) reads the trunk as round and the
+  roots apart from each other. vantilator2000/pbr-playground on Replicate (tried first, $0.04 for a tree and a ground
+  strip) gave a flatter depth, and its normal map leaned the trunk's edges only 5°. Vision lists no
+  depth-from-one-picture request; Apple ships Depth Anything V2 as a Core ML model (Vision's `CoreMLRequest` runs
+  it), the same network as here.
+- The depth model sees the cut-out on flat grey; the background never counts (the maps are read inside the alpha).
+- Merges tried (`merges.webp` in `samples/15-relief/`, a dev panel in the mode while it ran): in front with no merge;
+  behind the floor's moss; in front with the ground projected in world space (the moss carpet climbing what faces
+  up, the strip taking over below the floor); behind with a height blend that fills the hollows between roots with
+  moss first; the projection handed over in height blends. **The last one won** and is the mode's.
+- **Cross-fades blur**: the projection mixed moss and strip into the bark at partial weight, so both showed through
+  each other like a double exposure. Handed over in a height blend (the tree's local relief, its depth against its
+  blurred depth, against the moss's luminance) every texel is either bark or moss, hollows first, and both stay sharp.
+  The same relief shades it: moss deep in a hollow darkens to 40 %, the bark there to 75 %.
+- **SDF erosion** (the silhouette eaten from its edges by a distance transform, dithered, the eaten part turned to
+  moss) was dropped: it looked like moss pasted along the outline, no better than behind. In front, eroding to
+  transparent shows the sky through the trunk above the strip's tufts: whatever is eaten has to turn into something.
+- Behind, the strip's opaque moss already hides the cut, so a merge only matters where the tree stands clear of it.
+
 ## Recommended pipeline for the mode
 
 1. A short style line + nano-banana-2 + one mood reference, **neutral overcast light**, and the "never sawn" rule.

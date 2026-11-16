@@ -2,7 +2,7 @@
 // as scripts/forest/matte/pack.py packs it (manifest.json lists every file and its size); only what the scene
 // uses is fetched. The download starts when the mode's code loads, so it runs while the user types; RUN waits
 // for it with a byte count on #boot.
-import { atlases, textures } from './assets/manifest.json';
+import { atlases, frames, textures } from './assets/manifest.json';
 
 /** what the scene uses: the ground strip, the strip of the moss hill behind it (star moss, lichen, clover) and the
  * moss carpets of its body, and the soil horizons in layer order (leafy humus is 3, stony 1) */
@@ -21,10 +21,26 @@ const TEXTURES = [
 /** and the atlases of what lies buried (buried.ts): treasure and pebbles, and the stones */
 export const ATLASES = ['underground-0', 'ground-0'] as const satisfies readonly (keyof typeof atlases)[];
 export type AtlasKey = (typeof ATLASES)[number];
-const USED = [...TEXTURES, ...ATLASES];
+
+/** a page of an atlas; tree pages hold one tree each, with its relief (normal, depth) beside it in the same layout */
+export interface Page {
+  file: string;
+  w: number;
+  h: number;
+  bytes: number;
+  relief?: { file: string; bytes: number };
+}
+const PAGES: Record<string, Page> = atlases;
+/** the tree the scene stands (render.ts places it), and its page */
+export const TREE = 'trees-a/03' satisfies keyof typeof frames;
+export const TREE_PAGE = PAGES[frames[TREE].atlas]!;
+const TREE_RELIEF = TREE_PAGE.relief;
+if (!TREE_RELIEF) throw new Error(`${TREE_PAGE.file}: no relief (re-run scripts/forest/matte/pack.py)`);
+
+const USED = [...TEXTURES, ...ATLASES, 'tree', 'tree-relief'] as const;
 export type AssetKey = (typeof USED)[number];
 
-const FILES: Record<AssetKey, { file: string; bytes: number }> = { ...textures, ...atlases };
+const FILES: Record<AssetKey, { file: string; bytes: number }> = { ...textures, ...atlases, tree: TREE_PAGE, 'tree-relief': TREE_RELIEF };
 
 const URLS = import.meta.glob<string>(
   [
@@ -34,6 +50,9 @@ const URLS = import.meta.glob<string>(
     './assets/tex-soil-*.webp',
     './assets/atlas-underground-0.webp',
     './assets/atlas-ground-0.webp',
+    // every tree page and its relief: the URLs only, a scene fetches the trees it shows
+    './assets/atlas-trees-*.webp',
+    './assets/relief-trees-*.webp',
   ],
   {
     eager: true,
@@ -86,7 +105,8 @@ async function download(): Promise<Assets> {
         for (const l of listeners) l(loaded, total);
       }
       const blob = new Blob(chunks as BlobPart[], { type: 'image/webp' });
-      // premultiplied here, so the upload needs no conversion and mipmaps don't bleed transparent texels' colour
+      // premultiplied here, so the upload needs no conversion and mipmaps don't bleed transparent texels' colour (a
+      // relief is opaque: unchanged by it)
       out[key] = await createImageBitmap(blob, { premultiplyAlpha: 'premultiply', colorSpaceConversion: 'none' });
     }),
   );
