@@ -1,0 +1,345 @@
+[
+ {
+  "sheet": "life-parasol",
+  "cell": 0,
+  "level": "warn",
+  "check": "base",
+  "detail": "bottom 96% as wide as its widest row: something drawn under it?"
+ },
+ {
+  "sheet": "life-parasol",
+  "cell": 11,
+  "level": "warn",
+  "check": "base",
+  "detail": "bottom 79% as wide as its widest row: something drawn under it?"
+ },
+ {
+  "sheet": "life-bonnets",
+  "cell": 11,
+  "level": "warn",
+  "check": "base",
+  "detail": "bottom 82% as wide as its widest row: something drawn under it?"
+ },
+ {
+  "sheet": "critters-a",
+  "cell": 1,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs."
+ },
+ {
+  "sheet": "critters-a",
+  "cell": 3,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs."
+ },
+ {
+  "sheet": "critters-a",
+  "cell": 5,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs."
+ },
+ {
+  "sheet": "critters-a",
+  "cell": 7,
+  "level": "warn",
+  "check": "base",
+  "detail": "bottom 74% as wide as its widest row: something drawn under it?"
+ },
+ {
+  "sheet": "critters-b",
+  "cell": null,
+  "level": "warn",
+  "check": "count",
+  "detail": "12 cells, the grid asked for 8"
+ },
+ {
+  "sheet": "critters-b",
+  "cell": 6,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs or antennae."
+ },
+ {
+  "sheet": "critters-b",
+  "cell": 7,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs or antennae."
+ },
+ {
+  "sheet": "critters-b",
+  "cell": 8,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs or antennae."
+ },
+ {
+  "sheet": "critters-b",
+  "cell": 9,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs or antennae."
+ },
+ {
+  "sheet": "critters-b",
+  "cell": 10,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs or antennae."
+ },
+ {
+  "sheet": "critters-b",
+  "cell": 11,
+  "level": "drop",
+  "check": "drop",
+  "detail": "Drawn with legs or antennae."
+ },
+ {
+  "sheet": "plants",
+  "cell": 0,
+  "level": "warn",
+  "check": "base",
+  "detail": "bottom 70% as wide as its widest row: something drawn under it?"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 0,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.59 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 1,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.53 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 2,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.64 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 3,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.45 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 4,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.52 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 5,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.44 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 6,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.56 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "bushes",
+  "cell": 7,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.61 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "moss",
+  "cell": null,
+  "level": "warn",
+  "check": "count",
+  "detail": "16 cells, the grid asked for 12"
+ },
+ {
+  "sheet": "moss-strips",
+  "cell": 1,
+  "level": "reject",
+  "check": "cut",
+  "detail": "touches top (100%)"
+ },
+ {
+  "sheet": "moss-strips",
+  "cell": 2,
+  "level": "reject",
+  "check": "fragment",
+  "detail": "area 808 px, the sheet's median is 166098"
+ },
+ {
+  "sheet": "inclusions",
+  "cell": 2,
+  "level": "drop",
+  "check": "drop",
+  "detail": "The root tangle came out as a speck and a sliver."
+ },
+ {
+  "sheet": "treasure",
+  "cell": 0,
+  "level": "warn",
+  "check": "density",
+  "detail": "0.83 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "treasure",
+  "cell": 2,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.57 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "treasure",
+  "cell": 3,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.33 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "treasure",
+  "cell": 4,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.73 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "treasure",
+  "cell": 8,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.83 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "treasure",
+  "cell": 13,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.79 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 0,
+  "level": "warn",
+  "check": "base",
+  "detail": "bottom 81% as wide as its widest row: something drawn under it?"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 0,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.03 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 1,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.03 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 2,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.03 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 3,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.03 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 4,
+  "level": "warn",
+  "check": "density",
+  "detail": "0.86 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 5,
+  "level": "warn",
+  "check": "density",
+  "detail": "0.86 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 6,
+  "level": "warn",
+  "check": "density",
+  "detail": "0.86 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "deadwood",
+  "cell": 7,
+  "level": "warn",
+  "check": "density",
+  "detail": "0.86 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "snags",
+  "cell": 1,
+  "level": "reject",
+  "check": "cut",
+  "detail": "touches right (15%)"
+ },
+ {
+  "sheet": "snags",
+  "cell": 2,
+  "level": "reject",
+  "check": "cut",
+  "detail": "touches right (4%)"
+ },
+ {
+  "sheet": "snags",
+  "cell": 0,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.29 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "snags",
+  "cell": 3,
+  "level": "warn",
+  "check": "density",
+  "detail": "1.48 texels per unit (wants 2)"
+ },
+ {
+  "sheet": "trees-a",
+  "cell": null,
+  "level": "warn",
+  "check": "count",
+  "detail": "4 cells, the grid asked for 2"
+ },
+ {
+  "sheet": "trunks-a",
+  "cell": 0,
+  "level": "reject",
+  "check": "cut",
+  "detail": "touches right (4%)"
+ },
+ {
+  "sheet": "trunks-a",
+  "cell": 1,
+  "level": "drop",
+  "check": "drop",
+  "detail": "A grid line drawn behind the trunks (the repair only finds lines drawn over subjects) stays across the oak."
+ }
+]
