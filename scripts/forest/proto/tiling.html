@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FOREST_ soil tiling</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0d0b08;
+        font:
+          13px/1.4 ui-monospace,
+          monospace;
+        color: #d8cdb8;
+      }
+      #wrap {
+        position: relative;
+        width: fit-content;
+      }
+      canvas {
+        display: block;
+      }
+      .tag {
+        position: absolute;
+        padding: 3px 7px;
+        background: rgb(13 11 8 / 0.78);
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap"><canvas></canvas></div>
+    <script type="module" src="./tiling.ts"></script>
+  </body>
+</html>

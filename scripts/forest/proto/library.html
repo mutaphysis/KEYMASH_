@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FOREST_ asset library</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0d0b08;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        font:
+          13px/1.4 ui-monospace,
+          monospace;
+        color: #d8cdb8;
+      }
+      canvas {
+        display: block;
+      }
+      #loader {
+        position: fixed;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+      }
+      #track {
+        height: 3px;
+        background: #2a251f;
+        margin-bottom: 6px;
+        transition: opacity 0.6s;
+      }
+      #bar {
+        height: 100%;
+        width: 0;
+        background: #d6ac70;
+      }
+      #loader.done #track {
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <div id="loader">
+      <div id="track"><div id="bar"></div></div>
+      <div id="label">gathering moss…</div>
+    </div>
+    <script type="module" src="./library.ts"></script>
+  </body>
+</html>
