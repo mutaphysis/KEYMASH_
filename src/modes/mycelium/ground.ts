@@ -17,7 +17,17 @@ export interface Ground {
   drift: [number, number];
   /** how thick the moss is along the floor, as waves around 1 (the strip as photographed): amplitude, frequency, phase */
   moss: [number, number, number][];
+  /** the mossy hill behind the floor: its waves (amplitude, frequency, phase), how far they reach (view units per unit
+   * of normalised wave) and the wave level at the floor, so the hill shows over it RIDGE_SHOWS of the way */
+  ridge: [number, number, number][];
+  ridgeAmp: number;
+  ridgeLevel: number;
 }
+
+/** how much of the floor's length the hill behind it shows over it, and how far above the floor it rises at most
+ * (about 11 cm: its moss band in render.ts, RIDGE_STRETCH, must still reach down behind the floor's moss) */
+export const RIDGE_SHOWS = 0.3;
+export const RIDGE_RISE = 40;
 
 /** the ground of a text */
 export function readGround(src: string): Ground {
@@ -43,7 +53,33 @@ export function readGround(src: string): Ground {
     [span(0.18, 0.3), span(0.0018, 0.0035), span(0, 6.3)],
     [span(0.08, 0.14), span(0.007, 0.012), span(0, 6.3)],
   ];
-  return { waves, bumps, bands: [b0, b1, b2], drift, moss };
+  const ridge: [number, number, number][] = [
+    [1, span(0.004, 0.006), span(0, 6.3)],
+    [span(0.3, 0.5), span(0.009, 0.013), span(0, 6.3)],
+  ];
+  // the level the hill's waves top RIDGE_SHOWS of the way, and the reach that puts its highest crest RIDGE_RISE up
+  const ws: number[] = [];
+  for (let x = WORLD.x0; x <= WORLD.x1; x += 4) ws.push(ridgeWave(ridge, x));
+  ws.sort((a, b) => a - b);
+  const ridgeLevel = ws[Math.floor((1 - RIDGE_SHOWS) * (ws.length - 1))]!;
+  const ridgeAmp = RIDGE_RISE / Math.max(0.05, ws[ws.length - 1]! - ridgeLevel);
+  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, ridgeAmp, ridgeLevel };
+}
+
+/** the hill's waves at x, normalised to -1 … 1 */
+function ridgeWave(ridge: [number, number, number][], x: number): number {
+  let w = 0;
+  let sum = 0;
+  for (const [a, f, p] of ridge) {
+    w += a * Math.sin(x * f + p);
+    sum += a;
+  }
+  return w / sum;
+}
+
+/** the top of the mossy hill behind the floor at x: the floor's curve, raised and lowered by larger waves */
+export function ridgeAt(g: Ground, x: number): number {
+  return heightAt(g, x) + g.ridgeAmp * (ridgeWave(g.ridge, x) - g.ridgeLevel);
 }
 
 /** the top of the forest floor at x */
@@ -72,5 +108,8 @@ export function mixGround(a: Ground, b: Ground, k: number): Ground {
     bands: row(a.bands, b.bands),
     drift: row(a.drift, b.drift),
     moss: a.moss.map((w, i) => row(w, b.moss[i]!)),
+    ridge: a.ridge.map((w, i) => row(w, b.ridge[i]!)),
+    ridgeAmp: m(a.ridgeAmp, b.ridgeAmp),
+    ridgeLevel: m(a.ridgeLevel, b.ridgeLevel),
   };
 }

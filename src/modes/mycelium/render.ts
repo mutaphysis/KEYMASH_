@@ -1,16 +1,18 @@
 // MYCELIUM_'s picture: a side view of the forest floor in WebGL2, panned in x and y. Layers are drawn back to
 // front into a target sized by the pixel budget, then finished onto the canvas:
 //   sky     the air behind everything (full screen)
+//   ridge   a mossy hill behind the floor: the moss band of a second strip on larger waves, showing over the floor
+//           along part of it (ground.ts, RIDGE_SHOWS); the floor in front hides where its moss ends
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
 //   post    contrast, vignette, grain
 //   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
 // Shaders live in shaders/, one file per piece.
 import type { Assets } from './assets';
-import { WORLD, heightAt, mixGround, mossAt } from './ground';
+import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
 import { freeTarget, program, target, texture, textureArray } from './gl';
 import type { GL, Program, Target } from './gl';
-import { GROUND_FS, GROUND_VS, POST_FS, SCREEN_VS, SKY_FS, WIRE_FS, WIRE_VS } from './shaders';
+import { GROUND_FS, GROUND_VS, POST_FS, RIDGE_FS, RIDGE_VS, SCREEN_VS, SKY_FS, WIRE_FS, WIRE_VS } from './shaders';
 import { PixelBudget } from '../../ui/budget';
 
 type RGB = [number, number, number];
@@ -22,8 +24,9 @@ export interface WireMaterial {
   color: RGBA;
   tris: number;
 }
-const WIRE_COLOR: Record<'sky' | 'strip' | 'soil' | 'post', RGBA> = {
+const WIRE_COLOR: Record<'sky' | 'ridge' | 'strip' | 'soil' | 'post', RGBA> = {
   sky: [0.35, 0.8, 1, 0.9],
+  ridge: [0.25, 1, 0.85, 0.85],
   strip: [0.55, 1, 0.35, 0.85],
   soil: [1, 0.62, 0.2, 0.85],
   post: [1, 0.35, 0.85, 0.9],
@@ -48,6 +51,17 @@ const MARGIN = 320;
 const LIFT = 0.1;
 /** where the moss ends in the strip picture (v, measured off assets/tex-ground.webp: below it, no green) */
 const MOSS = 0.57;
+/** where the moss ends in the hill's strip picture (assets/tex-ground-c.webp: green down to about here, then stones) */
+const RIDGE_MOSS = 0.38;
+/**
+ * The hill's moss band is drawn this much taller than photographed: its opaque part must reach from above the
+ * hill's highest crest (RIDGE_RISE over the floor) down behind the floor's moss, or sky would show under it.
+ */
+const RIDGE_STRETCH = 1.4;
+/** the hill is a little darker: further back, more shaded */
+const RIDGE_SHADE = 0.82;
+/** the hill's strip cells are seeded apart from the floor's, so their seams don't line up */
+const RIDGE_SEED = 17;
 /** floats per ground vertex: position, uv, depth, where the moss ends in its column */
 const STRIDE = 6;
 /** the strip gives way to the soil from v FADE[0] to FADE[1], the line rising and dipping by up to FADE[2] / 2 */
@@ -67,6 +81,16 @@ const AIR = {
   tint: [1, 0.98, 0.94] as RGB,
   deep: [0.035, 0.03, 0.025] as RGB,
 };
+
+/** the normal into the ground under curve `f` at x, blended with straight down so steep bits don't fold over */
+function inward(f: (x: number) => number, x: number): [number, number] {
+  const ty = f(x + COL) - f(x - COL);
+  const tl = Math.hypot(2 * COL, ty);
+  const nx = (ty / tl) * 0.6;
+  const ny = ((-2 * COL) / tl) * 0.6 - 0.4;
+  const nl = Math.hypot(nx, ny);
+  return [nx / nl, ny / nl];
+}
 
 /**
  * The colour of a band of rows (0 … 1 from the top) between its bright bits: a geometric mean, so a few light pebbles
@@ -111,6 +135,12 @@ export class ForestRenderer {
   private mesh: WebGLVertexArrayObject | null = null;
   private vbo: WebGLBuffer | null = null;
   private count = 0;
+  private ridge: Program | null = null;
+  private ridgeVao: WebGLVertexArrayObject | null = null;
+  private ridgeVbo: WebGLBuffer | null = null;
+  private ridgeCount = 0;
+  private wireRidgeVao: WebGLVertexArrayObject | null = null;
+  private wireRidge = 0;
   private wireP: Program | null = null;
   private wireScreen: Program | null = null;
   private wireVao: WebGLVertexArrayObject | null = null;
@@ -123,12 +153,17 @@ export class ForestRenderer {
   private stripH = 1;
   private soilTile = 1;
   private soilGain: RGB = [1, 1, 1];
+  private ridgeTex: WebGLTexture | null = null;
+  /** the hill strip's height in view units, as photographed */
+  private ridgeH = 1;
 
   /** the ground drawn now, the one it eases toward, and how long that still takes */
   private shown: Ground | null = null;
   private goal: Ground | null = null;
   private morph = 0;
   private verts: Float32Array;
+  /** the hill: per column its top and the bottom of its moss band; position, uv */
+  private ridgeVerts: Float32Array;
   private cols: number;
 
   constructor(cv: HTMLCanvasElement) {
@@ -138,6 +173,7 @@ export class ForestRenderer {
     this.budget = new PixelBudget(undefined, typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches ? 0 : TOUCH);
     this.cols = Math.floor((WORLD.x1 - WORLD.x0 + 2 * MARGIN) / COL) + 1;
     this.verts = new Float32Array(this.cols * 3 * STRIDE);
+    this.ridgeVerts = new Float32Array(this.cols * 2 * 4);
     cv.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.lost = true;
@@ -212,6 +248,40 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...strip, ...soil]), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
+    // the hill: two rows per column, one quad per column pair; pos xy, uv
+    this.ridge = program(gl, RIDGE_VS, RIDGE_FS);
+    this.ridgeVao = gl.createVertexArray();
+    this.ridgeVbo = gl.createBuffer();
+    gl.bindVertexArray(this.ridgeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, this.ridgeVerts.byteLength, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+    const ridx: number[] = [];
+    const rlines: number[] = [];
+    for (let i = 0; i < this.cols; i++) {
+      const a = i * 2;
+      const b = a + 2;
+      rlines.push(a, a + 1);
+      if (i + 1 < this.cols) {
+        ridx.push(a, a + 1, b, b, a + 1, b + 1);
+        rlines.push(a, b, a + 1, b + 1, a + 1, b);
+      }
+    }
+    this.ridgeCount = ridx.length;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ridx), gl.STATIC_DRAW);
+    this.wireRidgeVao = gl.createVertexArray();
+    gl.bindVertexArray(this.wireRidgeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+    this.wireRidge = rlines.length;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(rlines), gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
   }
 
   /** the pictures as textures; the soils' scale and colour follow the strip they meet */
@@ -231,6 +301,9 @@ export class ForestRenderer {
     const s = soilColor(a.ground, FADE[0], 1);
     const l = soilColor(a['soil-3'], 0, 1);
     this.soilGain = s.map((v, k) => Math.max(0.6, Math.min(1.6, v / Math.max(0.01, l[k]!)))) as RGB;
+    // the hill behind: another strip at the same texel scale, only its moss band is drawn
+    this.ridgeTex = texture(gl, a['ground-c'], 'clamp', 'clamp');
+    this.ridgeH = (STRIP_TILE * a['ground-c'].height) / a['ground-c'].width;
   }
 
   /** a new ground: eases in from the one shown, or snaps (`now`, or nothing shown yet) */
@@ -318,14 +391,7 @@ export class ForestRenderer {
       if (x <= 0) u0 = arc;
       px = x;
       py = y;
-      // the normal into the ground, blended with straight down so steep bits don't fold over
-      const ty = heightAt(g, x + COL) - heightAt(g, x - COL);
-      const tl = Math.hypot(2 * COL, ty);
-      let nx = (ty / tl) * 0.6;
-      let ny = ((-2 * COL) / tl) * 0.6 - 0.4;
-      const nl = Math.hypot(nx, ny);
-      nx /= nl;
-      ny /= nl;
+      const [nx, ny] = inward((x) => heightAt(g, x), x);
       const s = mossAt(g, x);
       const Hc = H * (MOSS * s + 1 - MOSS);
       const m = (MOSS * s) / (MOSS * s + 1 - MOSS);
@@ -338,8 +404,35 @@ export class ForestRenderer {
     }
     // arc length → strip repeats, from x = 0
     for (let i = 0; i < this.cols * 3; i++) v[i * STRIDE + 2] = (v[i * STRIDE + 2]! - u0) / this.stripW;
+    this.buildRidge(g);
     if (!gl || this.lost || !this.vbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
+  }
+
+  /** the hill behind: per column the top of its strip on ridgeAt, and the bottom of its (stretched) moss band */
+  private buildRidge(g: Ground): void {
+    const gl = this.gl;
+    const v = this.ridgeVerts;
+    const lift = LIFT * this.ridgeH;
+    const band = RIDGE_MOSS * this.ridgeH * RIDGE_STRETCH;
+    let arc = 0;
+    let u0 = 0;
+    let px = 0;
+    let py = 0;
+    for (let i = 0; i < this.cols; i++) {
+      const x = WORLD.x0 - MARGIN + i * COL;
+      const y = ridgeAt(g, x) + lift;
+      if (i > 0) arc += Math.hypot(x - px, y - py);
+      if (x <= 0) u0 = arc;
+      px = x;
+      py = y;
+      const [nx, ny] = inward((x) => ridgeAt(g, x), x);
+      v.set([x, y, arc, 0, x + nx * band, y + ny * band, arc, 1], i * 8);
+    }
+    for (let i = 0; i < this.cols * 2; i++) v[i * 4 + 2] = (v[i * 4 + 2]! - u0) / STRIP_TILE;
+    if (!gl || this.lost || !this.ridgeVbo) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
   }
 
@@ -357,7 +450,7 @@ export class ForestRenderer {
 
   frame(dt: number): void {
     const gl = this.gl;
-    if (!gl || this.lost || !this.shown || !this.strip || !this.soils) return;
+    if (!gl || this.lost || !this.shown || !this.strip || !this.soils || !this.ridgeTex) return;
     this.time += dt;
     this.budget.frame(dt);
     if (this.morph > 0 && this.goal) {
@@ -389,11 +482,25 @@ export class ForestRenderer {
     gl.bindVertexArray(this.empty);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // ground: premultiplied over the sky
+    // the hill behind, then the floor in front of it: premultiplied over the sky
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    const ri = this.ridge!;
+    gl.useProgram(ri.prog);
+    gl.uniform4f(ri.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.ridgeTex);
+    gl.uniform1i(ri.u.uStrip!, 0);
+    gl.uniform1f(ri.u.uCellSeed!, RIDGE_SEED);
+    gl.uniform1f(ri.u.uMossEnd!, RIDGE_MOSS);
+    gl.uniform1f(ri.u.uShade!, RIDGE_SHADE);
+    gl.uniform3f(ri.u.uTint!, ...AIR.tint);
+    gl.bindVertexArray(this.ridgeVao);
+    gl.drawElements(gl.TRIANGLES, this.ridgeCount, gl.UNSIGNED_SHORT, 0);
+
     const gr = this.ground!;
     gl.useProgram(gr.prog);
+    gl.uniform1f(gr.u.uCellSeed!, 0);
     gl.uniform4f(gr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.strip);
@@ -434,6 +541,7 @@ export class ForestRenderer {
     const quads = this.cols - 1;
     return [
       { name: 'sky.frag · full-screen', color: WIRE_COLOR.sky, tris: 1 },
+      { name: 'ridge.frag · moss hill', color: WIRE_COLOR.ridge, tris: quads * 2 },
       { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
       { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
       { name: 'post.frag · full-screen', color: WIRE_COLOR.post, tris: 1 },
@@ -459,6 +567,9 @@ export class ForestRenderer {
     const w = this.wireP!;
     gl.useProgram(w.prog);
     gl.uniform4f(w.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    gl.bindVertexArray(this.wireRidgeVao);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.ridge);
+    gl.drawElements(gl.LINES, this.wireRidge, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.strip);
     gl.drawElements(gl.LINES, this.wireStrip, gl.UNSIGNED_SHORT, 0);

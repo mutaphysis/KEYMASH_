@@ -8,6 +8,8 @@ import soil from './soil.glsl?raw';
 import strip from './strip.glsl?raw';
 import groundVert from './ground.vert?raw';
 import groundFrag from './ground.frag?raw';
+import ridgeVert from './ridge.vert?raw';
+import ridgeFrag from './ridge.frag?raw';
 import screenVert from './screen.vert?raw';
 import skyFrag from './sky.frag?raw';
 import postFrag from './post.frag?raw';
@@ -19,6 +21,8 @@ const glsl = (...parts: string[]) => HEAD + parts.join('\n');
 
 export const GROUND_VS = glsl(camera, groundVert);
 export const GROUND_FS = glsl(noise, blend, hex, soil, strip, groundFrag);
+export const RIDGE_VS = glsl(camera, ridgeVert);
+export const RIDGE_FS = glsl(noise, blend, strip, ridgeFrag);
 export const SCREEN_VS = glsl(camera, screenVert);
 export const SKY_FS = glsl(noise, skyFrag);
 export const POST_FS = glsl(noise, postFrag);

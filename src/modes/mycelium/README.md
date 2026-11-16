@@ -14,6 +14,8 @@ The whole text seeds the ground. The same text always gives the same ground; any
 - **The soil horizons**: how deep the leafy humus reaches, where the dark humus turns plain and the plain turns stony.
 - **The moss's thickness** along the floor: two waves, from 0.6 to 1.45 times the photographed moss.
 - **Where the borders wander**: the noise that bends horizon borders and tones the soil is read at a place of the text's own.
+- **The mossy hill behind**: its larger waves, placed so it shows over the floor along 30 % of the world and rises at
+  most 40 view units (about 11 cm) above it.
 
 Editing while it runs eases the old ground into the new one (about half a second; at once with reduced motion).
 
@@ -32,6 +34,7 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 | layer | what | shaders |
 | --- | --- | --- |
 | sky | the air behind everything: haze toward the floor, a soft light, slow mist; a placeholder until the backdrop comes | `screen.vert`, `sky.frag` |
+| ridge | a mossy hill behind the floor, same distance (no parallax): the moss band of a second strip (`tex-ground-c.webp`: star moss, lichen, clover) on the floor's curve plus larger waves, only its moss, a little darker | `ridge.vert`, `ridge.frag` with `strip.glsl` |
 | ground | one mesh: per column the strip's top on the curve, its bottom along the curve's normal (blended with straight down, so steep bits don't fold), the bottom of the world | `ground.vert`, `ground.frag` with `strip.glsl`, `soil.glsl` |
 | post | a gentle contrast curve, vignette, film grain | `post.frag` |
 
@@ -56,19 +59,22 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
   long stretches and frays into blotches up close, so the strip's gravel band changes thickness and never ends along
   a ruled line. The soil's colour is matched to the strip over the hand-over band (geometric means, so bright pebbles
   don't count).
+- **The hill behind** draws only its strip's moss band (the picture's top 38 %), stretched 1.4× so its opaque moss
+  reaches from above its highest crest down behind the floor's moss: no soil and no sky show under it. Where it
+  dips below the floor, the floor hides it. Its strip cells are seeded apart from the floor's (`uCellSeed`).
 - Colours are premultiplied throughout; the bitmaps are decoded premultiplied, so mipmaps don't bleed transparent
   texels' colour into the moss edges.
 
 ## Debugging
 
 In dev builds (`bun run dev`) a grid button sits left of fullscreen while the mode plays. It draws every draw's
-edges over the picture in one colour per shader or material (sky, ground strip, ground soil, post), with a legend
-of triangle counts in the top left. The full-screen triangle of sky and post runs off screen, so only its legend
-line shows. Off, it costs nothing; on, about 4,400 line segments in two draws.
+edges over the picture in one colour per shader or material (sky, moss hill, ground strip, ground soil, post), with a
+legend of triangle counts in the top left. The full-screen triangle of sky and post runs off screen, so only its legend
+line shows. Off, it costs nothing; on, about 5,500 line segments in three draws.
 
 ## Assets
 
 `assets/` is the forest library as `scripts/forest/matte/pack.py` packs it (`scripts/forest/samples/pack`): atlases,
 textures, `manifest.json`, `report.json`. It is copied as it is (`oxfmt` leaves it alone). Only what the scene uses is
-bundled and fetched (`assets.ts`: the ground strip and the four soils, about 650 kB); the download starts when the
+bundled and fetched (`assets.ts`: two ground strips and the four soils, about 1 MB); the download starts when the
 mode's code loads and shows its byte count on the boot screen.

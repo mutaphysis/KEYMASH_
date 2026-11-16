@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { heightAt, mixGround, mossAt, readGround, WORLD } from '../src/modes/mycelium/ground';
+import { heightAt, mixGround, mossAt, readGround, ridgeAt, RIDGE_RISE, RIDGE_SHOWS, WORLD } from '../src/modes/mycelium/ground';
 
 const TEXTS = ['', 'a', 'under the spruces\nneedles and moss', '🍄🐌🪲', '\ud800 lone \udfff', '\0\0\0', 'x'.repeat(5000)];
 
@@ -17,6 +17,21 @@ test('any text gives a sane ground: finite, within reach of the view, horizons i
     expect(a).toBeGreaterThan(150);
     expect(b).toBeGreaterThan(a);
     expect(c).toBeGreaterThan(b);
+  }
+});
+
+test('the moss hill behind shows over the floor along about RIDGE_SHOWS of the world, never higher than RIDGE_RISE', () => {
+  for (const src of [...TEXTS, ...Array.from({ length: 60 }, (_, i) => `line ${i} ${'ölk'.repeat(i)}`)]) {
+    const g = readGround(src);
+    let over = 0;
+    let n = 0;
+    for (let x = WORLD.x0; x <= WORLD.x1; x += 3, n++) {
+      const d = ridgeAt(g, x) - heightAt(g, x);
+      expect(Number.isFinite(d)).toBe(true);
+      expect(d).toBeLessThan(RIDGE_RISE + 1);
+      if (d > 0) over++;
+    }
+    expect(Math.abs(over / n - RIDGE_SHOWS)).toBeLessThan(0.02);
   }
 });
 

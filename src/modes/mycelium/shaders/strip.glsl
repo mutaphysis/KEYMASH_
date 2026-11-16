@@ -3,7 +3,8 @@
 // depth, so a seam is never a straight cut); each cell shows its own stretch of the strip, mirrored half the time,
 // and neighbours meet in a height blend: where one has a taller tuft or a brighter leaf, that one stays whole.
 
-uniform sampler2D uStrip; // premultiplied, clamped: no cell reads past its edges
+uniform sampler2D uStrip;  // premultiplied, clamped: no cell reads past its edges
+uniform float uCellSeed;  // each layer its own cells, so two layers of strips don't line up
 
 const float CELL = 0.42;   // strip widths per cell
 const float SEAM = 0.06;   // half the width of the blend at a border, in strip widths
@@ -12,12 +13,13 @@ const float SWAY = 0.05;   // and wander this far (strip widths) from top to bot
 
 /** where the border before cell k lies at depth v */
 float stripBorder(float k, float v) {
-  return (k + (hash12(vec2(k, 7.31)) - 0.5) * 2.0 * JITTER) * CELL + (vnoise(vec2(k * 3.7, v * 2.5)) - 0.5) * 2.0 * SWAY;
+  return (k + (hash12(vec2(k, 7.31 + uCellSeed)) - 0.5) * 2.0 * JITTER) * CELL +
+    (vnoise(vec2(k * 3.7 + uCellSeed, v * 2.5)) - 0.5) * 2.0 * SWAY;
 }
 
 /** cell k's texel at u, v: its own offset into the strip, maybe mirrored; the gradients keep the mip steady at borders */
 vec4 stripCell(float k, vec2 uv, vec2 dx, vec2 dy) {
-  vec2 h = hash22(vec2(k, 2.17));
+  vec2 h = hash22(vec2(k, 2.17 + uCellSeed));
   // how far the cell reaches past its nominal span (jitter, sway, blend) either side: it reads only inside the strip
   float reach = JITTER * CELL + SWAY + SEAM;
   float local = uv.x - k * CELL;
