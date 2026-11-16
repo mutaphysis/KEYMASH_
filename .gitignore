@@ -3,4 +3,5 @@ dist
 
 
 .env.local
+.claude/launch.json
 scripts/forest/samples/

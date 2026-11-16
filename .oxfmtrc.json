@@ -2,5 +2,5 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "printWidth": 140,
   "singleQuote": true,
-  "ignorePatterns": ["dist", "bun.lock", "public", "*.md", "src/modes/*/assets"]
+  "ignorePatterns": ["dist", "bun.lock", "public", "*.md", "src/modes/*/assets", ".claude"]
 }
