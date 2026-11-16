@@ -1,6 +1,8 @@
 // The soil: four horizons of the library's soil textures (one texture array), hex-tiled so no repeat shows.
 // Down from the ground strip: leafy humus, dark humus, plain, stony. Each hex vertex picks its horizon by its own
-// depth, moved by slow noise, so borders wander and interlock patch by patch instead of running as lines.
+// depth, bent by noise at two scales (broad swells, narrower tongues), so borders rise and dip instead of running
+// along the floor, and interlock patch by patch. Here and there a pocket holds a horizon from above or below:
+// gravel in the humus, humus washed down into the gravel.
 // No rotation, offsets and left-right mirroring only: the soil is lit from above.
 
 uniform highp sampler2DArray uSoil;
@@ -11,6 +13,10 @@ uniform vec3 uSoilGain;  // matches the soil's colour to the strip it meets
 uniform vec3 uDeep;      // what the soil darkens toward, deep down
 
 const float PATCH = 1.0;
+const float SWELL = 240.0;  // how far a border rises and dips over broad stretches (view units, peak to peak)
+const float TONGUE = 110.0; // and in narrower tongues
+const float POCKETS = 0.74; // pocket noise above this: a lens of another horizon (higher: fewer)
+const float LENS = 190.0;   // how far up or down a pocket reaches for its horizon
 
 float horizon(float d) {
   return d < uBands.x ? 3.0 : d < uBands.y ? 2.0 : d < uBands.z ? 0.0 : 1.0;
@@ -18,10 +24,16 @@ float horizon(float d) {
 
 vec3 soilTap(vec2 uv, vec2 world, float depth, vec2 v, vec2 dx, vec2 dy) {
   // the vertex's place in the world (uv runs down as y runs up), and its depth: the pixel's, moved by how far
-  // the vertex lies above or below it, plus wander
+  // the vertex lies above or below it, then bent
   vec2 st = hexVertex(v) * PATCH / HEX_K * uSoilTile;
   vec2 vw = vec2(st.x, -st.y);
-  float d = depth + world.y - vw.y + (fbm(vw / 260.0 + uDrift) - 0.5) * 90.0 + (hash12(v + 91.0) - 0.5) * 24.0;
+  float d = depth + world.y - vw.y;
+  d += (fbm(vw / vec2(620.0, 380.0) + uDrift) - 0.5) * SWELL;
+  d += (fbm(vw / vec2(150.0, 110.0) + uDrift + 17.0) - 0.5) * TONGUE;
+  d += (hash12(v + 91.0) - 0.5) * 40.0;
+  // pockets: blobs a few patches across, reaching up or down by their own sign
+  vec2 pw = vw / 170.0 + uDrift * 1.3 + 40.0;
+  if (vnoise(pw) > POCKETS) d += (vnoise(pw * 0.37 + 9.0) < 0.5 ? -LENS : LENS);
   vec2 h = hash22(v);
   vec2 u = uv + h;
   if (fract(h.x * 13.7) > 0.5) u.x = -u.x;
