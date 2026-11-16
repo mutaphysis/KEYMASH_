@@ -7,6 +7,7 @@ layout(location = 1) in vec2 aUV;     // in its atlas
 layout(location = 2) in float aDepth; // view units below the forest floor
 layout(location = 3) in vec4 aRect;   // the picture in its atlas: u0, v0, u1, v1
 layout(location = 4) in float aReach; // how far the halo spreads the picture's outline (texels)
+layout(location = 5) in float aGem;   // 1 for a gem: stained less, and it glints
 
 uniform vec2 uOffset; // world units the whole pass moves by: the shadow drops below the thing
 
@@ -15,6 +16,7 @@ out vec2 vUV;
 out float vDepth;
 flat out vec4 vRect;
 flat out float vReach;
+flat out float vGem;
 
 void main() {
   vWorld = aPos;
@@ -22,5 +24,6 @@ void main() {
   vDepth = aDepth;
   vRect = aRect;
   vReach = aReach;
+  vGem = aGem;
   gl_Position = toClip(aPos + uOffset);
 }

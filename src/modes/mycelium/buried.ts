@@ -1,6 +1,7 @@
-// What lies buried under MYCELIUM_'s forest floor, read from the text: treasure (a chest, coins, pots, a sword…) and
-// stones, scattered through the soil horizons. Pure and DOM-free. Sizes come from the library's manifest (view units
-// per texel), so a chest stays a chest and a pebble a pebble; nothing overlaps, nothing pokes up into the moss.
+// What lies buried under MYCELIUM_'s forest floor, read from the text: treasure (a chest, coins, pots, a sword…, raw
+// gems) and stones, scattered through the soil horizons. Pure and DOM-free. Sizes come from the library's manifest
+// (view units per texel), so a chest stays a chest and a pebble a pebble; nothing overlaps, nothing pokes up into
+// the moss.
 import { frames } from './assets/manifest.json';
 
 export type BuriedFrame = keyof typeof frames;
@@ -17,8 +18,10 @@ export interface Buried {
   flip: boolean;
 }
 
-/** the treasure sheet, every one of them (a chest, coins, pots, an amphora, a sword, a dagger, a ring, a key…) */
-const TREASURE = Array.from({ length: 16 }, (_, i) => `treasure/${String(i).padStart(2, '0')}` as BuriedFrame);
+const sheet = (name: string) => Array.from({ length: 16 }, (_, i) => `${name}/${String(i).padStart(2, '0')}` as BuriedFrame);
+/** treasure: the treasure sheet (a chest, coins, pots, an amphora, a sword, a dagger, a ring, a key…) and the crystals
+ * sheet (raw gems: an amethyst geode, a ruby, an emerald, quartz, lapis…), each piece as likely as any other */
+const TREASURE = [...sheet('treasure'), ...sheet('crystals')];
 /** bare stones only: the ones with moss caps or lichen grew in the light (stones 05, 06, 09), plus the soil's pebbles */
 const STONES: BuriedFrame[] = [
   'stones/00',
@@ -72,7 +75,7 @@ export function readBuried(r: () => number, bands: readonly [number, number, num
     return true;
   };
 
-  // a shuffled pick of the treasure sheet: each piece at most once
+  // a shuffled pick of the treasure: each piece at most once
   const pick = [...TREASURE];
   for (let i = pick.length - 1; i > 0; i--) {
     const j = Math.floor(r() * (i + 1));
@@ -94,6 +97,12 @@ export function readBuried(r: () => number, bands: readonly [number, number, num
   return out;
 }
 
+/** treasure and gems: what gets a halo of disturbed earth */
 export function isTreasure(frame: BuriedFrame): boolean {
-  return frame.startsWith('treasure/');
+  return frame.startsWith('treasure/') || isGem(frame);
+}
+
+/** gems keep their colour (the soil stains and shades them less) and now and then glint */
+export function isGem(frame: BuriedFrame): boolean {
+  return frame.startsWith('crystals/');
 }

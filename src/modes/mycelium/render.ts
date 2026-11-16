@@ -11,7 +11,7 @@
 import { ATLASES } from './assets';
 import type { Assets, AtlasKey } from './assets';
 import { atlases, frames } from './assets/manifest.json';
-import { BURIED_MAX, TREASURE_MAX, isTreasure } from './buried';
+import { BURIED_MAX, TREASURE_MAX, isGem, isTreasure } from './buried';
 import type { Buried } from './buried';
 import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
@@ -80,8 +80,12 @@ const ZOOM = [0.5, 4] as const;
 /** a buried thing's quad reaches this many texels past its picture: room for its blurred shadow (the atlases leave
  * 16 texels between pictures, and the shadow's mip level reads about 4 further, so no neighbour bleeds in) */
 const PAD = 6;
-/** floats per buried vertex: position, uv, depth, the picture's rect in its atlas, the halo's reach */
-const BURIED_STRIDE = 10;
+/** floats per buried vertex: position, uv, depth, the picture's rect in its atlas, the halo's reach, gem or not */
+const BURIED_STRIDE = 11;
+/** how much soil stains a gem's picture (other things: fully), and how bright it is (other things: BURIED_DIM): its
+ * colour is the find, so it stands out of the soil a little, deep down too */
+const GEM_STAIN = 0.25;
+const GEM_LIGHT = 0.9;
 /** how dark a buried thing's shadow is, and how far below it it falls (view units: light comes from above) */
 const SHADOW = 0.55;
 const SHADOW_DROP = 3;
@@ -94,7 +98,7 @@ const HALO_DARK = 0.5;
 /** buried things lie out of the sun, in the soil's shade */
 const BURIED_DIM = 0.8;
 /** the passes of buried.frag */
-const PASS = { picture: 0, shadow: 1, halo: 2 } as const;
+const PASS = { picture: 0, shadow: 1, halo: 2, glint: 3 } as const;
 
 /** The air. Neutral daylight for now; the assets carry no mood of their own, so this is where it will change. */
 const AIR = {
@@ -329,7 +333,7 @@ export class ForestRenderer {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...band, ...body]), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
     // what lies buried: a quad per thing (two triangles), then one per treasure's halo; pos xy, uv, depth, the
-    // picture's rect in its atlas, how far the halo reaches (texels)
+    // picture's rect in its atlas, how far the halo reaches (texels), 1 for a gem (less stained; glints)
     this.buried = program(gl, BURIED_VS, BURIED_FS);
     this.buriedVao = gl.createVertexArray();
     this.buriedVbo = gl.createBuffer();
@@ -347,6 +351,8 @@ export class ForestRenderer {
     gl.vertexAttribPointer(3, 4, gl.FLOAT, false, BB, 20);
     gl.enableVertexAttribArray(4);
     gl.vertexAttribPointer(4, 1, gl.FLOAT, false, BB, 36);
+    gl.enableVertexAttribArray(5);
+    gl.vertexAttribPointer(5, 1, gl.FLOAT, false, BB, 40);
     // corners: top left, top right, bottom left, bottom right
     const quads = BURIED_MAX + TREASURE_MAX;
     const bidx = new Uint16Array(quads * 6);
@@ -573,6 +579,7 @@ export class ForestRenderer {
       v[o++] = (f.x + f.w) / A.w;
       v[o++] = (f.y + f.h) / A.h;
       v[o++] = reach;
+      v[o++] = isGem(b.frame) ? 1 : 0;
     }
     return o;
   }
@@ -708,16 +715,21 @@ export class ForestRenderer {
     gl.uniform2f(bu.u.uDrift!, ...g.drift);
     gl.uniform3f(bu.u.uTint!, ...AIR.tint);
     gl.uniform3f(bu.u.uDeep!, ...AIR.deep);
+    gl.uniform1f(bu.u.uGemStain!, GEM_STAIN);
+    gl.uniform1f(bu.u.uGemLight!, GEM_LIGHT);
+    gl.uniform1f(bu.u.uTime!, this.time);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(bu.u.uAtlas!, 0);
     gl.bindVertexArray(this.buriedVao);
-    // halos first, then every shadow, then the pictures: the things' quads per atlas, then the halos' per atlas
+    // halos first, then every shadow, then the pictures, then the gems' glints (on the halo quads, room for their
+    // rays; none with reduced motion): the things' quads per atlas, then the halos' per atlas
     const things = this.buriedCount.reduce((s, n) => s + n, 0);
-    const passes = [
+    const passes: [number, number, number[], number][] = [
       [PASS.halo, HALO_DARK, this.haloCount, things],
       [PASS.shadow, SHADOW, this.buriedCount, 0],
       [PASS.picture, 0, this.buriedCount, 0],
-    ] as const;
+    ];
+    if (!this.gentle) passes.push([PASS.glint, 0, this.haloCount, things]);
     for (const [pass, dark, counts, start] of passes) {
       gl.uniform1i(bu.u.uPass!, pass);
       gl.uniform1f(bu.u.uDark!, dark);
@@ -757,7 +769,12 @@ export class ForestRenderer {
       { name: 'ridge.frag · moss body', color: WIRE_COLOR.body, tris: quads * 2 },
       { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
       { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
-      { name: 'buried.frag · treasure halos', color: WIRE_COLOR.halo, tris: this.haloCount.reduce((s, n) => s + n, 0) * 2 },
+      // drawn twice unless motion is reduced: halo, then the gems' glints
+      {
+        name: 'buried.frag · halos, glints',
+        color: WIRE_COLOR.halo,
+        tris: this.haloCount.reduce((s, n) => s + n, 0) * (this.gentle ? 2 : 4),
+      },
       // drawn twice: shadow, then picture
       { name: 'buried.frag · treasure, stones', color: WIRE_COLOR.buried, tris: this.buriedCount.reduce((s, n) => s + n, 0) * 4 },
       { name: 'post.frag · full-screen', color: WIRE_COLOR.post, tris: 1 },

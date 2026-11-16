@@ -19,14 +19,16 @@ The whole text seeds the ground. The same text always gives the same ground; any
   0.8 m wide; between every two a smaller one (0.35–0.55 m, 20–50 units over the floor), so the hill never runs
   flat. Where cushions meet they nestle with a soft crease (a smooth maximum, not a sum: no dips on top). Together
   they show over the floor along about three quarters of it.
-- **What lies buried**: 6–9 treasures, each a different one off the library's treasure sheet (a chest of coins, pots,
-  an amphora, a sword, a helmet, a crown, a lantern…), well apart, shallow ones likelier so a few show from where the
-  camera starts; and about 150 bare stones and pebbles (the library's stones without moss or lichen, its soil
-  pebbles), sparse in the humus and gathering in the stony horizon. All at their library sizes (a pebble 4 cm, a
-  stone up to 15 cm, the chest 70 cm), a little larger or smaller, turned a little, mirrored half the time. None
-  overlaps another, none reaches up closer than 40 cm under the floor (below the moss), none leaves the world.
-  They sit at a depth below the floor, so they ride along when an edit eases the floor; the things themselves are
-  swapped for the new text's at once.
+- **What lies buried**: 6–9 treasures, each a different one off the library's treasure and crystals sheets, every piece
+  as likely as any other (a chest of coins, pots, an amphora, a sword, a helmet, a crown, a lantern…; raw gems: an
+  amethyst geode, a ruby, an emerald, quartz, opal, lapis…, so about half the finds are gems), well apart, shallow
+  ones likelier so a few show from where the camera starts; and about 150 bare stones and pebbles (the library's
+  stones without moss or lichen, its soil pebbles), sparse in the humus and gathering in the stony horizon. All at
+  their library sizes (a pebble 4 cm, a stone up to 15 cm, a gem 4–15 cm, the chest 70 cm), a little larger or
+  smaller, turned a little, mirrored half the time. None overlaps another, none reaches up closer than 40 cm under
+  the floor (below the moss), none leaves the world. They sit at a depth below the floor, so they ride along when an
+  edit eases the floor; the things themselves are swapped for the new text's at once. Now and then a gem glints: a
+  short twinkle on a bright spot of it, a few seconds apart and most chances skipped (none with reduced motion).
 
 Editing while it runs eases the old ground into the new one (about half a second; at once with reduced motion).
 
@@ -47,7 +49,7 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 | sky | the air behind everything: haze toward the floor, a soft light, slow mist; a placeholder until the backdrop comes | `screen.vert`, `sky.frag` |
 | ridge | a mossy hill behind the floor, same distance (no parallax), on its own waves: the moss band of a second strip (`tex-ground-c.webp`: star moss, lichen, clover) for its outline, a hex-tiled moss carpet (`tex-moss-*.webp`) for its body, a little darker | `ridge.vert`, `ridge.frag` with `strip.glsl`, `mossfill.glsl` |
 | ground | one mesh: per column the strip's top on the curve, its bottom along the curve's normal (blended with straight down, so steep bits don't fold), the bottom of the world | `ground.vert`, `ground.frag` with `strip.glsl`, `soil.glsl` |
-| buried | treasure and stones: a quad each from the library's atlases (`atlas-underground-0`, `atlas-ground-0`), in three passes: a halo of damp, disturbed earth around each treasure in its own shape (its alpha tapped over a disc of 48 taps reaching about a third of its narrow side plus 4 cm, so a sword gets a long narrow halo and a pot a round one; ragged by noise, the soil's colour darkened rather than black, at 40 % strength in the light upper soil rising to full deep down, fading out before the moss), a soft shadow under each thing (its alpha at a fixed mip level, dropped 3 units), then the picture: stained toward the soil's colour, earth clinging in blotches, in the soil's shade and darker with depth like it | `buried.vert`, `buried.frag` |
+| buried | treasure and stones: a quad each from the library's atlases (`atlas-underground-0`, `atlas-ground-0`), in four passes: a halo of damp, disturbed earth around each treasure in its own shape (its alpha tapped over a disc of 48 taps reaching about a third of its narrow side plus 4 cm, so a sword gets a long narrow halo and a pot a round one; ragged by noise, the soil's colour darkened rather than black, at 40 % strength in the light upper soil rising to full deep down, fading out before the moss), a soft shadow under each thing (its alpha at a fixed mip level, dropped 3 units), then the picture: stained toward the soil's colour, earth clinging in blotches, in the soil's shade and darker with depth like it (gems stained a quarter as much, a little less shaded, darkening half as much: their colour is the find), then the gems' glints (a four-pointed star on a bright texel of the gem, its rays growing and fading over half a second, added over the picture on the halo quads, which leave the rays room) | `buried.vert`, `buried.frag` |
 | post | a gentle contrast curve, vignette, film grain | `post.frag` |
 
 - **The strip** (`assets/tex-ground.webp`, moss over soil) is laid along the curve by arc length, 335 view units per
