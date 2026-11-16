@@ -5,8 +5,9 @@
 //            is as soft at any zoom, dropped a little (light comes from above)
 //   picture  the photographs, lit like things above ground, so toned down into the soil: out of the light, their
 //            colour pulled toward the soil's brown, earth clinging to them in blotches, darker with depth as the soil is
-//   glint    now and then a gem catches the light: a short twinkle, a four-pointed star on a bright spot of it, added
-//            over the picture (alpha 0: the premultiplied blend adds it). Drawn on the halo quads, which leave its rays room
+//   glint    now and then a gem catches the light: a short twinkle, a four-pointed star on a bright spot of it, and the
+//            gem glows a little in its own colour meanwhile, both added over the picture (alpha 0: the premultiplied
+//            blend adds them). Drawn on the halo quads, which leave the star's rays room
 
 in vec2 vWorld;
 in vec2 vUV;
@@ -30,6 +31,7 @@ uniform float uTime;      // seconds, for the glints
 out vec4 o;
 
 const int HALO_TAPS = 48;
+const float GLOW = 0.35; // how much of a gem's own colour it adds while it glints
 
 /** the picture's alpha at p, blurred by `lod`; nothing outside its rect, so its neighbours in the atlas don't count */
 float coverage(vec2 p, float lod) {
@@ -37,7 +39,7 @@ float coverage(vec2 p, float lod) {
   return textureLod(uAtlas, p, lod).a;
 }
 
-/** a gem's glint at this pixel: how bright, and its colour (premultiplied, to be added) */
+/** a gem's glint at this pixel: its star and its glow (premultiplied, to be added) */
 vec3 glint() {
   vec2 size = vec2(textureSize(uAtlas, 0));
   vec2 lo = vRect.xy * size, hi = vRect.zw * size; // the picture, in texels
@@ -49,7 +51,9 @@ vec3 glint() {
   if (hash12(vec2(cycle, seed * 91.0)) > 0.5) return vec3(0.0);
   float s = fract(t) * period; // seconds into the cycle
   float pulse = smoothstep(0.0, 0.1, s) * (1.0 - smoothstep(0.1, 0.5, s));
-  if (pulse <= 0.0) return vec3(0.0);
+  // the glow rises with the star and fades a little after it
+  float glow = smoothstep(0.0, 0.12, s) * (1.0 - smoothstep(0.15, 0.9, s));
+  if (glow <= 0.0) return vec3(0.0);
   // where: a bright spot of the gem, a new one each time (a few tries; none found, no glint)
   vec2 c = vec2(-1.0);
   vec3 tone = vec3(1.0);
@@ -69,8 +73,14 @@ vec3 glint() {
   float rays = exp(-abs(d.x) / max(len, 1e-3) * 2.5 - d.y * d.y / 1.6) + exp(-abs(d.y) / max(len, 1e-3) * 2.5 - d.x * d.x / 1.6);
   float core = exp(-dot(d, d) / 6.0);
   // a little of the gem's own colour; deep down it still catches most of the light
-  vec3 light = mix(vec3(1.0), tone, 0.35) * mix(1.0, 0.8, smoothstep(150.0, 900.0, vDepth));
-  return light * pulse * (0.9 * rays + 1.2 * core);
+  float deep = mix(1.0, 0.8, smoothstep(150.0, 900.0, vDepth));
+  vec3 light = mix(vec3(1.0), tone, 0.35) * deep;
+  // the gem lights up in its own colour, blurred so the light spreads a little past its edge: up to 8 texels past its
+  // rect, still inside the 16 empty texels the atlas leaves around every picture, so no neighbour glows
+  vec2 margin = 8.0 / size;
+  bool near = all(greaterThanEqual(vUV, vRect.xy - margin)) && all(lessThanEqual(vUV, vRect.zw + margin));
+  vec3 own = near ? textureLod(uAtlas, vUV, 2.5).rgb : vec3(0.0);
+  return light * pulse * (0.9 * rays + 1.2 * core) + own * GLOW * glow * deep;
 }
 
 void main() {
