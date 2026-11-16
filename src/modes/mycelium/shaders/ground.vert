@@ -4,14 +4,17 @@
 layout(location = 0) in vec2 aPos;   // world
 layout(location = 1) in vec2 aUV;    // u along the curve in strip repeats, v down the strip (beyond 1: below it)
 layout(location = 2) in float aDepth; // view units below the forest floor
+layout(location = 3) in float aMoss;  // v where the moss ends in this column (thicker or thinner than photographed)
 
 out vec2 vWorld;
 out vec2 vUV;
 out float vDepth;
+out float vMoss;
 
 void main() {
   vWorld = aPos;
   vUV = aUV;
   vDepth = aDepth;
+  vMoss = aMoss;
   gl_Position = toClip(aPos);
 }

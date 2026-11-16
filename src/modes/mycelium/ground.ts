@@ -15,6 +15,8 @@ export interface Ground {
   bands: [number, number, number];
   /** where the noise that makes horizon borders wander and tones the soil is read: a different place per text */
   drift: [number, number];
+  /** how thick the moss is along the floor, as waves around 1 (the strip as photographed): amplitude, frequency, phase */
+  moss: [number, number, number][];
 }
 
 /** the ground of a text */
@@ -36,7 +38,12 @@ export function readGround(src: string): Ground {
   const b0 = span(190, 250);
   const b1 = b0 + span(90, 170);
   const b2 = b1 + span(120, 240);
-  return { waves, bumps, bands: [b0, b1, b2], drift: [span(-500, 500), span(-500, 500)] };
+  const drift: [number, number] = [span(-500, 500), span(-500, 500)];
+  const moss: [number, number, number][] = [
+    [span(0.18, 0.3), span(0.0018, 0.0035), span(0, 6.3)],
+    [span(0.08, 0.14), span(0.007, 0.012), span(0, 6.3)],
+  ];
+  return { waves, bumps, bands: [b0, b1, b2], drift, moss };
 }
 
 /** the top of the forest floor at x */
@@ -45,6 +52,14 @@ export function heightAt(g: Ground, x: number): number {
   for (const [a, f, p] of g.waves) y += a * Math.sin(x * f + p);
   for (const [c, w, h] of g.bumps) y += h * Math.exp(-(((x - c) / w) ** 2));
   return y;
+}
+
+/** how thick the moss is at x: 1 as photographed, MOSS_RANGE at the extremes (it is stretched, so not much further) */
+export const MOSS_RANGE = [0.6, 1.45] as const;
+export function mossAt(g: Ground, x: number): number {
+  let s = 1;
+  for (const [a, f, p] of g.moss) s += a * Math.sin(x * f + p);
+  return Math.max(MOSS_RANGE[0], Math.min(MOSS_RANGE[1], s));
 }
 
 /** a ground on its way from `a` to `b` (k 0 … 1); both from readGround, so their shapes match */
@@ -56,5 +71,6 @@ export function mixGround(a: Ground, b: Ground, k: number): Ground {
     bumps: a.bumps.map((w, i) => row(w, b.bumps[i]!)),
     bands: row(a.bands, b.bands),
     drift: row(a.drift, b.drift),
+    moss: a.moss.map((w, i) => row(w, b.moss[i]!)),
   };
 }

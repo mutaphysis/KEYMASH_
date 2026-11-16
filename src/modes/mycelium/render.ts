@@ -5,7 +5,7 @@
 //   post    contrast, vignette, grain
 // Shaders live in shaders/, one file per piece.
 import type { Assets } from './assets';
-import { WORLD, heightAt, mixGround } from './ground';
+import { WORLD, heightAt, mixGround, mossAt } from './ground';
 import type { Ground } from './ground';
 import { freeTarget, program, target, texture, textureArray } from './gl';
 import type { GL, Program, Target } from './gl';
@@ -27,6 +27,10 @@ const COL = 8;
 const MARGIN = 320;
 /** the strip's top edge sits this far above the curve: its clear rows above the moss */
 const LIFT = 22;
+/** where the moss ends in the strip picture (v, measured off assets/tex-ground.webp: below it, no green) */
+const MOSS = 0.57;
+/** floats per ground vertex: position, uv, depth, where the moss ends in its column */
+const STRIDE = 6;
 /** the strip gives way to the soil from v FADE[0] to FADE[1], the line rising and dipping by up to FADE[2] / 2 */
 const FADE: RGB = [0.6, 0.98, 0.5];
 /** seconds a ground needs to settle into an edited one */
@@ -106,7 +110,7 @@ export class ForestRenderer {
     this.ok = !!this.gl;
     this.budget = new PixelBudget(undefined, typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches ? 0 : TOUCH);
     this.cols = Math.floor((WORLD.x1 - WORLD.x0 + 2 * MARGIN) / COL) + 1;
-    this.verts = new Float32Array(this.cols * 3 * 5);
+    this.verts = new Float32Array(this.cols * 3 * STRIDE);
     cv.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.lost = true;
@@ -134,13 +138,16 @@ export class ForestRenderer {
     gl.bindVertexArray(this.mesh);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
     gl.bufferData(gl.ARRAY_BUFFER, this.verts.byteLength, gl.DYNAMIC_DRAW);
-    // pos xy, uv, depth
+    // pos xy, uv, depth, where the moss ends
+    const B = STRIDE * 4;
     gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 20, 0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, B, 0);
     gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 8);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, B, 8);
     gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 20, 16);
+    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, B, 16);
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(3, 1, gl.FLOAT, false, B, 20);
     // two quads per column pair: strip (rows 0–1) and soil below it (rows 1–2)
     const idx = new Uint16Array((this.cols - 1) * 12);
     for (let i = 0, n = 0; i + 1 < this.cols; i++) {
@@ -237,7 +244,11 @@ export class ForestRenderer {
     this.clamp();
   }
 
-  /** the ribbon along the curve: per column the top of the strip, its bottom along the normal, the world's bottom */
+  /**
+   * The ribbon along the curve: per column the top of the strip, its bottom along the normal, the world's bottom.
+   * The moss is stretched or squeezed by mossAt (its soil keeps its size, so the strip grows and shrinks with it);
+   * each vertex carries where in its column the moss ends, the shader maps that back onto the picture.
+   */
   private build(g: Ground): void {
     const gl = this.gl;
     const v = this.verts;
@@ -262,15 +273,18 @@ export class ForestRenderer {
       const nl = Math.hypot(nx, ny);
       nx /= nl;
       ny /= nl;
-      const bx = x + nx * H;
-      const by = y + ny * H;
-      const o = i * 15;
-      v.set([x, y, arc, 0, -LIFT], o);
-      v.set([bx, by, arc, 1, heightAt(g, bx) - by], o + 5);
-      v.set([bx, WORLD.bottom, arc, 1 + (by - WORLD.bottom) / H, heightAt(g, bx) - WORLD.bottom], o + 10);
+      const s = mossAt(g, x);
+      const Hc = H * (MOSS * s + 1 - MOSS);
+      const m = (MOSS * s) / (MOSS * s + 1 - MOSS);
+      const bx = x + nx * Hc;
+      const by = y + ny * Hc;
+      const o = i * 3 * STRIDE;
+      v.set([x, y, arc, 0, -LIFT, m], o);
+      v.set([bx, by, arc, 1, heightAt(g, bx) - by, m], o + STRIDE);
+      v.set([bx, WORLD.bottom, arc, 1 + (by - WORLD.bottom) / Hc, heightAt(g, bx) - WORLD.bottom, m], o + 2 * STRIDE);
     }
     // arc length → strip repeats, from x = 0
-    for (let i = 0; i < this.cols * 3; i++) v[i * 5 + 2] = (v[i * 5 + 2]! - u0) / this.stripW;
+    for (let i = 0; i < this.cols * 3; i++) v[i * STRIDE + 2] = (v[i * STRIDE + 2]! - u0) / this.stripW;
     if (!gl || this.lost || !this.vbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
@@ -340,6 +354,7 @@ export class ForestRenderer {
     gl.uniform3f(gr.u.uSoilGain!, ...this.soilGain);
     gl.uniform3f(gr.u.uDeep!, ...AIR.deep);
     gl.uniform3f(gr.u.uFade!, ...FADE);
+    gl.uniform1f(gr.u.uMoss!, MOSS);
     gl.uniform3f(gr.u.uTint!, ...AIR.tint);
     gl.bindVertexArray(this.mesh);
     gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_SHORT, 0);

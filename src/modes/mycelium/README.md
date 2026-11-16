@@ -12,6 +12,7 @@ The whole text seeds the ground. The same text always gives the same ground; any
 - **The curve of the floor**: three swells (long to short) and four mounds or hollows, their sizes, places and
   phases read from the text.
 - **The soil horizons**: how deep the leafy humus reaches, where the dark humus turns plain and the plain turns stony.
+- **The moss's thickness** along the floor: two waves, from 0.6 to 1.45 times the photographed moss.
 - **Where the borders wander**: the noise that bends horizon borders and tones the soil is read at a place of the text's own.
 
 Editing while it runs eases the old ground into the new one (about half a second; at once with reduced motion).
@@ -39,6 +40,9 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
   curve into cells (a 1D Voronoi: jittered borders that also wander with depth). Each cell shows its own stretch of
   the strip, mirrored half the time, and neighbours meet in a height blend (`blend.glsl`): the taller tuft or the
   brighter leaf wins and stays whole.
+- **Moss thickness**: the moss part of the strip (the picture's top 57 %) is stretched or squeezed per column of the
+  mesh, the soil below it keeps its scale, so the strip grows and shrinks with its moss. Each vertex carries where
+  the moss ends in its column; `ground.frag` maps v back onto the picture piecewise. The surface stays on the curve.
 - **The soil** (`soil.glsl`) is the library's four soil textures as one texture array, hex-tiled (Mikkelsen's
   luminance-weighted blend, `hex.glsl`; research in `scripts/forest/README.md`, step 14). Each hex vertex picks its
   horizon by its own depth, bent by noise at two scales (broad swells, narrower tongues), so borders rise and dip

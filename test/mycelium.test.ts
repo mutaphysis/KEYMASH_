@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { heightAt, mixGround, readGround, WORLD } from '../src/modes/mycelium/ground';
+import { heightAt, mixGround, mossAt, readGround, WORLD } from '../src/modes/mycelium/ground';
 
 const TEXTS = ['', 'a', 'under the spruces\nneedles and moss', '🍄🐌🪲', '\ud800 lone \udfff', '\0\0\0', 'x'.repeat(5000)];
 
@@ -11,6 +11,7 @@ test('any text gives a sane ground: finite, within reach of the view, horizons i
       const y = heightAt(g, x);
       expect(Number.isFinite(y)).toBe(true);
       expect(Math.abs(y)).toBeLessThan(200);
+      expect(Number.isFinite(mossAt(g, x))).toBe(true);
     }
     const [a, b, c] = g.bands;
     expect(a).toBeGreaterThan(150);
