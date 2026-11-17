@@ -29,17 +29,29 @@ The whole text seeds the ground. The same text always gives the same ground; any
   the floor (below the moss), none leaves the world. They sit at a depth below the floor, so they ride along when an
   edit eases the floor; the things themselves are swapped for the new text's at once. Now and then a gem glints: a
   short twinkle on a bright spot of it, a few seconds apart and most chances skipped (none with reduced motion).
-- **The tree's crown**: six canopy pieces stacked over the top of the trunk, back to front: one wide piece furthest
-  back (4.6–5.5 m) and highest, two pairs further in, one in front and lowest. Only their undersides show (the view
-  never goes above the trees), so they read as one crown with layered hanging edges. The whole crown sits higher or
-  lower on its trunk (54 cm lower to 22 cm higher), always low enough to hide the trunk's cut top. No crown is
-  symmetric: it leans to one side (mirrored half the time), each piece is wider toward the lean, its underside rounder
-  or flatter (a superellipse) and wobbling, its centre and height strayed, and one bough of the middle layer hangs
-  lower. And the season its leaves are in: summer green about half the time, autumn (yellow through orange and red,
-  patches a spray of leaves across ahead of or behind the rest) four times in ten, otherwise the dry brown that
-  beeches keep through winter.
+- **The trees**: 8–11 trunks across the whole world, one per equal stretch of it, jittered within it (about 0.9–1.25 m
+  apart), from fourteen library trunks (`trees-a/03`, a stout beech; four slender ones made one per sheet: a beech with
+  eye-shaped scars, a twisting hornbeam, a furrowed oak with a burl, a forked beech; and nine made five per sheet: an
+  S-curved young beech, a sweet chestnut, a fluted hornbeam, a flaking sycamore, an ash, a lime with burrs, a banded
+  red cherry, an alder, a wounded beech with bracket fungi). No picture repeats within seven trees in
+  a row, about a zoomed-out screen. Each differs from its picture a little: mirrored half the time, leaning up to 2.6°
+  either way, 10 % larger or smaller, its bark lighter or darker (±12 %), warmer or greyer, more or less saturated,
+  broken by damp and dry patches of its own, its moss climbing higher or lower in cushions of its own.
+- **The canopy**: three canopy pieces over each trunk's top, back to front: a wide one furthest back and highest
+  (2.4–3.1 m, reaching well over the neighbours', so the canopy closes over the forest), one in a middle layer off to
+  one side, one in front, lowest and centred. Only their undersides show (the view never goes above the trees), so
+  they read as layered hanging edges. Each tree's pieces sit higher or lower on its trunk (48 cm lower to 19 cm
+  higher), the front one always low enough to hide the trunk's cut top. No crown is symmetric: it leans to one side,
+  each piece is wider toward the lean, its underside rounder or flatter (a superellipse) and wobbling, its centre and
+  height strayed, and about one middle bough in three hangs lower. Each tree wears its own kind of leaves (birch, oak,
+  beech or maple, never its left neighbour's) in a shade of its own (lighter or darker, warmer or cooler, greener or
+  greyer, a few per cent). The season is the whole forest's: summer green about half the time, autumn (yellow through
+  orange and red, patches a spray of leaves across ahead of or behind the rest) four times in ten, otherwise the dry
+  brown that beeches keep through winter.
 
-Editing while it runs eases the old ground into the new one (about half a second; at once with reduced motion).
+Editing while it runs eases the old ground into the new one (about half a second; at once with reduced motion);
+what lies buried, the trees and the canopy are swapped for the new text's halfway through, once the new forest's
+trunks are downloaded.
 
 **Note:** a different text doesn't need a smooth transition to its ground. Later the forest will drop away and be
 recreated for the new text, so there is no need to make changes between texts smooth now (the easing above is a
@@ -58,8 +70,8 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 | sky | the air behind everything: haze toward the floor, a soft light, slow mist; a placeholder until the backdrop comes | `screen.vert`, `sky.frag` |
 | ridge | a mossy hill behind the floor, same distance (no parallax), on its own waves: the moss band of a second strip (`tex-ground-c.webp`: star moss, lichen, clover) for its outline, a hex-tiled moss carpet (`tex-moss-*.webp`) for its body, a little darker | `ridge.vert`, `ridge.frag` with `strip.glsl`, `mossfill.glsl`, `crown.glsl` |
 | ground | one mesh: per column the strip's top on the curve, its bottom along the curve's normal (blended with straight down, so steep bits don't fold), the bottom of the world | `ground.vert`, `ground.frag` with `strip.glsl`, `soil.glsl`, `crown.glsl` |
-| tree | one tree (a beech trunk, `trees-a/03` from the library, drawn 20 % larger than its library size, which looked small beside the moss and the hill: 110 cm wide, 2.9 m of it; its crown grows with it, the leaves keep their size) standing 140 units right of where the camera starts, drawn after the ground, its foot 45 units (12 cm) under the floor's curve, about 7 cm into the dense moss. Its mesh's foot rows bend with the floor under them. The ground is projected onto its foot in world space: the moss carpet climbs it (thick at the floor, in cushions, most on what faces up), and below the floor the ground strip takes over. Each hands over in a height blend rather than a cross-fade, the tree's height being its local relief (its depth against the depth around it): every texel is bark, moss or strip whole, the hollows between roots mossed first, so nothing ghosts. The same relief shades the hollows (moss down to 40 %, bark to 75 %). Its relief page (normal, depth) and the floor at any point (`groundat.glsl`: the ground mesh's columns as a float texture) feed it. Higher up it lies in the crown's shade, and inside the crown it shows only through the leaves' gaps, dark. The world reaches 3.5 m up (1300 units), a little into the crown | `tree.vert`, `tree.frag` with `strip.glsl`, `mossfill.glsl`, `groundat.glsl`, `crown.glsl` |
-| crown | the tree's crown (`crown.ts`), made like the floor upside down: per canopy piece a U (its underside a superellipse wider on one side, wobbling a little, its sides running straight up out of the world), the beech's canopy strip (`tex-canopy-beech.webp`) hanging along it in the ground strip's 1D Voronoi cells, its dense band inside the outline and its sprays out of it along the normal, and the beech's leaf fill (`tex-leaf-2.webp`) hex-tiled for the body, a fan from high above. Over the strip's dense band the fill takes over in a height blend along a wandering line, never below it (its edge would show through the gaps). Leaves are recoloured: the photograph's brightness mapped onto the season's shade, middle and light colours, so strip and fill match; twigs (not green in the photo) keep theirs, greyed. Faked shade, no shadow maps: further back is darker, deeper inside a piece darker, under another piece in its shade (a column below it that leans with the light from the upper left, blurring and fading with the distance), and behind one only seen through its leaves' gaps; the same shade falls on the trunk, the hill and the floor's moss. Clumps of leaves standing out of the crown catch the light wherever they hang, low down too (patches a few sprays across, their edges following the brighter leaves), and the hanging sprays a little | `crown.vert`, `crown.frag` with `strip.glsl`, `leaves.glsl`, `crown.glsl` |
+| trees | the row of trees (`trees.ts`), a draw each, drawn 20 % larger than their library size (one looked small beside the moss and the hill: 2.9 m of trunk; crowns grow with them, the leaves don't), after the ground, each foot 45 units (12 cm) under the floor's curve, about 7 cm into the dense moss, mirrored and leaning by a shear (the foot stays on the floor). Its mesh's foot rows bend with the floor under them. The ground is projected onto each foot in world space: the moss carpet climbs it (thick at the floor, in cushions, most on what faces up), and below the floor the ground strip takes over. Each hands over in a height blend rather than a cross-fade, the tree's height being its local relief (its depth against the depth around it): every texel is bark, moss or strip whole, the hollows between roots mossed first, so nothing ghosts. The same relief shades the hollows (moss down to 40 %, bark to 75 %). Its relief page (normal, depth) and the floor at any point (`groundat.glsl`: the ground mesh's columns as a float texture) feed it. Per tree: its bark's gain and saturation, patches taller than wide (±14 %) and its own place in the noise for moss and patches, its moss climbing 0.7–1.35× as high. Higher up the trunks lie in the canopy's shade, and inside it they show only through the leaves' gaps, dark. The world reaches 3.5 m up (1300 units), a little into the canopy | `tree.vert`, `tree.frag` with `strip.glsl`, `mossfill.glsl`, `groundat.glsl`, `crown.glsl` |
+| crown | the canopy (`crown.ts`), made like the floor upside down, a draw per piece: per canopy piece a U (its underside a superellipse wider on one side, wobbling a little, its sides running straight up out of the world), in its tree's kind of leaves: that kind's canopy strip (`tex-canopy-<kind>.webp`) hanging along it in the ground strip's 1D Voronoi cells, its dense band inside the outline and its sprays out of it, along the normal blended with straight down (along the bare normal the sprays fanned out around the underside and smeared), and that kind's leaf fill (`tex-leaf-<n>.webp`) hex-tiled for the body, a fan from high above. Leaves are drawn at 70 % of the size the library measured (they looked too large beside the trunks). Over the strip's dense band the fill takes over in a height blend along a wandering line, never below it (its edge would show through the gaps). Leaves are recoloured: the photograph's brightness mapped onto the season's shade, middle and light colours, so strip and fill match, then the tree's own shade of it; twigs (not green in the photo) keep theirs, greyed. Faked shade, no shadow maps: further back is darker, deeper inside a piece darker, under another piece in its shade (a column below it that leans with the light from the upper left, blurring and fading with the distance), and behind one only seen through its leaves' gaps; the same shade falls on the trunks, the hill and the floor's moss. The shade loops over every piece, cheaply skipping those that can't reach a pixel. Clumps of leaves standing out of the canopy catch the light wherever they hang, low down too (patches a few sprays across, their edges following the brighter leaves), and the hanging sprays a little | `crown.vert`, `crown.frag` with `strip.glsl`, `leaves.glsl`, `crown.glsl` |
 | buried | treasure and stones: a quad each from the library's atlases (`atlas-underground-0`, `atlas-ground-0`), in four passes: a halo of damp, disturbed earth around each treasure in its own shape (its alpha tapped over a disc of 48 taps reaching about a third of its narrow side plus 4 cm, so a sword gets a long narrow halo and a pot a round one; ragged by noise, the soil's colour darkened rather than black, at 40 % strength in the light upper soil rising to full deep down, fading out before the moss), a soft shadow under each thing (its alpha at a fixed mip level, dropped 3 units), then the picture: stained toward the soil's colour, earth clinging in blotches, in the soil's shade and darker with depth like it (gems stained a quarter as much, a little less shaded, darkening half as much: their colour is the find), then the gems' glints (a four-pointed star on a bright texel of the gem, its rays growing and fading over half a second, and meanwhile the gem glows a little in its own colour, a third of it added, blurred so the light spreads a few texels past its edge, fading out a little after the star; added over the picture on the halo quads, which leave the rays room) | `buried.vert`, `buried.frag` |
 | post | a gentle contrast curve, vignette, film grain | `post.frag` |
 
@@ -97,16 +109,17 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 
 In dev builds (`bun run dev`) a grid button sits left of fullscreen while the mode plays. It draws every draw's
 edges over the picture in one colour per shader or material (sky, moss band, moss body, ground strip, ground soil,
-tree, crown, treasure halos, buried things, post), with a legend of triangle counts in the top left. The full-screen
-triangle of sky and post runs off screen, so only its legend line shows. Off, it costs nothing; on, about 9,300 line
-segments in eight draws.
+trees, canopy, treasure halos, buried things, post), with a legend of triangle counts in the top left. The full-screen
+triangle of sky and post runs off screen, so only its legend line shows. Off, it costs nothing; on, up to about
+17,000 line segments (eleven trees, 33 canopy pieces) in ten draws.
 
 ## Assets
 
 `assets/` is the forest library as `scripts/forest/matte/pack.py` packs it (`scripts/forest/samples/pack`): atlases,
 textures, `manifest.json`, `report.json`. It is copied as it is (`oxfmt` leaves it alone). Only what the scene uses is
 bundled and fetched (`assets.ts`: two ground strips, four moss carpets and four soils, the two atlases of what lies
-buried, the tree's page with its relief, and the beech's canopy strip and leaf fill, about 2.3 MB); the download
-starts when the mode's code loads and shows its byte count on the boot screen. Trees come one per page, each with a
-relief page beside it (normal, depth: see `scripts/forest/README.md`, step 15), so the scene fetches only the trees
-it shows. The leaf cover (step 16) keeps its photographed colour; the crown replaces it by the season's.
+buried, and the four kinds of leaves' canopy strips and leaf fills, about 3.4 MB); the download starts when the mode's
+code loads and shows its byte count on the boot screen. Trees come one per page, each with a relief page beside it
+(normal, depth: see `scripts/forest/README.md`, step 15), so a forest fetches only its own trunks (about 0.3 MB each,
+2.4–3.3 MB for 8–11 different ones), at RUN with the rest's byte count, and an edit's new trunks before it eases in.
+The leaf cover (step 16) keeps its photographed colour; the canopy replaces it by the season's.

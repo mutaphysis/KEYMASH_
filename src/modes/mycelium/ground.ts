@@ -4,11 +4,13 @@
 import { hash, mulberry32 } from '../../lang/rng';
 import { readBuried } from './buried';
 import type { Buried } from './buried';
-import { mixCrown, readCrown } from './crown';
+import { readCrown } from './crown';
 import type { Crown } from './crown';
+import { readTrees } from './trees';
+import type { Tree } from './trees';
 
 /** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. 10 m wide.
- * Its top reaches a little into the tree's crown (render.ts, crown.ts): the view never goes above the trees. */
+ * Its top reaches a little into the trees' crowns (render.ts, crown.ts): the view never goes above the trees. */
 export const WORLD = { x0: -1875, x1: 1875, top: 1300, bottom: -2200 } as const;
 
 export interface Ground {
@@ -27,7 +29,9 @@ export interface Ground {
   ridge: [number, number, number, number][];
   /** treasure and stones in the soil (buried.ts); an edit swaps them for the new ones instead of easing them */
   buried: Buried[];
-  /** the crown over the tree (crown.ts): its canopy pieces and its leaves' season */
+  /** the trees standing in the floor (trees.ts) and the canopy over them (crown.ts): its pieces and its leaves'
+   * season; swapped like what lies buried */
+  trees: Tree[];
   crown: Crown;
 }
 
@@ -81,8 +85,9 @@ export function readGround(src: string): Ground {
   }
   // its own random stream, so the ground's shape doesn't change with how many tries the scattering takes
   const buried = readBuried(mulberry32(hash(src) ^ 0x9e3779b9), [b0, b1, b2], WORLD.x0, WORLD.x1);
-  const crown = readCrown(mulberry32(hash(src) ^ 0x85ebca6b));
-  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, buried, crown };
+  const trees = readTrees(mulberry32(hash(src) ^ 0x27d4eb2f), WORLD.x0, WORLD.x1);
+  const crown = readCrown(mulberry32(hash(src) ^ 0x85ebca6b), trees);
+  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, buried, trees, crown };
 }
 
 /** cushion i's dome at x: its top, falling RIDGE_DOME to its foot as an ellipse over its half widths, so it ends at
@@ -135,6 +140,7 @@ export function mixGround(a: Ground, b: Ground, k: number): Ground {
     moss: a.moss.map((w, i) => row(w, b.moss[i]!)),
     ridge: a.ridge.map((w, i) => row(w, b.ridge[i]!)),
     buried: k < 0.5 ? a.buried : b.buried,
-    crown: mixCrown(a.crown, b.crown, k),
+    trees: k < 0.5 ? a.trees : b.trees,
+    crown: k < 0.5 ? a.crown : b.crown,
   };
 }

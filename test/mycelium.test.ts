@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { heightAt, mixGround, mossAt, readGround, ridgeAt, RIDGE_RISE, WORLD } from '../src/modes/mycelium/ground';
 import { BURIED_MAX, isTreasure, reach, TREASURE_MAX } from '../src/modes/mycelium/buried';
+import { CROWN_PIECES, LAYERS } from '../src/modes/mycelium/crown';
+import { TREES_MAX, TREES_MIN, TRUNKS } from '../src/modes/mycelium/trees';
 
 const TEXTS = ['', 'a', 'under the spruces\nneedles and moss', '🍄🐌🪲', '\ud800 lone \udfff', '\0\0\0', 'x'.repeat(5000)];
 
@@ -68,6 +70,38 @@ test('buried things: a handful of different treasures, stones, inside the world,
       expect(b.depth - r).toBeGreaterThanOrEqual(150);
       expect(heightAt(g, b.x) - b.depth - r).toBeGreaterThan(WORLD.bottom);
       for (const o of buried.slice(i + 1)) expect(Math.hypot(o.x - b.x, o.depth - b.depth)).toBeGreaterThan(r + reach(o.frame, o.scale));
+    }
+  }
+});
+
+test('trees fill the world, neighbours differ, and the canopy fits the shaders: every tree under a front piece', () => {
+  for (const src of [...TEXTS, ...Array.from({ length: 60 }, (_, i) => `grove ${i} ${'y'.repeat(i)}`)]) {
+    const { trees, crown } = readGround(src);
+    expect(trees.length).toBeGreaterThanOrEqual(TREES_MIN);
+    expect(trees.length).toBeLessThanOrEqual(TREES_MAX);
+    const slot = (WORLD.x1 - WORLD.x0) / trees.length;
+    expect(trees[0]!.x - WORLD.x0).toBeLessThan(slot);
+    expect(WORLD.x1 - trees.at(-1)!.x).toBeLessThan(slot);
+    for (const [i, t] of trees.entries()) {
+      expect(t.trunk).toBeGreaterThanOrEqual(0);
+      expect(t.trunk).toBeLessThan(TRUNKS.length);
+      if (i > 0) expect(t.x).toBeGreaterThan(trees[i - 1]!.x);
+      if (i > 0) expect(t.leaves).not.toBe(trees[i - 1]!.leaves);
+    }
+    // a zoomed-out screen (about seven trees) never shows a picture twice
+    for (let i = 0; i + 7 <= trees.length; i++) expect(new Set(trees.slice(i, i + 7).map((t) => t.trunk)).size).toBe(7);
+    expect(crown.pieces.length).toBeLessThanOrEqual(CROWN_PIECES);
+    for (const [i, p] of crown.pieces.entries()) {
+      expect(p.layer).toBeLessThan(LAYERS);
+      if (i > 0) expect(p.layer).toBeGreaterThanOrEqual(crown.pieces[i - 1]!.layer);
+    }
+    // the front piece hides the trunk's cut top: its lowest point under the top, its body over it
+    for (let t = 0; t < trees.length; t++) {
+      const front = crown.pieces.filter((p) => p.tree === t && p.layer === LAYERS - 1);
+      expect(front.length).toBe(1);
+      const p = front[0]!;
+      expect(p.bottom).toBeLessThan(0);
+      expect(Math.abs(p.dx)).toBeLessThan(Math.min(p.left, p.right) / 2);
     }
   }
 });

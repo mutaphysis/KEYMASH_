@@ -14,6 +14,7 @@ flat in int vPiece;
 uniform float uSolid;               // v where the canopy strip stops being solid (its rows below have gaps)
 uniform float uPieceShade[CROWN_PIECES]; // per piece: further back is darker
 uniform vec3 uTint;                 // the key light
+uniform vec3 uFoliage;              // its tree's shade of the season's colours: a gain per channel
 
 out vec4 o;
 
@@ -36,7 +37,7 @@ void main() {
   vec4 c = s + (1.0 - s.a) * under * vec4(f, 1.0);
   c = mix(c, vec4(f, 1.0), k);
   vec3 straight = c.rgb / max(c.a, 1e-4);
-  vec3 col = leafColor(straight, vWorld) * c.a;
+  vec3 col = leafColor(straight, vWorld) * uFoliage * c.a;
   float inside = smoothstep(-DEPTH, 0.0, pieceSd(vPiece, vWorld));
   float shade = uPieceShade[vPiece] * mix(DEEP, 1.0, inside) * crownShade(vWorld, vPiece);
   // lit clumps: patches a few sprays across, their edges following the brighter leaves, so a clump is lit leaf by

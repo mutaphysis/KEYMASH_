@@ -4,19 +4,22 @@
 //   ridge   a mossy hill behind the floor: rounded moss cushions whose tops clear the floor (ground.ts, ridgeAt),
 //           a second strip's moss band handing over to a hex-tiled moss carpet below
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
-//   tree    one tree standing in the floor, its foot sunk into the moss, the ground projected onto it and handed over
-//           in height blends (shaders/tree.frag)
-//   crown   its crown over it (crown.ts): canopy pieces stacked back to front, each the canopy strip hanging along a U
-//           with the leaf fill for its body, recoloured by the season; its shade falls on the trunk, hill and floor
+//   trees   a row of trees standing in the floor (trees.ts), each foot sunk into the moss, the ground projected onto
+//           it and handed over in height blends (shaders/tree.frag); a draw per tree, each graded on its own
+//   crown   the canopy over them (crown.ts): a few canopy pieces per tree stacked back to front, each the canopy strip
+//           hanging along a U with the leaf fill for its body, recoloured by the season; its shade falls on the
+//           trunks, hill and floor
 //   buried  treasure and stones in the soil (buried.ts): one quad each from the library's atlases, over a soft shadow
 //   post    contrast, vignette, grain
 //   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
 // Shaders live in shaders/, one file per piece.
-import { ATLASES, CANOPY, LEAF_FILL, TREE, TREE_PAGE } from './assets';
-import type { Assets, AtlasKey } from './assets';
+import { ATLASES, CANOPIES, CANOPY, LEAF_FILL, LEAF_FILLS, TREE_PAGES } from './assets';
+import type { Assets, AtlasKey, Trunk } from './assets';
 import { atlases, frames } from './assets/manifest.json';
 import { BURIED_MAX, TREASURE_MAX, isGem, isTreasure } from './buried';
-import { CROWN_PIECES, PIECE_LAYER } from './crown';
+import { CROWN_PIECES } from './crown';
+import { TREE_SCALE, TREES_MAX, trunkFrame } from './trees';
+import type { Tree } from './trees';
 import type { Buried } from './buried';
 import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
@@ -123,18 +126,15 @@ const BURIED_DIM = 0.8;
 /** the passes of buried.frag */
 const PASS = { picture: 0, shadow: 1, halo: 2, glint: 3 } as const;
 
-/** where the tree (assets.ts: TREE, its frame in the manifest; its page of the trees atlas) stands */
-const TREE_X = 140;
-/** the tree drawn this much larger than the library's size: at that size it looked small beside the moss and the
- * hill. Its crown (crown.ts, in the tree's units) grows with it; the leaves keep their size */
-const TREE_SCALE = 1.2;
-/** its mesh: this many columns; the rows below KNEE (a share of the picture from the top) bend with the floor */
+/** a tree's mesh: this many columns; the rows below KNEE (a share of the picture from the top) bend with the floor */
 const TREE_COLS = 16;
 const KNEE = 0.82;
 /** the mesh's rows, down the picture: its top, the knee, its foot */
 const TREE_ROWS = [0, KNEE, 1] as const;
-/** how far the foot is sunk under the floor's curve: the strip's dense moss starts about 17 units under it (its top
- * rows are clear, then tufts), so this is the foot about 7 cm into the moss */
+/** vertices per tree */
+const TREE_VERTS = (TREE_COLS + 1) * TREE_ROWS.length;
+/** how far a tree's foot is sunk under the floor's curve: the strip's dense moss starts about 17 units under it (its
+ * top rows are clear, then tufts), so this is the foot about 7 cm into the moss */
 const SINK = 45;
 /** floats per tree vertex: position, uv in the picture */
 const TREE_STRIDE = 4;
@@ -149,13 +149,19 @@ const CROWN_VERTS = 2 * CROWN_COLUMNS + 1;
 const CROWN_STRIDE = 5;
 /** a piece's sides run up this far past the world's top (or its ellipse's centre, if that is higher) */
 const CROWN_ABOVE = 100;
+/** the crowns' leaves are drawn this much smaller than the library measured them (its `s`, by leaf length): at that
+ * size they looked 20–40 % too large beside the trunks; strip and fill shrink together, so their leaves still match */
+const LEAF_SCALE = 0.7;
 /** each piece reads the canopy strip this many strip widths on from the one before, so their cells don't line up */
 const PIECE_U = 2.37;
+/** a canopy strip's leaves hang along the outline's normal blended with straight down this much: along the bare
+ * normal they fanned out around a piece's rounded underside and its leaves smeared into streaks (worst on the
+ * birch's long curtains); hanging more nearly down, the strip's lower edge runs about as long as its top */
+const HANG = 1.2;
 /** how far a piece's underside wobbles in and out, a share of its size */
 const WOBBLE = 0.07;
-/** how light each layer of pieces is, back to front (crown.ts, PIECE_LAYER): further in, more shaded */
+/** how light each layer of pieces is, back to front (crown.ts, LAYERS): further in, more shaded */
 const LAYER_SHADE = [0.6, 0.72, 0.86, 1];
-const PIECE_SHADE = new Float32Array(PIECE_LAYER.map((l) => LAYER_SHADE[l]!));
 /** the crown's strip cells are seeded apart from the ground's and the hill's */
 const CROWN_SEED = 29;
 /** how dark the crown's shade gets right under a piece: on other pieces and the trunk, and on the hill and floor
@@ -279,39 +285,48 @@ export class ForestRenderer {
   private haloCount: number[] = ATLASES.map(() => 0);
   /** the soil's colour (straight), what buried things are stained toward */
   private earth: RGB = [0.3, 0.22, 0.15];
-  /** the tree: its picture and relief, its mesh (TREE_COLS + 1 columns of TREE_ROWS), its edges for the wireframe */
+  /** the trees: the trunks fetched so far and their pictures and reliefs as textures (by TRUNKS index), their meshes
+   * one after the other (TREE_COLS + 1 columns of TREE_ROWS each), indices per tree (triangles, and edges for the
+   * wireframe) */
   private tree: Program | null = null;
-  private treeTex: WebGLTexture | null = null;
-  private reliefTex: WebGLTexture | null = null;
+  private trunks = new Map<number, Trunk>();
+  private treeTex: WebGLTexture[] = [];
+  private reliefTex: WebGLTexture[] = [];
   private treeVao: WebGLVertexArrayObject | null = null;
   private treeVbo: WebGLBuffer | null = null;
+  private treeIdx = 0;
+  /** how many trees the forest has */
   private treeCount = 0;
   private wireTreeVao: WebGLVertexArrayObject | null = null;
-  private wireTree = 0;
-  private treeVerts = new Float32Array((TREE_COLS + 1) * TREE_ROWS.length * TREE_STRIDE);
+  private wireTreeIdx = 0;
+  private treeVerts = new Float32Array(TREES_MAX * TREE_VERTS * TREE_STRIDE);
   /** the moss carpets' colour matched to the floor strip's moss: what climbs the tree's foot */
   private floorMossGain: RGB = [1, 1, 1];
   /** the ground mesh's columns for shaders that need the floor at a point (shaders/groundat.glsl) */
   private groundAtTex: WebGLTexture | null = null;
   private groundAt: Float32Array;
-  /** the crown: its canopy strip and leaf fill, where the strip stops being solid, the fill's colour matched to the
-   * strip's dense top and that top's brightness (what the season's colours map from) */
+  /** the canopy, per kind of leaves (trees.ts: LEAVES): its canopy strip and leaf fill, where the strip stops being
+   * solid, the fill's colour matched to the strip's dense top and that top's brightness (what the season's colours
+   * map from) */
   private crown: Program | null = null;
-  private canopyTex: WebGLTexture | null = null;
-  private leafTex: WebGLTexture | null = null;
-  private canopySolid = 0.3;
-  private leafGain: RGB = [1, 1, 1];
-  private leafLuma = 0.3;
+  private canopyTex: WebGLTexture[] = [];
+  private leafTex: WebGLTexture[] = [];
+  private canopySolid = CANOPIES.map(() => 0.3);
+  private leafGain: RGB[] = CANOPIES.map(() => [1, 1, 1]);
+  private leafLuma = CANOPIES.map(() => 0.3);
   private crownVao: WebGLVertexArrayObject | null = null;
   private crownVbo: WebGLBuffer | null = null;
-  private crownCount = 0;
+  /** indices per piece (triangles, and edges for the wireframe), and how many pieces the canopy has */
+  private crownIdx = 0;
   private wireCrownVao: WebGLVertexArrayObject | null = null;
-  private wireCrown = 0;
+  private wireCrownIdx = 0;
+  private pieceCount = 0;
   private crownVerts = new Float32Array(CROWN_PIECES * CROWN_VERTS * CROWN_STRIDE);
   /** per piece in world units: its centre, its width left and right; its underside's height and roundness
-   * (shaders/crown.glsl) */
+   * (shaders/crown.glsl); how light it is by its layer */
   private pieces = new Float32Array(CROWN_PIECES * 4);
   private pieceShape = new Float32Array(CROWN_PIECES * 2);
+  private pieceShade = new Float32Array(CROWN_PIECES);
 
   /** the ground drawn now, the one it eases toward, and how long that still takes */
   private shown: Ground | null = null;
@@ -342,6 +357,9 @@ export class ForestRenderer {
       this.lost = false;
       this.setup();
       if (this.assets) this.upload(this.assets);
+      const trunks = this.trunks;
+      this.trunks = new Map();
+      this.addTrunks(trunks);
       if (this.shown) this.build(this.shown);
     });
     this.setup();
@@ -485,7 +503,7 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, blines, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    // the tree: TREE_ROWS per column, a quad per cell
+    // the trees: per tree TREE_ROWS per column, a quad per cell; tree t's vertices and indices follow tree t - 1's
     this.tree = program(gl, TREE_VS, TREE_FS);
     this.treeVao = gl.createVertexArray();
     this.treeVbo = gl.createBuffer();
@@ -499,19 +517,21 @@ export class ForestRenderer {
     const tidx: number[] = [];
     const tlines: number[] = [];
     const R = TREE_ROWS.length;
-    for (let i = 0; i <= TREE_COLS; i++) {
-      const a = i * R;
-      const b = a + R;
-      for (let r = 0; r + 1 < R; r++) {
-        tlines.push(a + r, a + r + 1);
-        if (i < TREE_COLS) {
-          tidx.push(a + r, a + r + 1, b + r, b + r, a + r + 1, b + r + 1);
-          tlines.push(a + r, b + r, a + r + 1, b + r);
+    for (let t = 0; t < TREES_MAX; t++) {
+      for (let i = 0; i <= TREE_COLS; i++) {
+        const a = t * TREE_VERTS + i * R;
+        const b = a + R;
+        for (let r = 0; r + 1 < R; r++) {
+          tlines.push(a + r, a + r + 1);
+          if (i < TREE_COLS) {
+            tidx.push(a + r, a + r + 1, b + r, b + r, a + r + 1, b + r + 1);
+            tlines.push(a + r, b + r, a + r + 1, b + r);
+          }
         }
+        if (i < TREE_COLS) tlines.push(a + R - 1, b + R - 1);
       }
-      if (i < TREE_COLS) tlines.push(a + R - 1, b + R - 1);
     }
-    this.treeCount = tidx.length;
+    this.treeIdx = tidx.length / TREES_MAX;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tidx), gl.STATIC_DRAW);
     this.wireTreeVao = gl.createVertexArray();
@@ -519,12 +539,13 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, TREE_STRIDE * 4, 0);
-    this.wireTree = tlines.length;
+    this.wireTreeIdx = tlines.length / TREES_MAX;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tlines), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    // the crown: per piece a ribbon (an inner and an outer vertex per column) and a fan from high above to the
-    // ribbon's inner edge; pos xy, uv, piece. The topology is fixed, build() moves the vertices
+    // the canopy: per piece a ribbon (an inner and an outer vertex per column) and a fan from high above to the
+    // ribbon's inner edge; pos xy, uv, piece. The topology is fixed, build() moves the vertices; piece p's indices
+    // follow piece p - 1's
     this.crown = program(gl, CROWN_VS, CROWN_FS);
     this.crownVao = gl.createVertexArray();
     this.crownVbo = gl.createBuffer();
@@ -552,7 +573,7 @@ export class ForestRenderer {
         }
       }
     }
-    this.crownCount = cidx.length;
+    this.crownIdx = cidx.length / CROWN_PIECES;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(cidx), gl.STATIC_DRAW);
     this.wireCrownVao = gl.createVertexArray();
@@ -560,7 +581,7 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.crownVbo);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, CB, 0);
-    this.wireCrown = clines.length;
+    this.wireCrownIdx = clines.length / CROWN_PIECES;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(clines), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
@@ -611,22 +632,35 @@ export class ForestRenderer {
     }) as RGB;
     // what lies buried: sprites packed 16 texels apart, the quads padded into that gap
     this.atlasTex = ATLASES.map((k) => texture(gl, a[k], 'clamp', 'clamp'));
-    // the tree and its relief (data: mipmapped like a picture, the normals average out with distance)
-    this.treeTex = texture(gl, a.tree, 'clamp', 'clamp');
-    this.reliefTex = texture(gl, a['tree-relief'], 'clamp', 'clamp');
-    // the crown's leaves: the canopy strip (cut into cells like the ground strip, so clamped) and its leaf fill
-    // (hex-tiled, so repeating); the fill's colour matched to the strip's dense top, whose brightness the season's
-    // colours map from
-    this.canopyTex = texture(gl, a['canopy-beech'], 'clamp', 'clamp');
-    this.leafTex = texture(gl, a['leaf-2'], 'repeat', 'repeat');
-    this.canopySolid = solidRows(a['canopy-beech']);
-    const leafTop = soilColor(a['canopy-beech'], 0, 0.8 * this.canopySolid);
-    const fill = soilColor(a['leaf-2'], 0, 1);
-    this.leafGain = leafTop.map((v, k) => Math.max(0.6, Math.min(1.6, v / Math.max(0.01, fill[k]!)))) as RGB;
-    this.leafLuma = 0.299 * leafTop[0] + 0.587 * leafTop[1] + 0.114 * leafTop[2];
+    // the crowns' leaves, per kind: the canopy strip (cut into cells like the ground strip, so clamped) and its leaf
+    // fill (hex-tiled, so repeating); the fill's colour matched to the strip's dense top, whose brightness the
+    // season's colours map from
+    this.canopyTex = CANOPIES.map((k) => texture(gl, a[k], 'clamp', 'clamp'));
+    this.leafTex = LEAF_FILLS.map((k) => texture(gl, a[k], 'repeat', 'repeat'));
+    CANOPIES.forEach((k, i) => {
+      const solid = solidRows(a[k]);
+      const top = soilColor(a[k], 0, 0.8 * solid);
+      const fill = soilColor(a[LEAF_FILLS[i]!], 0, 1);
+      this.canopySolid[i] = solid;
+      this.leafGain[i] = top.map((v, c) => Math.max(0.6, Math.min(1.6, v / Math.max(0.01, fill[c]!)))) as RGB;
+      this.leafLuma[i] = 0.299 * top[0] + 0.587 * top[1] + 0.114 * top[2];
+    });
   }
 
-  /** a new ground: eases in from the one shown, or snaps (`now`, or nothing shown yet) */
+  /** trunks as they arrive (assets.ts: fetchTrunks), as textures: their pictures and reliefs (data: mipmapped like a
+   * picture, the normals average out with distance). A ground may only be set once its trunks are here */
+  addTrunks(trunks: Map<number, Trunk>): void {
+    const gl = this.gl;
+    for (const [i, t] of trunks) {
+      if (this.trunks.has(i)) continue;
+      this.trunks.set(i, t);
+      if (!gl || this.lost) continue;
+      this.treeTex[i] = texture(gl, t.picture, 'clamp', 'clamp');
+      this.reliefTex[i] = texture(gl, t.relief, 'clamp', 'clamp');
+    }
+  }
+
+  /** a new ground (its trunks added already): eases in from the one shown, or snaps (`now`, or nothing shown yet) */
   setGround(g: Ground, now = false): void {
     this.goal = g;
     if (now || !this.shown || this.gentle) {
@@ -728,7 +762,7 @@ export class ForestRenderer {
     for (let i = 0; i < this.cols; i++) this.groundAt[i * AT_STRIDE + 1] = (this.groundAt[i * AT_STRIDE + 1]! - u0) / this.stripW;
     this.buildRidge(g);
     this.buildBuried(g);
-    this.buildTree(g);
+    this.buildTrees(g);
     this.buildCrown(g);
     if (!gl || this.lost || !this.vbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
@@ -737,60 +771,85 @@ export class ForestRenderer {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.cols, 1, gl.RGBA, gl.FLOAT, this.groundAt);
   }
 
-  /**
-   * The tree's mesh: its picture at the library's size, its foot (the manifest's anchor) SINK under the floor under
-   * its centre. Above KNEE it stands upright; below, each column bends toward the floor under it, so the foot follows
-   * a slope instead of floating over one side of it.
-   */
-  private buildTree(g: Ground): void {
-    const gl = this.gl;
-    const f = frames[TREE];
-    const w = f.w * f.s * TREE_SCALE;
-    const h = f.h * f.s * TREE_SCALE;
-    const foot = f.ay / f.h;
-    const base = heightAt(g, TREE_X) - SINK;
-    const v = this.treeVerts;
-    for (let i = 0; i <= TREE_COLS; i++) {
-      const u = i / TREE_COLS;
-      const x = TREE_X + (u - f.ax / f.w) * w;
-      const bend = heightAt(g, x) - heightAt(g, TREE_X);
-      TREE_ROWS.forEach((r, k) => {
-        const y = base + (foot - r) * h + bend * Math.min(1, Math.max(0, (r - KNEE) / (foot - KNEE)));
-        // u, v in its page (the picture sits GAP texels in, the relief page has the same layout)
-        const uv = [(f.x + u * f.w) / TREE_PAGE.w, (f.y + r * f.h) / TREE_PAGE.h];
-        v.set([x, y, ...uv], (i * TREE_ROWS.length + k) * TREE_STRIDE);
-      });
-    }
-    if (!gl || this.lost || !this.treeVbo) return;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
+  /** tree t's foot (the manifest's anchor, SINK under the floor at its x) and the top of its trunk, leaning with it,
+   * and its view units per tree unit */
+  private treeAt(g: Ground, t: Tree): { foot: number; top: [number, number]; k: number } {
+    const f = trunkFrame(t);
+    const k = TREE_SCALE * t.scale;
+    const foot = heightAt(g, t.x) - SINK;
+    const h = f.ay * f.s * k;
+    return { foot, top: [t.x + h * Math.sin(t.tilt), foot + h * Math.cos(t.tilt)], k };
   }
 
   /**
-   * The crown's pieces over the top of the trunk (crown.ts gives them relative to it). Per piece its outline, a U:
-   * the straight sides from high above down to its centre's height, the underside between, a superellipse wider on
-   * one side, wobbling a little. The canopy strip runs along it, its dense band inside the outline and its leaves
-   * hanging out of it along the outline's normal, u counting from the lowest point. The fan's centre sits high above,
-   * on the U's open top.
+   * The trees' meshes, one after the other: each its picture at its size, mirrored or not, its foot standing in the
+   * floor (treeAt). Above KNEE it leans by its tilt (a shear: the foot stays on the floor); below, each column bends
+   * toward the floor under it, so the foot follows a slope instead of floating over one side of it.
+   */
+  private buildTrees(g: Ground): void {
+    const gl = this.gl;
+    const v = this.treeVerts;
+    this.treeCount = g.trees.length;
+    g.trees.forEach((t, n) => {
+      const f = trunkFrame(t);
+      const page = TREE_PAGES[t.trunk]!;
+      const { foot: base, k } = this.treeAt(g, t);
+      const w = f.w * f.s * k;
+      const h = f.h * f.s * k;
+      const foot = f.ay / f.h;
+      // the anchor's share of the width, from the left as drawn
+      const ax = t.flip ? 1 - f.ax / f.w : f.ax / f.w;
+      const lean = Math.sin(t.tilt);
+      const up = Math.cos(t.tilt);
+      for (let i = 0; i <= TREE_COLS; i++) {
+        const s = i / TREE_COLS;
+        const u = t.flip ? 1 - s : s;
+        const x = t.x + (s - ax) * w;
+        const bend = heightAt(g, x) - heightAt(g, t.x);
+        TREE_ROWS.forEach((r, j) => {
+          const above = (foot - r) * h;
+          const y = base + above * up + bend * Math.min(1, Math.max(0, (r - KNEE) / (foot - KNEE)));
+          // u, v in its page (the picture sits GAP texels in, the relief page has the same layout)
+          v.set(
+            [x + above * lean, y, (f.x + u * f.w) / page.w, (f.y + r * f.h) / page.h],
+            (n * TREE_VERTS + i * TREE_ROWS.length + j) * TREE_STRIDE,
+          );
+        });
+      }
+    });
+    if (!gl || this.lost || !this.treeVbo) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, v, 0, g.trees.length * TREE_VERTS * TREE_STRIDE);
+  }
+
+  /**
+   * The canopy's pieces, each over the top of its tree's trunk (crown.ts gives them relative to it). Per piece its
+   * outline, a U: the straight sides from high above down to its centre's height, the underside between, a
+   * superellipse wider on one side, wobbling a little. The canopy strip runs along it, its dense band inside the
+   * outline and its leaves hanging out of it along the outline's normal, u counting from the lowest point. The fan's
+   * centre sits high above, on the U's open top.
    */
   private buildCrown(g: Ground): void {
     const gl = this.gl;
-    const f = frames[TREE];
-    const top = heightAt(g, TREE_X) - SINK + f.ay * f.s * TREE_SCALE;
-    const sw = CANOPY.w * CANOPY.s;
-    const sh = CANOPY.h * CANOPY.s;
-    const din = this.canopySolid * sh;
+    const tops = g.trees.map((t) => this.treeAt(g, t));
     const v = this.crownVerts;
     // per column of the outline: x, y, the outward normal, arc length from the first
     const e: number[][] = [];
-    g.crown.pieces.forEach(([dx, b, l, r, h, round, wobble], p) => {
-      // crown.ts gives the pieces in the tree's units
-      const [bottom, left, right, ry] = [b, l, r, h].map((n) => n * TREE_SCALE) as [number, number, number, number];
-      const cx = TREE_X + dx * TREE_SCALE;
-      const cy = top + bottom + ry;
+    this.pieceCount = g.crown.pieces.length;
+    g.crown.pieces.forEach(({ tree, layer, dx, bottom: b, left: l, right: r, ry: h, round, wobble }, p) => {
+      // crown.ts gives the pieces in their tree's units; the strip is its tree's kind of leaves
+      const { top, k } = tops[tree]!;
+      const kind = g.trees[tree]!.leaves;
+      const sw = CANOPY[kind]!.w * CANOPY[kind]!.s * LEAF_SCALE;
+      const sh = CANOPY[kind]!.h * CANOPY[kind]!.s * LEAF_SCALE;
+      const din = this.canopySolid[kind]! * sh;
+      const [bottom, left, right, ry] = [b, l, r, h].map((n) => n * k) as [number, number, number, number];
+      const cx = top[0] + dx * k;
+      const cy = top[1] + bottom + ry;
       const high = Math.max(WORLD.top, cy) + CROWN_ABOVE;
       this.pieces.set([cx, cy, left, right], p * 4);
       this.pieceShape.set([ry, round], p * 2);
+      this.pieceShade[p] = LAYER_SHADE[layer]!;
       e.length = 0;
       e.push([cx - left, high]);
       for (let j = 0; j <= CROWN_COLS; j++) {
@@ -817,7 +876,11 @@ export class ForestRenderer {
       let o = p * CROWN_VERTS * CROWN_STRIDE;
       for (const [x, y, nx, ny, s] of e as [number, number, number, number, number][]) {
         const u = (s - lowest) / sw + p * PIECE_U;
-        v.set([x - nx * din, y - ny * din, u, 0, p, x + nx * (sh - din), y + ny * (sh - din), u, 1, p], o);
+        const hx = nx;
+        const hy = ny - HANG;
+        const hl = Math.hypot(hx, hy);
+        const out = sh - din;
+        v.set([x - nx * din, y - ny * din, u, 0, p, x + (hx / hl) * out, y + (hy / hl) * out, u, 1, p], o);
         o += 2 * CROWN_STRIDE;
       }
       // the fan's centre: v keeps falling inward (only the fill shows there)
@@ -825,7 +888,7 @@ export class ForestRenderer {
     });
     if (!gl || this.lost || !this.crownVbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.crownVbo);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, v, 0, this.pieceCount * CROWN_VERTS * CROWN_STRIDE);
   }
 
   /**
@@ -954,8 +1017,7 @@ export class ForestRenderer {
       !this.ridgeTex ||
       !this.mossFill ||
       !this.atlasTex.length ||
-      !this.treeTex ||
-      !this.canopyTex
+      !this.canopyTex.length
     )
       return;
     this.time += dt;
@@ -1033,9 +1095,9 @@ export class ForestRenderer {
     gl.bindVertexArray(this.mesh);
     gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_SHORT, 0);
 
-    // the tree, after the ground: its foot takes the ground over in height blends
-    this.drawTree(hw, hh, g);
-    // its crown over it, back to front
+    // the trees, after the ground: their feet take the ground over in height blends
+    this.drawTrees(hw, hh, g);
+    // the canopy over them, back to front
     this.drawCrown(hw, hh, g);
 
     // what lies buried, over the soil: the treasures' halos, every shadow (dropped a little, blurred), then the
@@ -1093,8 +1155,8 @@ export class ForestRenderer {
     gl.bindVertexArray(null);
   }
 
-  /** the tree's mesh, the ground projected onto its foot */
-  private drawTree(hw: number, hh: number, g: Ground): void {
+  /** the trees' meshes, the ground projected onto their feet: a draw per tree, its picture and its grade */
+  private drawTrees(hw: number, hh: number, g: Ground): void {
     const gl = this.gl!;
     const tr = this.tree!;
     gl.useProgram(tr.prog);
@@ -1103,11 +1165,7 @@ export class ForestRenderer {
     gl.uniform1f(tr.u.uSink!, SINK);
     gl.uniform3f(tr.u.uTint!, ...AIR.tint);
     gl.uniform2f(tr.u.uDrift!, ...g.drift);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.treeTex);
     gl.uniform1i(tr.u.uTree!, 0);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.reliefTex);
     gl.uniform1i(tr.u.uRelief!, 1);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, this.strip);
@@ -1125,41 +1183,56 @@ export class ForestRenderer {
     gl.uniform1f(tr.u.uLift!, LIFT * this.stripH);
     gl.uniform1f(tr.u.uMossV!, MOSS);
     gl.bindVertexArray(this.treeVao);
-    gl.drawElements(gl.TRIANGLES, this.treeCount, gl.UNSIGNED_SHORT, 0);
+    g.trees.forEach((t, n) => {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.treeTex[t.trunk]!);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.reliefTex[t.trunk]!);
+      gl.uniform2f(tr.u.uSeed!, ...t.seed);
+      gl.uniform4f(tr.u.uGrade!, ...t.tint, t.saturation);
+      gl.uniform1f(tr.u.uClimb!, t.climb);
+      gl.drawElements(gl.TRIANGLES, this.treeIdx, gl.UNSIGNED_SHORT, n * this.treeIdx * 2);
+    });
     gl.activeTexture(gl.TEXTURE0);
   }
 
-  /** the crown's pieces in one draw, back to front */
+  /** the canopy's pieces back to front, a draw per piece: each wears its tree's kind of leaves, in its tree's shade */
   private drawCrown(hw: number, hh: number, g: Ground): void {
     const gl = this.gl!;
     const cr = this.crown!;
     gl.useProgram(cr.prog);
     gl.uniform4f(cr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
     this.crownUniforms(cr, CROWN_SHADOW);
-    gl.uniform1fv(cr.u.uPieceShade!, PIECE_SHADE);
+    gl.uniform1fv(cr.u.uPieceShade!, this.pieceShade);
     gl.uniform3f(cr.u.uTint!, ...AIR.tint);
-    gl.uniform1f(cr.u.uSolid!, this.canopySolid);
     gl.uniform1f(cr.u.uSeason!, g.crown.season);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.canopyTex);
     gl.uniform1i(cr.u.uStrip!, 0);
     gl.uniform1f(cr.u.uCellSeed!, CROWN_SEED);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.leafTex);
     gl.uniform1i(cr.u.uLeafFill!, 1);
-    gl.uniform1f(cr.u.uLeafTile!, LEAF_FILL.w * LEAF_FILL.s);
-    gl.uniform3f(cr.u.uLeafGain!, ...this.leafGain);
-    gl.uniform1f(cr.u.uLeafLuma!, this.leafLuma);
     gl.bindVertexArray(this.crownVao);
-    gl.drawElements(gl.TRIANGLES, this.crownCount, gl.UNSIGNED_SHORT, 0);
+    g.crown.pieces.forEach(({ tree }, p) => {
+      const t = g.trees[tree]!;
+      const kind = t.leaves;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.canopyTex[kind]!);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.leafTex[kind]!);
+      gl.uniform1f(cr.u.uSolid!, this.canopySolid[kind]!);
+      gl.uniform1f(cr.u.uLeafTile!, LEAF_FILL[kind]!.w * LEAF_FILL[kind]!.s * LEAF_SCALE);
+      gl.uniform3f(cr.u.uLeafGain!, ...this.leafGain[kind]!);
+      gl.uniform1f(cr.u.uLeafLuma!, this.leafLuma[kind]!);
+      gl.uniform3f(cr.u.uFoliage!, ...t.foliage);
+      gl.drawElements(gl.TRIANGLES, this.crownIdx, gl.UNSIGNED_SHORT, p * this.crownIdx * 2);
+    });
     gl.activeTexture(gl.TEXTURE0);
   }
 
-  /** the crown's pieces and how dark its shade is, for a program that shades by it (shaders/crown.glsl) */
+  /** the canopy's pieces and how dark its shade is, for a program that shades by it (shaders/crown.glsl) */
   private crownUniforms(p: Program, dark: number): void {
     const gl = this.gl!;
     gl.uniform4fv(p.u.uPieces ?? null, this.pieces);
     gl.uniform2fv(p.u.uPieceShape ?? null, this.pieceShape);
+    gl.uniform1i(p.u.uPieceCount ?? null, this.pieceCount);
     gl.uniform1f(p.u.uCrownShadow ?? null, dark);
   }
 
@@ -1172,8 +1245,8 @@ export class ForestRenderer {
       { name: 'ridge.frag · moss body', color: WIRE_COLOR.body, tris: quads * 2 },
       { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
       { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
-      { name: 'tree.frag · tree', color: WIRE_COLOR.tree, tris: TREE_COLS * (TREE_ROWS.length - 1) * 2 },
-      { name: 'crown.frag · canopy pieces', color: WIRE_COLOR.crown, tris: this.crownCount / 3 },
+      { name: 'tree.frag · trees', color: WIRE_COLOR.tree, tris: (this.treeCount * this.treeIdx) / 3 },
+      { name: 'crown.frag · canopy pieces', color: WIRE_COLOR.crown, tris: (this.pieceCount * this.crownIdx) / 3 },
       // drawn twice unless motion is reduced: halo, then the gems' glints
       {
         name: 'buried.frag · halos, glints',
@@ -1217,10 +1290,10 @@ export class ForestRenderer {
     gl.drawElements(gl.LINES, this.wireSoil, gl.UNSIGNED_SHORT, this.wireStrip * 2);
     gl.bindVertexArray(this.wireTreeVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.tree);
-    gl.drawElements(gl.LINES, this.wireTree, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.LINES, this.treeCount * this.wireTreeIdx, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireCrownVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.crown);
-    gl.drawElements(gl.LINES, this.wireCrown, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.LINES, this.pieceCount * this.wireCrownIdx, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireBuriedVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.buried);
     const things = this.buriedCount.reduce((s, n) => s + n, 0);

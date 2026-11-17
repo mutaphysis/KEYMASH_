@@ -5,9 +5,10 @@ import type { AudioEngine } from '../../engine/audio';
 import type { ModePlayer, PlayerHost } from '../types';
 import { $ } from '../../ui/dom';
 import { VERSION_LABEL } from '../../version';
-import { fetchAssets } from './assets';
-import type { Assets } from './assets';
+import { fetchAssets, fetchTrunks } from './assets';
+import type { Assets, Trunk } from './assets';
 import { readGround, WORLD } from './ground';
+import type { Ground } from './ground';
 import { ForestRenderer } from './render';
 import { t } from './messages';
 import { debugCorner, stage3d, wireLegend } from './theme.css';
@@ -16,6 +17,8 @@ import { debugCorner, stage3d, wireLegend } from './theme.css';
 const PER_M = 375;
 /** how fast a flung camera slows down: its speed keeps this share per second */
 const GLIDE = 0.04;
+/** the trunks a forest stands (TRUNKS indices): what has to be fetched before it shows */
+const trunksOf = (g: Ground) => g.trees.map((t) => t.trunk);
 
 export class ForestPlayer implements ModePlayer {
   wrap = $('stageWrap');
@@ -35,6 +38,8 @@ export class ForestPlayer implements ModePlayer {
   private raf = 0;
   private lastFrame = 0;
   private run = 0;
+  /** counts edits: a forest whose trunks arrive after a newer edit is dropped */
+  private edit = 0;
   /** the fingers (or the mouse) on the stage, where their centre and spread were last, and the camera's speed in CSS px/s */
   private touches = new Map<number, { x: number; y: number }>();
   private gesture: { x: number; y: number; spread: number; t: number } | null = null;
@@ -138,9 +143,18 @@ export class ForestPlayer implements ModePlayer {
     }
     const line = document.createTextNode('');
     boot.append(line);
+    // the scene's pictures and this forest's trunks, one byte count for both
+    const g = readGround(src);
+    const bytes = [0, 0, 0, 0];
+    const progress = (k: number) => (n: number, total: number) => {
+      bytes[k] = n;
+      bytes[k + 2] = total;
+      line.textContent = t('bootLoad', { pct: Math.floor((100 * (bytes[0]! + bytes[1]!)) / Math.max(1, bytes[2]! + bytes[3]!)) });
+    };
     let assets: Assets;
+    let trunks: Map<number, Trunk>;
     try {
-      assets = await fetchAssets((n, total) => (line.textContent = t('bootLoad', { pct: Math.floor((100 * n) / total) })));
+      [assets, trunks] = await Promise.all([fetchAssets(progress(0)), fetchTrunks(trunksOf(g), progress(1))]);
     } catch (e) {
       if (run === this.run) line.textContent = t('bootFailed', { err: e instanceof Error ? e.message : String(e) });
       return;
@@ -150,7 +164,7 @@ export class ForestPlayer implements ModePlayer {
       this.r.upload(assets);
       this.uploaded = assets;
     }
-    const g = readGround(src);
+    this.r.addTrunks(trunks);
     this.r.setGround(g, true);
     this.r.home();
     this.vx = this.vy = 0;
@@ -188,7 +202,18 @@ export class ForestPlayer implements ModePlayer {
     const top = this.codeview.scrollTop;
     this.codeview.textContent = src;
     this.codeview.scrollTop = top;
-    this.r.setGround(readGround(src));
+    // the new forest may stand other trunks: it eases in once they are here (the newest edit wins; a failed download
+    // keeps the forest shown, the next edit tries again)
+    const g = readGround(src);
+    const run = this.run;
+    const edit = ++this.edit;
+    fetchTrunks(trunksOf(g))
+      .then((trunks) => {
+        if (run !== this.run || edit !== this.edit) return;
+        this.r.addTrunks(trunks);
+        this.r.setGround(g);
+      })
+      .catch(() => {});
   }
 
   /** centre and spread (mean distance from the centre) of the fingers down */
