@@ -35,7 +35,7 @@ The scripts drive headless Chromium through playwright-core; the first run needs
 canopy, crowns, soil): frame time with frames sent back to back, what each group of draws costs
 (left out in turn; draws are grouped by fragment shader, buried.frag by pass), fragments shaded
 per group (every fragment shader swapped for a counting one: overdraw, heat maps) and so the cost
-per fragment, and what overriding uniforms saves (`--set "uPieceCount=0;uOwn=0,0"`). GPU timer
+per fragment, and what overriding uniforms saves (`--set "uHaze=0"`). GPU timer
 queries are taken too, but on Apple GPUs each query splits the render pass and inflates the
 numbers; the report says so and falls back to the ablation. Results go to `scripts/perf/out/<label>/`
 (report.md, result.json, pictures); `--label before` … `--compare before` shows what a change did.

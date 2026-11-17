@@ -29,7 +29,7 @@ const HELP = `bun scripts/perf.ts [options]
   --rounds <n>       measurements per configuration (default 5)
   --timer-frames <n> frames timed by GPU queries (default 10)
   --set <spec>       a variant: uniforms overridden in every program that has them, e.g. "uHaze=0" or
-                     "uPieceCount=0;uOwn=0,0" (repeatable; one variant runs by default: no canopy shade)
+                     "uHaze=0;uTint=1,1,1" (repeatable; none by default)
   --heatmaps         an overdraw heat map per group, not only the whole frame's
   --per-draw         leave out every draw on its own too (slow: a configuration per draw)
   --trace            record a Chrome trace (trace.json)
@@ -63,7 +63,7 @@ if (a.help) {
   process.exit(0);
 }
 
-/** "uPieceCount=0;uOwn=0,0" → { uPieceCount: [0], uOwn: [0, 0] } */
+/** "uHaze=0;uTint=1,1,1" → { uHaze: [0], uTint: [1, 1, 1] } */
 function overrides(spec: string): Record<string, number[]> {
   return Object.fromEntries(
     spec.split(';').map((s) => {
@@ -86,10 +86,7 @@ const opts: BenchOptions = {
   frames: Number(a.frames),
   rounds: Number(a.rounds),
   timerFrames: Number(a['timer-frames']),
-  // the canopy's shade loops (shaders/crown.glsl) run in every program but the sky's and the buried things'
-  variants: a.set?.length
-    ? Object.fromEntries(a.set.map((s) => [s, overrides(s)]))
-    : { 'no canopy shade (uPieceCount=0;uOwn=0,0)': overrides('uPieceCount=0;uOwn=0,0') },
+  variants: Object.fromEntries((a.set ?? []).map((s) => [s, overrides(s)])),
   heatmaps: !!a.heatmaps,
   perDraw: !!a['per-draw'],
 };
