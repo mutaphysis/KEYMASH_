@@ -80,9 +80,9 @@ export const TYPES = {
   'moss-fill': { density: 1, scale: 'cell', kind: 'textures' },
   ribbon: { density: 1, scale: 'cell', kind: 'ribbon' },
   // the leaf cover over the tree tops: its lower edge (a ribbon hanging from above, mirrored along the top of the
-  // view) and the dense foliage above it (tiled like the soils)
-  canopy: { density: 1, scale: 'cell', hangs: true, kind: 'ribbon' },
-  'leaf-fill': { density: 1, scale: 'cell', kind: 'textures' },
+  // view) and the dense foliage above it (tiled like the soils); packed at 2 texels per view unit by their leaf size
+  canopy: { density: 2, scale: 'cell', hangs: true, kind: 'ribbon' },
+  'leaf-fill': { density: 2, scale: 'cell', kind: 'textures' },
 } satisfies Record<string, Rule>;
 type TypeName = keyof typeof TYPES;
 

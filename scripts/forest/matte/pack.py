@@ -17,7 +17,8 @@ first, 16 px apart, so the mip blur (depth of field) of one sprite never reaches
 of their own instead: they are big, and a scene shows a few of them, so it fetches only those. Each tree page has a
 relief page beside it, same layout (relief.py: normal and depth, for merging its foot into the ground). Repeating
 textures (soils) stay single images: GL repeat works on whole textures only. A texture carries `s` (view units per
-texel) where the plan gives one: the leaf cover's strips and fills, scaled by their leaf size so the leaves match.
+texel) where the plan gives one: the leaf cover's strips and fills, scaled by their leaf size so the leaves match,
+and brought down to their type's density (texels per view unit) if they have more.
 
 Usage: uv run scripts/forest/matte/pack.py <library-dir> <out-dir> [--ts <manifest.ts>]
 """
@@ -65,6 +66,25 @@ def crop_page(img: np.ndarray) -> np.ndarray:
     h = int(-(-(ys.max() + GAP) // 4) * 4)
     w = int(-(-(xs.max() + GAP) // 4) * 4)
     return img[:h, :w]
+
+
+def at_density(img: Image.Image, s: float, density: float, seamless: bool) -> tuple[Image.Image, float]:
+    """A texture that knows its scale (`s`, view units per texel) brought down to `density` texels per view unit,
+    never up; returns it with its new `s`. A seamless tile is resized as a 3 x 3 repeat and cut back out, so its
+    edges still meet; a strip with alpha is resized premultiplied, so its cut edges stay clean."""
+    if density * s >= 1:
+        return img, s
+    w, h = max(1, round(img.width * density * s)), max(1, round(img.height * density * s))
+    units = img.width * s
+    if seamless:
+        big = Image.new(img.mode, (img.width * 3, img.height * 3))
+        for y in range(3):
+            for x in range(3):
+                big.paste(img, (x * img.width, y * img.height))
+        img = big.resize((w * 3, h * 3), Image.LANCZOS).crop((w, h, 2 * w, 2 * h))
+    else:
+        img = img.convert("RGBa").resize((w, h), Image.LANCZOS).convert("RGBA")
+    return img, round(units / w, 5)
 
 
 def check(name: str, sheet: dict, cells: list[dict], report: list[dict]) -> list[dict]:
@@ -214,13 +234,16 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
             for k, tile in enumerate(sorted((lib / name).glob("tile-*.png"))):
                 file = f"tex-{prefix}-{k}.webp"
                 img = Image.open(tile).convert("RGB")
+                s = scales[k] if k < len(scales) else None
+                if s is not None:
+                    img, s = at_density(img, s, sheet["density"], seamless=True)
                 img.save(out / file, quality=84, method=6)
                 manifest["textures"][f"{prefix}-{k}"] = {
                     "file": file,
                     "w": img.width,
                     "h": img.height,
                     "bytes": (out / file).stat().st_size,
-                    **({"s": scales[k]} if k < len(scales) else {}),
+                    **({"s": s} if s is not None else {}),
                 }
         elif sheet["kind"] == "ribbon":
             src = lib / name / "ribbon.png"
@@ -228,6 +251,9 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
                 continue
             img = Image.open(src).convert("RGBA")
             img = img.crop(img.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox())
+            s = scales[0] if scales else None
+            if s is not None:
+                img, s = at_density(img, s, sheet["density"], seamless=False)
             # ground-strip → ground, ground-strip-b → ground-b; canopy-oak stays canopy-oak
             key = name.replace("ground-strip", "ground")
             file = f"tex-{key}.webp"
@@ -240,7 +266,7 @@ def pack(lib: Path, out: Path, ts: Path | None) -> None:
                 "bytes": (out / file).stat().st_size,
                 "wrap": "mirror",
                 **({"hangs": True} if sheet.get("hangs") else {}),
-                **({"s": scales[0]} if scales else {}),
+                **({"s": s} if s is not None else {}),
             }
 
     total = sum(a["bytes"] + a.get("relief", {}).get("bytes", 0) for a in manifest["atlases"].values())

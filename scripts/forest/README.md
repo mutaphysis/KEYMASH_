@@ -321,7 +321,8 @@ picture's high-passed luminance) and the depth. The mode merges the foot with th
 Trunks leave the top of the view, and the cut shows. The leaf cover hides it, made like the ground upside down: four
 edge strips that hang from above (type `canopy`: birch, oak, beech, maple, one 2K 16:9 picture each) and a 2 × 2
 sheet of seamless leaf fills for the body above them (type `leaf-fill`, `leaves`, the same four trees in the same
-order). All in `12-library.ts`; $0.72 with one re-roll of the fills. Not packed into the mode yet.
+order). All in `12-library.ts`; $0.72 with one re-roll of the fills. MYCELIUM_ draws the beech's strip and fill as
+its tree's crown (`src/modes/mycelium/README.md`).
 `matte/canopy.py` previews the seam from a packed library (`seam-blend.webp`); older composites, made with throwaway
 scripts, are beside it in `samples/16-canopy/`: `cover.webp` (the first fills over two trunks, zoomed out),
 `seam.webp` (fill graded or not), `native.png` (strip top and fill at their source pixels).
@@ -362,10 +363,13 @@ scripts, are beside it in `samples/16-canopy/`: `cover.webp` (the first fills ov
   its fill), which a gain like the moss carpets' `uMossGain` (matching the fill to the strip's top) would close.
   The fill must not reach below the strip's solid band: its straight bottom edge shows through the gaps. Rows ≥ 97 %
   opaque: birch 29 % of the strip's height, beech 27 %, maple 15 %, oak 9 % (oak is open almost from the top).
-- **Size**: packed as they are (2752 px wide, 0.5–0.84 MB each, 2.8 MB for four) the strips weigh more than all
-  soils and mosses. At 1 texel per view unit they would be 595–1030 px wide; the packer doesn't scale textures yet.
-- Not tried: the gain above; a canopy edge per depth layer; sway in the shader; autumn colours (the theme could tint,
-  but leaves would need their own hue shift).
+- **Size**: packed as they came (2752 px wide, 0.5–0.84 MB each, 2.8 MB for four) the strips weighed more than all
+  soils and mosses. `pack.py` now brings a texture that carries `s` down to its type's density, 2 texels per view
+  unit for the leaf cover (resized premultiplied; a seamless fill as a 3 × 3 repeat, cut back out so its edges still
+  meet): strips 1191–2064 px wide, 0.2–0.67 MB (1.5 MB for four), fills 383–690 px, 30–81 KB.
+- In the mode: the fill's colour matched to the strip's dense top by a gain (closes the step above), and the colour
+  replaced by the season's (the photograph's brightness mapped onto it, twigs kept), so autumn needs no new pictures.
+- Not tried: sway in the shader.
 
 ## Recommended pipeline for the mode
 

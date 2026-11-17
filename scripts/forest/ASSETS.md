@@ -186,6 +186,9 @@ hangs from above (`canopy`, a ribbon cut from the bottom up) and a seamless fill
   (a rosette, a hero leaf) that would repeat as a grid. Packed as `tex-leaf-<n>`.
 - The model doesn't keep leaf size between pictures, so each strip and fill tile carries `s` (view units per texel),
   from the plan's `leaf` (a typical leaf in cm and in source pixels): strip and fill draw their leaves the same size.
+  Packed at 2 texels per view unit (the type's density), never more than the source has.
+- Colour is kept: the mode replaces it by the season's (only the brightness counts), and tells twigs from leaves by
+  the photograph's green.
 
 ## Checks
 

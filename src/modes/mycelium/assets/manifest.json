@@ -2597,6 +2597,70 @@
    "h": 480,
    "bytes": 82748
   },
+  "leaf-0": {
+   "file": "tex-leaf-0.webp",
+   "w": 383,
+   "h": 383,
+   "bytes": 30338,
+   "s": 0.50043
+  },
+  "leaf-1": {
+   "file": "tex-leaf-1.webp",
+   "w": 460,
+   "h": 460,
+   "bytes": 44070,
+   "s": 0.5
+  },
+  "leaf-2": {
+   "file": "tex-leaf-2.webp",
+   "w": 526,
+   "h": 526,
+   "bytes": 47046,
+   "s": 0.49972
+  },
+  "leaf-3": {
+   "file": "tex-leaf-3.webp",
+   "w": 690,
+   "h": 690,
+   "bytes": 81102,
+   "s": 0.5
+  },
+  "canopy-birch": {
+   "file": "tex-canopy-birch.webp",
+   "w": 2064,
+   "h": 982,
+   "bytes": 666350,
+   "wrap": "mirror",
+   "hangs": true,
+   "s": 0.5
+  },
+  "canopy-oak": {
+   "file": "tex-canopy-oak.webp",
+   "w": 1651,
+   "h": 755,
+   "bytes": 372526,
+   "wrap": "mirror",
+   "hangs": true,
+   "s": 0.50006
+  },
+  "canopy-beech": {
+   "file": "tex-canopy-beech.webp",
+   "w": 1270,
+   "h": 606,
+   "bytes": 215186,
+   "wrap": "mirror",
+   "hangs": true,
+   "s": 0.50006
+  },
+  "canopy-maple": {
+   "file": "tex-canopy-maple.webp",
+   "w": 1191,
+   "h": 641,
+   "bytes": 260698,
+   "wrap": "mirror",
+   "hangs": true,
+   "s": 0.49991
+  },
   "ground-b": {
    "file": "tex-ground-b.webp",
    "w": 1376,
@@ -2619,5 +2683,5 @@
    "wrap": "mirror"
   }
  },
- "bytes": 7361768
+ "bytes": 9079084
 }
