@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { heightAt, mixGround, mossAt, readGround, ridgeAt, RIDGE_RISE, WORLD } from '../src/modes/mycelium/ground';
 import { BURIED_MAX, isTreasure, reach, TREASURE_MAX } from '../src/modes/mycelium/buried';
 import { CROWN_PIECES, LAYERS } from '../src/modes/mycelium/crown';
-import { TREES_MAX, TREES_MIN, TRUNKS } from '../src/modes/mycelium/trees';
+import { TREE_SCALE, TREES_MAX, TREES_MIN, TRUNKS } from '../src/modes/mycelium/trees';
 
 const TEXTS = ['', 'a', 'under the spruces\nneedles and moss', '🍄🐌🪲', '\ud800 lone \udfff', '\0\0\0', 'x'.repeat(5000)];
 
@@ -74,7 +74,7 @@ test('buried things: a handful of different treasures, stones, inside the world,
   }
 });
 
-test('trees fill the world, neighbours differ, and the canopy fits the shaders: every tree under a front piece', () => {
+test('trees fill the world, neighbours differ, and the canopy fits the shaders: crowns drawn whole, back trees first', () => {
   for (const src of [...TEXTS, ...Array.from({ length: 60 }, (_, i) => `grove ${i} ${'y'.repeat(i)}`)]) {
     const { trees, crown } = readGround(src);
     expect(trees.length).toBeGreaterThanOrEqual(TREES_MIN);
@@ -88,20 +88,29 @@ test('trees fill the world, neighbours differ, and the canopy fits the shaders: 
       if (i > 0) expect(t.x).toBeGreaterThan(trees[i - 1]!.x);
       if (i > 0) expect(t.leaves).not.toBe(trees[i - 1]!.leaves);
     }
-    // a zoomed-out screen (about seven trees) never shows a picture twice
+    // no picture repeats within seven trees
     for (let i = 0; i + 7 <= trees.length; i++) expect(new Set(trees.slice(i, i + 7).map((t) => t.trunk)).size).toBe(7);
     expect(crown.pieces.length).toBeLessThanOrEqual(CROWN_PIECES);
+    expect(crown.seasons.length).toBe(trees.length);
+    // tree by tree from the back, each crown whole: the pieces behind its trunk, then at least one in front of it, each
+    // group back to front; neighbours stand at different depths
     for (const [i, p] of crown.pieces.entries()) {
       expect(p.layer).toBeLessThan(LAYERS);
-      if (i > 0) expect(p.layer).toBeGreaterThanOrEqual(crown.pieces[i - 1]!.layer);
+      const q = crown.pieces[i - 1];
+      if (!q) continue;
+      expect(trees[p.tree]!.depth).toBeLessThanOrEqual(trees[q.tree]!.depth);
+      if (q.tree === p.tree && q.behind === p.behind) expect(p.layer).toBeGreaterThanOrEqual(q.layer);
+      if (q.tree === p.tree) expect(q.behind || !p.behind).toBe(true);
     }
-    // the front piece hides the trunk's cut top: its lowest point under the top, its body over it
-    for (let t = 0; t < trees.length; t++) {
-      const front = crown.pieces.filter((p) => p.tree === t && p.layer === LAYERS - 1);
-      expect(front.length).toBe(1);
-      const p = front[0]!;
-      expect(p.bottom).toBeLessThan(0);
-      expect(Math.abs(p.dx)).toBeLessThan(Math.min(p.left, p.right) / 2);
-    }
+    for (let t = 0; t < trees.length; t++) expect(crown.pieces.some((p) => p.tree === t && !p.behind)).toBe(true);
+    // each crown drawn whole: a tree's pieces follow each other
+    const order = crown.pieces.map((p) => p.tree).filter((t, i, all) => t !== all[i - 1]);
+    expect(new Set(order).size).toBe(trees.length);
+    expect(order.length).toBe(trees.length);
+    for (let i = 1; i < trees.length; i++) expect(Math.abs(trees[i]!.depth - trees[i - 1]!.depth)).toBeGreaterThan(0.25);
+    // the canopy runs out of the world at both ends: a piece of each end tree reaches past the edge
+    const [first, last] = [trees[0]!, trees.at(-1)!];
+    expect(crown.pieces.some((p) => p.tree === 0 && first.x + (p.dx - p.left) * TREE_SCALE < WORLD.x0 - 100)).toBe(true);
+    expect(crown.pieces.some((p) => p.tree === trees.length - 1 && last.x + (p.dx + p.right) * TREE_SCALE > WORLD.x1 + 100)).toBe(true);
   }
 });

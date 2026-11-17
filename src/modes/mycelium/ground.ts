@@ -10,8 +10,8 @@ import { readTrees } from './trees';
 import type { Tree } from './trees';
 
 /** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. 10 m wide.
- * Its top reaches a little into the trees' crowns (render.ts, crown.ts): the view never goes above the trees. */
-export const WORLD = { x0: -1875, x1: 1875, top: 1300, bottom: -2200 } as const;
+ * Its top reaches a little into the tallest trees' crowns (render.ts, crown.ts): the view never goes above the trees. */
+export const WORLD = { x0: -1875, x1: 1875, top: 1700, bottom: -2200 } as const;
 
 export interface Ground {
   /** gentle swells, long to short: amplitude, frequency (per unit), phase */
@@ -86,7 +86,7 @@ export function readGround(src: string): Ground {
   // its own random stream, so the ground's shape doesn't change with how many tries the scattering takes
   const buried = readBuried(mulberry32(hash(src) ^ 0x9e3779b9), [b0, b1, b2], WORLD.x0, WORLD.x1);
   const trees = readTrees(mulberry32(hash(src) ^ 0x27d4eb2f), WORLD.x0, WORLD.x1);
-  const crown = readCrown(mulberry32(hash(src) ^ 0x85ebca6b), trees);
+  const crown = readCrown(mulberry32(hash(src) ^ 0x85ebca6b), trees, WORLD.x0, WORLD.x1);
   return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, buried, trees, crown };
 }
 

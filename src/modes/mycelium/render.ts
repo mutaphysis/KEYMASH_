@@ -4,11 +4,11 @@
 //   ridge   a mossy hill behind the floor: rounded moss cushions whose tops clear the floor (ground.ts, ridgeAt),
 //           a second strip's moss band handing over to a hex-tiled moss carpet below
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
-//   trees   a row of trees standing in the floor (trees.ts), each foot sunk into the moss, the ground projected onto
-//           it and handed over in height blends (shaders/tree.frag); a draw per tree, each graded on its own
-//   crown   the canopy over them (crown.ts): a few canopy pieces per tree stacked back to front, each the canopy strip
-//           hanging along a U with the leaf fill for its body, recoloured by the season; its shade falls on the
-//           trunks, hill and floor
+//   trees   the forest (trees.ts, crown.ts), tree by tree from the back: each its trunk standing in the floor, its
+//           foot sunk into the moss, the ground projected onto it and handed over in height blends (shaders/tree.frag),
+//           then its crown over it, canopy pieces back to front, each the canopy strip hanging along a U with the leaf
+//           fill for its body, recoloured by the tree's season; trees further back smaller and fading into the air.
+//           The canopy's shade falls on the trunks, hill and floor
 //   buried  treasure and stones in the soil (buried.ts): one quad each from the library's atlases, over a soft shadow
 //   post    contrast, vignette, grain
 //   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
@@ -154,18 +154,16 @@ const CROWN_ABOVE = 100;
 const LEAF_SCALE = 0.7;
 /** each piece reads the canopy strip this many strip widths on from the one before, so their cells don't line up */
 const PIECE_U = 2.37;
-/** a canopy strip's leaves hang along the outline's normal blended with straight down this much: along the bare
- * normal they fanned out around a piece's rounded underside and its leaves smeared into streaks (worst on the
- * birch's long curtains); hanging more nearly down, the strip's lower edge runs about as long as its top */
-const HANG = 1.2;
 /** how far a piece's underside wobbles in and out, a share of its size */
 const WOBBLE = 0.07;
-/** how light each layer of pieces is, back to front (crown.ts, LAYERS): further in, more shaded */
+/** how light each layer of a crown's pieces is, back to front (crown.ts, LAYERS): further in, more shaded */
 const LAYER_SHADE = [0.6, 0.72, 0.86, 1];
+/** how far a tree furthest back (Tree.depth 1) has faded into the air */
+const HAZE = 0.3;
 /** the crown's strip cells are seeded apart from the ground's and the hill's */
 const CROWN_SEED = 29;
-/** how dark the crown's shade gets right under a piece: on other pieces and the trunk, and on the hill and floor
- * (further down it is lighter anyway; the floor is lit from the sides too) */
+/** how dark the crown's shade gets right under a piece: on its crown's other pieces and the trunks, and on the hill
+ * and floor (further down it is lighter anyway; the floor is lit from the sides too) */
 const CROWN_SHADOW = 0.6;
 const FLOOR_SHADOW = 0.4;
 
@@ -777,7 +775,7 @@ export class ForestRenderer {
     const f = trunkFrame(t);
     const k = TREE_SCALE * t.scale;
     const foot = heightAt(g, t.x) - SINK;
-    const h = f.ay * f.s * k;
+    const h = f.ay * f.s * k * t.stretch;
     return { foot, top: [t.x + h * Math.sin(t.tilt), foot + h * Math.cos(t.tilt)], k };
   }
 
@@ -795,7 +793,7 @@ export class ForestRenderer {
       const page = TREE_PAGES[t.trunk]!;
       const { foot: base, k } = this.treeAt(g, t);
       const w = f.w * f.s * k;
-      const h = f.h * f.s * k;
+      const h = f.h * f.s * k * t.stretch;
       const foot = f.ay / f.h;
       // the anchor's share of the width, from the left as drawn
       const ax = t.flip ? 1 - f.ax / f.w : f.ax / f.w;
@@ -837,14 +835,15 @@ export class ForestRenderer {
     const e: number[][] = [];
     this.pieceCount = g.crown.pieces.length;
     g.crown.pieces.forEach(({ tree, layer, dx, bottom: b, left: l, right: r, ry: h, round, wobble }, p) => {
-      // crown.ts gives the pieces in their tree's units; the strip is its tree's kind of leaves
-      const { top, k } = tops[tree]!;
+      // crown.ts gives the pieces relative to their trunk's top, scaled by TREE_SCALE only: a smaller tree further
+      // back keeps a crown as wide as any, or the crowns shrank to lollipops; the strip is its tree's kind of leaves
+      const { top } = tops[tree]!;
       const kind = g.trees[tree]!.leaves;
       const sw = CANOPY[kind]!.w * CANOPY[kind]!.s * LEAF_SCALE;
       const sh = CANOPY[kind]!.h * CANOPY[kind]!.s * LEAF_SCALE;
       const din = this.canopySolid[kind]! * sh;
-      const [bottom, left, right, ry] = [b, l, r, h].map((n) => n * k) as [number, number, number, number];
-      const cx = top[0] + dx * k;
+      const [bottom, left, right, ry] = [b, l, r, h].map((n) => n * TREE_SCALE) as [number, number, number, number];
+      const cx = top[0] + dx * TREE_SCALE;
       const cy = top[1] + bottom + ry;
       const high = Math.max(WORLD.top, cy) + CROWN_ABOVE;
       this.pieces.set([cx, cy, left, right], p * 4);
@@ -876,11 +875,9 @@ export class ForestRenderer {
       let o = p * CROWN_VERTS * CROWN_STRIDE;
       for (const [x, y, nx, ny, s] of e as [number, number, number, number, number][]) {
         const u = (s - lowest) / sw + p * PIECE_U;
-        const hx = nx;
-        const hy = ny - HANG;
-        const hl = Math.hypot(hx, hy);
-        const out = sh - din;
-        v.set([x - nx * din, y - ny * din, u, 0, p, x + (hx / hl) * out, y + (hy / hl) * out, u, 1, p], o);
+        // the strip lies across the outline, its leaves hanging along the normal: blended toward straight down, the
+        // ribbon sheared on the steep sides and tilted their leaves
+        v.set([x - nx * din, y - ny * din, u, 0, p, x + nx * (sh - din), y + ny * (sh - din), u, 1, p], o);
         o += 2 * CROWN_STRIDE;
       }
       // the fan's centre: v keeps falling inward (only the fill shows there)
@@ -1095,10 +1092,9 @@ export class ForestRenderer {
     gl.bindVertexArray(this.mesh);
     gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_SHORT, 0);
 
-    // the trees, after the ground: their feet take the ground over in height blends
-    this.drawTrees(hw, hh, g);
-    // the canopy over them, back to front
-    this.drawCrown(hw, hh, g);
+    // the forest, after the ground (the trees' feet take the ground over in height blends): tree by tree from the
+    // back, each its trunk, then its crown
+    this.drawForest(hw, hh, g);
 
     // what lies buried, over the soil: the treasures' halos, every shadow (dropped a little, blurred), then the
     // pictures; an atlas a draw
@@ -1155,8 +1151,12 @@ export class ForestRenderer {
     gl.bindVertexArray(null);
   }
 
-  /** the trees' meshes, the ground projected onto their feet: a draw per tree, its picture and its grade */
-  private drawTrees(hw: number, hh: number, g: Ground): void {
+  /**
+   * The forest, tree by tree from the back (crown.ts gives the pieces in that order): each tree's trunk, the ground
+   * projected onto its foot, its picture and its grade; then its crown's pieces back to front, each in its tree's kind
+   * of leaves, season and shade. A tree further back fades into the air.
+   */
+  private drawForest(hw: number, hh: number, g: Ground): void {
     const gl = this.gl!;
     const tr = this.tree!;
     gl.useProgram(tr.prog);
@@ -1164,6 +1164,8 @@ export class ForestRenderer {
     gl.uniform4f(tr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
     gl.uniform1f(tr.u.uSink!, SINK);
     gl.uniform3f(tr.u.uTint!, ...AIR.tint);
+    gl.uniform3f(tr.u.uSkyHigh!, ...AIR.skyHigh);
+    gl.uniform3f(tr.u.uSkyLow!, ...AIR.skyLow);
     gl.uniform2f(tr.u.uDrift!, ...g.drift);
     gl.uniform1i(tr.u.uTree!, 0);
     gl.uniform1i(tr.u.uRelief!, 1);
@@ -1182,8 +1184,21 @@ export class ForestRenderer {
     gl.uniform2f(tr.u.uGroundCols!, WORLD.x0 - MARGIN, COL);
     gl.uniform1f(tr.u.uLift!, LIFT * this.stripH);
     gl.uniform1f(tr.u.uMossV!, MOSS);
-    gl.bindVertexArray(this.treeVao);
-    g.trees.forEach((t, n) => {
+    const cr = this.crown!;
+    gl.useProgram(cr.prog);
+    gl.uniform4f(cr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    this.crownUniforms(cr, CROWN_SHADOW);
+    gl.uniform1fv(cr.u.uPieceShade!, this.pieceShade);
+    gl.uniform3f(cr.u.uTint!, ...AIR.tint);
+    gl.uniform3f(cr.u.uSkyHigh!, ...AIR.skyHigh);
+    gl.uniform3f(cr.u.uSkyLow!, ...AIR.skyLow);
+    gl.uniform1i(cr.u.uStrip!, 0);
+    gl.uniform1f(cr.u.uCellSeed!, CROWN_SEED);
+    gl.uniform1i(cr.u.uLeafFill!, 1);
+    // a tree's trunk, under its own crown's pieces from `first` on and the crowns of the trees in front
+    const trunk = (t: Tree, tree: number, first: number) => {
+      gl.useProgram(tr.prog);
+      gl.bindVertexArray(this.treeVao);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.treeTex[t.trunk]!);
       gl.activeTexture(gl.TEXTURE1);
@@ -1191,27 +1206,15 @@ export class ForestRenderer {
       gl.uniform2f(tr.u.uSeed!, ...t.seed);
       gl.uniform4f(tr.u.uGrade!, ...t.tint, t.saturation);
       gl.uniform1f(tr.u.uClimb!, t.climb);
-      gl.drawElements(gl.TRIANGLES, this.treeIdx, gl.UNSIGNED_SHORT, n * this.treeIdx * 2);
-    });
-    gl.activeTexture(gl.TEXTURE0);
-  }
-
-  /** the canopy's pieces back to front, a draw per piece: each wears its tree's kind of leaves, in its tree's shade */
-  private drawCrown(hw: number, hh: number, g: Ground): void {
-    const gl = this.gl!;
-    const cr = this.crown!;
-    gl.useProgram(cr.prog);
-    gl.uniform4f(cr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
-    this.crownUniforms(cr, CROWN_SHADOW);
-    gl.uniform1fv(cr.u.uPieceShade!, this.pieceShade);
-    gl.uniform3f(cr.u.uTint!, ...AIR.tint);
-    gl.uniform1f(cr.u.uSeason!, g.crown.season);
-    gl.uniform1i(cr.u.uStrip!, 0);
-    gl.uniform1f(cr.u.uCellSeed!, CROWN_SEED);
-    gl.uniform1i(cr.u.uLeafFill!, 1);
-    gl.bindVertexArray(this.crownVao);
-    g.crown.pieces.forEach(({ tree }, p) => {
-      const t = g.trees[tree]!;
+      gl.uniform1i(tr.u.uFirstPiece!, first);
+      gl.uniform1f(tr.u.uHaze!, HAZE * t.depth);
+      gl.drawElements(gl.TRIANGLES, this.treeIdx, gl.UNSIGNED_SHORT, tree * this.treeIdx * 2);
+    };
+    // a tree's crown: its kind of leaves, its season and its shade of it; its own pieces (start … end - 1) shade each
+    // other, as in a crown standing alone, the other trees' don't
+    const leaves = (t: Tree, tree: number, start: number, end: number) => {
+      gl.useProgram(cr.prog);
+      gl.bindVertexArray(this.crownVao);
       const kind = t.leaves;
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.canopyTex[kind]!);
@@ -1221,7 +1224,27 @@ export class ForestRenderer {
       gl.uniform1f(cr.u.uLeafTile!, LEAF_FILL[kind]!.w * LEAF_FILL[kind]!.s * LEAF_SCALE);
       gl.uniform3f(cr.u.uLeafGain!, ...this.leafGain[kind]!);
       gl.uniform1f(cr.u.uLeafLuma!, this.leafLuma[kind]!);
+      gl.uniform1i(cr.u.uLeafKind!, kind);
+      gl.uniform1f(cr.u.uSeason!, g.crown.seasons[tree]!);
       gl.uniform3f(cr.u.uFoliage!, ...t.foliage);
+      gl.uniform1f(cr.u.uHaze!, HAZE * t.depth);
+      gl.uniform2i(cr.u.uOwn!, start, end);
+    };
+    // tree by tree: the pieces behind its trunk, the trunk, then the rest (crown.ts sorts them so; every crown has a
+    // piece in front, so every trunk is drawn)
+    const pieces = g.crown.pieces;
+    let start = 0;
+    pieces.forEach(({ tree, behind }, p) => {
+      const t = g.trees[tree]!;
+      const first = p === 0 || pieces[p - 1]!.tree !== tree;
+      if (first) start = p;
+      const front = !behind && (first || pieces[p - 1]!.behind);
+      if (front) trunk(t, tree, p);
+      if (first || front) {
+        let end = p;
+        while (pieces[end]?.tree === tree) end++;
+        leaves(t, tree, start, end);
+      }
       gl.drawElements(gl.TRIANGLES, this.crownIdx, gl.UNSIGNED_SHORT, p * this.crownIdx * 2);
     });
     gl.activeTexture(gl.TEXTURE0);

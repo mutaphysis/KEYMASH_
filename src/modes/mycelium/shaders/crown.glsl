@@ -40,18 +40,19 @@ float pieceUnderside(int i, float x) {
   return uPieces[i].y - s.x * pow(max(1.0 - pow(d, s.y), 0.0), 1.0 / s.y);
 }
 
-/** how much sky light reaches p past the pieces above it (1: all); piece `skip` casts none (-1: every piece casts) */
-float crownShade(vec2 p, int skip) {
+/** how much sky light reaches p past pieces from … to - 1 above it (1: all); piece `skip` casts none (-1: every piece
+ * in the range casts) */
+float crownShade(vec2 p, int from, int to, int skip) {
   float open = 1.0;
   for (int i = 0; i < CROWN_PIECES; i++) {
-    if (i >= uPieceCount) break;
+    if (i >= to) break;
     vec4 P = uPieces[i];
     // the underside lies below the centre: above it by more than the fade, p is lit. Further down, the column's
     // shift and blur grow with the distance, at most what the centre's height gives
     float top = P.y - p.y;
     float h0 = max(top, 0.0);
     float near = max(max(P.x - p.x, p.x - SHADE_SLANT * h0 - P.x), 0.0);
-    if (i == skip || top < -30.0 || near - 0.9 * max(P.z, P.w) > 50.0 + 0.4 * h0) continue;
+    if (i < from || i == skip || top < -30.0 || near - 0.9 * max(P.z, P.w) > 50.0 + 0.4 * h0) continue;
     float below = pieceUnderside(i, p.x) - p.y;
     float h = max(below, 0.0);
     float blur = 50.0 + 0.4 * h;

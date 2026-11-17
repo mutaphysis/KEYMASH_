@@ -17,6 +17,8 @@ uniform vec2 uDrift;       // where the noise is read: each program its own
 uniform vec2 uSeed;        // and each tree its own place in it
 uniform vec4 uGrade;       // this tree's bark: a gain per channel, its saturation (1: as photographed)
 uniform float uClimb;      // how high its moss climbs (1: CLIMB)
+uniform int uFirstPiece;   // the first canopy piece drawn after it: its own crown's back piece
+uniform float uHaze;       // how far it has faded into the air: the further back, the more
 
 out vec4 o;
 
@@ -92,6 +94,9 @@ void main() {
   vec4 g = groundAt(vWorld);
   float under = 1.0 - smoothstep(-uSink, 10.0, above + ragged(9.0, 10.0, 7.0));
   c = mix(c, groundOver(c, g), heightMix(h, stripHeight(g) + 0.2 * g.a, under, SHARP));
-  // the trunk rises into the crown: in its shade, and inside it seen only through its leaves' gaps
-  o = vec4(c.rgb * uTint * crownShade(vWorld, -1) * crownOcclusion(vWorld, 0), c.a);
+  // the trunk rises into the crown: in its shade, and behind its own crown and the crowns of the trees in front seen
+  // only through their leaves' gaps. Then the air between it and the eye, gone by the floor: the ground projected
+  // onto its foot must match the floor around it
+  vec3 lit = c.rgb * uTint * crownShade(vWorld, 0, uPieceCount, -1) * crownOcclusion(vWorld, uFirstPiece);
+  o = vec4(mix(lit, airAt(vWorld.y) * c.a, uHaze * smoothstep(20.0, 220.0, above)), c.a);
 }

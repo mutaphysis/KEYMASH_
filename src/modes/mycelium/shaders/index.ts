@@ -1,10 +1,12 @@
 // MYCELIUM_'s shaders, put together from the pieces in this folder: shared libraries (noise, camera, height blend,
-// hex tiling, soil, strip, the floor at a point, the crown's shade, its leaves) first, then the stage's own main().
+// hex tiling, the air, soil, strip, the floor at a point, the crown's shade, its leaves) first, then the stage's own
+// main().
 // Each .glsl file states what it needs above it.
 import { CROWN_PIECES } from '../crown';
 import noise from './noise.glsl?raw';
 import camera from './camera.glsl?raw';
 import blend from './blend.glsl?raw';
+import air from './air.glsl?raw';
 import hex from './hex.glsl?raw';
 import soil from './soil.glsl?raw';
 import strip from './strip.glsl?raw';
@@ -40,11 +42,11 @@ export const RIDGE_FS = glsl(noise, blend, hex, strip, mossfill, crown, ridgeFra
 export const BURIED_VS = glsl(camera, buriedVert);
 export const BURIED_FS = glsl(noise, buriedFrag);
 export const TREE_VS = glsl(camera, treeVert);
-export const TREE_FS = glsl(noise, blend, hex, strip, mossfill, groundat, crown, treeFrag);
+export const TREE_FS = glsl(noise, blend, hex, air, strip, mossfill, groundat, crown, treeFrag);
 export const CROWN_VS = glsl(camera, crownVert);
-export const CROWN_FS = glsl(noise, blend, hex, strip, crown, leaves, crownFrag);
+export const CROWN_FS = glsl(noise, blend, hex, air, strip, crown, leaves, crownFrag);
 export const SCREEN_VS = glsl(camera, screenVert);
-export const SKY_FS = glsl(noise, skyFrag);
+export const SKY_FS = glsl(noise, air, skyFrag);
 export const POST_FS = glsl(noise, postFrag);
 // debug: mesh edges (WIRE_VS) and the full-screen triangle's edges (SCREEN_VS), flat colour
 export const WIRE_VS = glsl(camera, wireVert);
