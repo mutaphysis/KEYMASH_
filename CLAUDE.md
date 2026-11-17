@@ -18,9 +18,10 @@ bun run lint         # oxlint (scripts/ is ignored)
 bun run format       # oxfmt: printWidth 140, single quotes; *.md and public/ are not formatted
 bun scripts/sheet.ts # re-render cheat-sheet pictures + the picture table in src/modes/<id>/README.md
 bun scripts/icons.ts # re-render public/ icons from scripts/icon.svg
+bun scripts/perf.ts  # MYCELIUM_ GPU perf report: frame time, cost per layer, overdraw, shader cost per fragment (--help)
 ```
 
-Both scripts use playwright-core (headless Chromium) under bun — no python. First run:
+The scripts use playwright-core (headless Chromium) under bun — no python. First run:
 `bunx playwright-core install chromium-headless-shell`. tsc covers `scripts/` too; oxlint ignores it.
 
 CI (`.github/workflows/check.yml`) runs lint, format:check, typecheck, test. Pushing to `main` deploys to GitHub Pages.
@@ -50,6 +51,7 @@ that is a normal shutdown, not a crash; nothing to fix. Port 5173 is often taken
 - `src/styles/theme.css.ts` — theme contract (`vars`, `layout`, `rgba()`); `global.css.ts` — shell styles (header grid areas: icon, logo, ver, status, sheet, mute). Each mode's `theme.css.ts` fills the contract via `createTheme`.
 - `scripts/sheet.ts` — starts a Vite dev server (config-less: vanilla-extract + version defines), opens `scripts/sheet/index.html` in Chromium, calls `window.shots()` (`scripts/sheet/shoot.ts`: replays each card through the real VM/`Renderer` or `Petri`/`MicroRenderer` in simulated time, `Math.random` seeded per card), writes the WebPs and rewrites the README table between `<!-- sheet:start … -->` / `<!-- sheet:end -->`. A new mode needs its own capture function in `SHOOT`.
 - `scripts/icons.ts` — renders `scripts/icon.svg` to the PNGs in `public/` (byte output differs between Chromium versions; don't commit re-renders of an unchanged icon). `scripts/ui-icons.ts` — the UI icon list + downloader (see `src/ui/icon.ts`). `scripts/checker-lint.ts` — oxlint + oxfmt report for the dev overlay.
+- `scripts/perf.ts` — MYCELIUM_ perf harness: headless Chromium on the real GPU (ANGLE Metal), a Vite server with COOP/COEP (5 µs timers), opens `scripts/perf/index.html`, calls `window.bench()` (`scripts/perf/bench.ts`: the real `ForestRenderer`, budget pinned to one rung, camera `VIEWS` home/wide/close/canopy/crowns/soil), writes `scripts/perf/out/<label>/` (gitignored: report.md, result.json, scene + overdraw pictures, `--trace` a Chrome trace). `scripts/perf/gltrace.ts` (`traced()`, `GLTrace`) patches the WebGL2 context the renderer gets: draws grouped by the fragment shader's export name in `shaders/index.ts` (buried by `PASS`), `skip`/`only` per group or `group#n`, uniform `overrides` (the `--set` variants), timer queries, and `counting` (each program's vertex shader with a counting fragment shader, additive: overdraw). On Apple GPUs timer queries split the render pass (their sum is many times the frame): trust ablate (`skip`) there. A new layer needs no harness change unless it adds a program that should split into several groups (then extend `group` in bench.ts). Workflow: `--label before`, change, `--compare before`; `--per-draw` for which draw costs, `--heatmaps` per group.
 
 ## Conventions
 

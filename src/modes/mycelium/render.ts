@@ -123,8 +123,8 @@ const HALO_PAD = 14;
 const HALO_DARK = 0.5;
 /** buried things lie out of the sun, in the soil's shade */
 const BURIED_DIM = 0.8;
-/** the passes of buried.frag */
-const PASS = { picture: 0, shadow: 1, halo: 2, glint: 3 } as const;
+/** the passes of buried.frag (scripts/perf names its draws by them) */
+export const PASS = { picture: 0, shadow: 1, halo: 2, glint: 3 } as const;
 
 /** a tree's mesh: this many columns; the rows below KNEE (a share of the picture from the top) bend with the floor */
 const TREE_COLS = 16;

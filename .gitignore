@@ -6,3 +6,4 @@ dist
 .claude/launch.json
 scripts/forest/samples/
 __pycache__/
+scripts/perf/out/

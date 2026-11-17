@@ -25,10 +25,20 @@ bun run format        # oxfmt (format:check in CI)
 bun run analyze       # build, then open the bundle analyzer (DevTools for Rolldown) on :9999
 bun scripts/sheet.ts  # re-render the cheat-sheet pictures (see "Cheat-sheet pictures")
 bun scripts/icons.ts  # re-render the app icons from scripts/icon.svg
+bun scripts/perf.ts   # MYCELIUM_ performance report on the real GPU (--help for options)
 ```
 
-Both scripts drive headless Chromium through playwright-core; the first run needs
+The scripts drive headless Chromium through playwright-core; the first run needs
 `bunx playwright-core install chromium-headless-shell`.
+
+`bun scripts/perf.ts` measures MYCELIUM_'s renderer per text and camera view (home, wide, close,
+canopy, crowns, soil): frame time with frames sent back to back, what each group of draws costs
+(left out in turn; draws are grouped by fragment shader, buried.frag by pass), fragments shaded
+per group (every fragment shader swapped for a counting one: overdraw, heat maps) and so the cost
+per fragment, and what overriding uniforms saves (`--set "uPieceCount=0;uOwn=0,0"`). GPU timer
+queries are taken too, but on Apple GPUs each query splits the render pass and inflates the
+numbers; the report says so and falls back to the ablation. Results go to `scripts/perf/out/<label>/`
+(report.md, result.json, pictures); `--label before` … `--compare before` shows what a change did.
 
 Git hooks ([lefthook](https://lefthook.dev), installed by `bun install`): every commit
 formats the staged files with oxfmt (and re-stages them) and lints them with oxlint;
@@ -135,6 +145,7 @@ src/styles/theme.css.ts  the theme contract (design tokens every mode fills in)
 src/styles/global.css.ts the app shell's styles
 src/i18n.ts              language detection + defineMessages(); the shared UI's text
 scripts/sheet.ts         renders the cheat-sheet pictures (browser side: scripts/sheet/)
+scripts/perf.ts          MYCELIUM_'s GPU perf harness (browser side: scripts/perf/, GL instrumentation scripts/perf/gltrace.ts)
 scripts/icons.ts         renders the app icons
 scripts/ui-icons.ts      downloads the UI icons from the Iconify API and writes src/ui/icons/index.ts
 ```
