@@ -10,7 +10,7 @@ lives in `src/modes/<id>/README.md`. Read them before larger changes.
 ## Commands
 
 ```sh
-bun run dev          # Vite dev server; tsc + oxlint + oxfmt problems show in terminal and in-page overlay
+bun run dev          # Vite dev server; tsc + oxlint + oxfmt problems show in terminal and in-page overlay (starts closed: click its badge)
 bun run build        # tsc + vite build -> dist/ (index.html, main chunk, one chunk per mode; served by GitHub Pages, needs http)
 bun test             # test/vm.test.ts (fuzz: the VM must never throw), test/petri.test.ts, test/cookie.test.ts, test/mycelium.test.ts
 bun run typecheck    # tsc (TypeScript 7, strict, noUnusedLocals, noImplicitOverride)

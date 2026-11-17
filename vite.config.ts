@@ -20,8 +20,9 @@ function gitSha(): string {
 // Built for GitHub Pages: a small index.html + main chunk, every mode a chunk of its own (fetched
 // on first use), pictures and fonts as files. Needs to be served over http(s), not opened from disk.
 // `bun run dev` checks as you type: TypeScript, oxlint and oxfmt (scripts/checker-lint.ts merges
-// both into one report) show in the terminal and the in-page overlay. CI runs them separately,
-// so the build skips them. Vite DevTools (dock on Shift+Alt+D, /__devtools/) has a checker panel too.
+// both into one report) show in the terminal and the in-page overlay, which starts closed (its badge
+// opens it), so it doesn't cover the stage. CI runs them separately, so the build skips them.
+// Vite DevTools (dock on Shift+Alt+D, /__devtools/) has a checker panel too.
 // `bun run analyze` builds and then serves the bundle analyzer (DevTools for Rolldown).
 export default defineConfig(({ command, mode }) => ({
   base: './',
@@ -29,6 +30,7 @@ export default defineConfig(({ command, mode }) => ({
     vanillaExtractPlugin(),
     checker({
       enableBuild: false,
+      overlay: { initialIsOpen: false },
       typescript: true,
       oxlint: { lintCommand: 'bun scripts/checker-lint.ts', watchPath: ['src', 'test', 'index.html', 'vite.config.ts'] },
     }),

@@ -16,7 +16,7 @@ TypeScript (strict) + Vite, with bun as package manager and test runner.
 
 ```sh
 bun install
-bun run dev           # Vite dev server with hot reload; TypeScript, oxlint and oxfmt problems show in the terminal and an in-page overlay
+bun run dev           # Vite dev server with hot reload; TypeScript, oxlint and oxfmt problems show in the terminal and an in-page overlay (closed until you click its badge)
 bun run build         # tsc typecheck + vite build -> dist/ (index.html, a main chunk, one chunk per mode)
 bun run preview       # serve the production build (it needs http, opening dist/index.html from disk won't work)
 bun test              # fuzz + unit tests for the interpreter and the culture
