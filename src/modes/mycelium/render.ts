@@ -6,14 +6,17 @@
 //   ground  the moss-and-soil strip bent along the curve, handing over to the hex-tiled soil horizons (one mesh)
 //   tree    one tree standing in the floor, its foot sunk into the moss, the ground projected onto it and handed over
 //           in height blends (shaders/tree.frag)
+//   crown   its crown over it (crown.ts): canopy pieces stacked back to front, each the canopy strip hanging along a U
+//           with the leaf fill for its body, recoloured by the season; its shade falls on the trunk, hill and floor
 //   buried  treasure and stones in the soil (buried.ts): one quad each from the library's atlases, over a soft shadow
 //   post    contrast, vignette, grain
 //   wire    debug only (dev builds' wireframe button): every draw's edges, one colour per shader or material
 // Shaders live in shaders/, one file per piece.
-import { ATLASES, TREE, TREE_PAGE } from './assets';
+import { ATLASES, CANOPY, LEAF_FILL, TREE, TREE_PAGE } from './assets';
 import type { Assets, AtlasKey } from './assets';
 import { atlases, frames } from './assets/manifest.json';
 import { BURIED_MAX, TREASURE_MAX, isGem, isTreasure } from './buried';
+import { CROWN_PIECES, PIECE_LAYER } from './crown';
 import type { Buried } from './buried';
 import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
@@ -22,6 +25,8 @@ import type { GL, Program, Target } from './gl';
 import {
   BURIED_FS,
   BURIED_VS,
+  CROWN_FS,
+  CROWN_VS,
   GROUND_FS,
   GROUND_VS,
   POST_FS,
@@ -45,11 +50,12 @@ export interface WireMaterial {
   color: RGBA;
   tris: number;
 }
-const WIRE_COLOR: Record<'sky' | 'band' | 'body' | 'tree' | 'strip' | 'soil' | 'halo' | 'buried' | 'post', RGBA> = {
+const WIRE_COLOR: Record<'sky' | 'band' | 'body' | 'tree' | 'crown' | 'strip' | 'soil' | 'halo' | 'buried' | 'post', RGBA> = {
   sky: [0.35, 0.8, 1, 0.9],
   band: [0.25, 1, 0.85, 0.85],
   body: [0.2, 0.55, 1, 0.85],
   tree: [1, 1, 1, 0.8],
+  crown: [1, 0.45, 0.35, 0.85],
   strip: [0.55, 1, 0.35, 0.85],
   soil: [1, 0.62, 0.2, 0.85],
   halo: [0.75, 0.45, 1, 0.8],
@@ -131,6 +137,28 @@ const SINK = 45;
 const TREE_STRIDE = 4;
 /** floats per column of the ground lookup (shaders/groundat.glsl): the curve's y, u, the strip's height, its moss */
 const AT_STRIDE = 4;
+/** each canopy piece's outline: its underside in this many segments, between two straight sides */
+const CROWN_COLS = 40;
+/** columns per piece (the sides' tops, the underside's points) and vertices (two per column, the fan's centre) */
+const CROWN_COLUMNS = CROWN_COLS + 3;
+const CROWN_VERTS = 2 * CROWN_COLUMNS + 1;
+/** floats per crown vertex: position, uv, piece */
+const CROWN_STRIDE = 5;
+/** a piece's sides run up this far past the world's top (or its ellipse's centre, if that is higher) */
+const CROWN_ABOVE = 100;
+/** each piece reads the canopy strip this many strip widths on from the one before, so their cells don't line up */
+const PIECE_U = 2.37;
+/** how far a piece's underside wobbles in and out, a share of its size */
+const WOBBLE = 0.07;
+/** how light each layer of pieces is, back to front (crown.ts, PIECE_LAYER): further in, more shaded */
+const LAYER_SHADE = [0.6, 0.72, 0.86, 1];
+const PIECE_SHADE = new Float32Array(PIECE_LAYER.map((l) => LAYER_SHADE[l]!));
+/** the crown's strip cells are seeded apart from the ground's and the hill's */
+const CROWN_SEED = 29;
+/** how dark the crown's shade gets right under a piece: on other pieces and the trunk, and on the hill and floor
+ * (further down it is lighter anyway; the floor is lit from the sides too) */
+const CROWN_SHADOW = 0.6;
+const FLOOR_SHADOW = 0.4;
 
 /** The air. Neutral daylight for now; the assets carry no mood of their own, so this is where it will change. */
 const AIR = {
@@ -164,6 +192,22 @@ function soilColor(b: ImageBitmap, y0: number, y1: number): RGB {
   const sum: RGB = [0, 0, 0];
   for (let i = 0; i < px.length; i += 4) for (let k = 0; k < 3; k++) sum[k] += Math.log((px[i + k]! + 1) / 256);
   return sum.map((v) => Math.exp(v / (N * N))) as RGB;
+}
+
+/** where a hanging strip stops being solid: the first row (0 … 1 from the top) less than 97 % opaque */
+function solidRows(b: ImageBitmap): number {
+  const W = 64;
+  const H = Math.min(256, b.height);
+  const c = new OffscreenCanvas(W, H);
+  const g = c.getContext('2d')!;
+  g.drawImage(b, 0, 0, W, H);
+  const px = g.getImageData(0, 0, W, H).data;
+  for (let y = 0; y < H; y++) {
+    let a = 0;
+    for (let x = 0; x < W; x++) a += px[(y * W + x) * 4 + 3]!;
+    if (a / (W * 255) < 0.97) return y / H;
+  }
+  return 1;
 }
 
 export class ForestRenderer {
@@ -247,6 +291,24 @@ export class ForestRenderer {
   /** the ground mesh's columns for shaders that need the floor at a point (shaders/groundat.glsl) */
   private groundAtTex: WebGLTexture | null = null;
   private groundAt: Float32Array;
+  /** the crown: its canopy strip and leaf fill, where the strip stops being solid, the fill's colour matched to the
+   * strip's dense top and that top's brightness (what the season's colours map from) */
+  private crown: Program | null = null;
+  private canopyTex: WebGLTexture | null = null;
+  private leafTex: WebGLTexture | null = null;
+  private canopySolid = 0.3;
+  private leafGain: RGB = [1, 1, 1];
+  private leafLuma = 0.3;
+  private crownVao: WebGLVertexArrayObject | null = null;
+  private crownVbo: WebGLBuffer | null = null;
+  private crownCount = 0;
+  private wireCrownVao: WebGLVertexArrayObject | null = null;
+  private wireCrown = 0;
+  private crownVerts = new Float32Array(CROWN_PIECES * CROWN_VERTS * CROWN_STRIDE);
+  /** per piece in world units: its centre, its width left and right; its underside's height and roundness
+   * (shaders/crown.glsl) */
+  private pieces = new Float32Array(CROWN_PIECES * 4);
+  private pieceShape = new Float32Array(CROWN_PIECES * 2);
 
   /** the ground drawn now, the one it eases toward, and how long that still takes */
   private shown: Ground | null = null;
@@ -458,6 +520,47 @@ export class ForestRenderer {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tlines), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
+    // the crown: per piece a ribbon (an inner and an outer vertex per column) and a fan from high above to the
+    // ribbon's inner edge; pos xy, uv, piece. The topology is fixed, build() moves the vertices
+    this.crown = program(gl, CROWN_VS, CROWN_FS);
+    this.crownVao = gl.createVertexArray();
+    this.crownVbo = gl.createBuffer();
+    gl.bindVertexArray(this.crownVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.crownVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, this.crownVerts.byteLength, gl.DYNAMIC_DRAW);
+    const CB = CROWN_STRIDE * 4;
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, CB, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, CB, 8);
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, CB, 16);
+    const cidx: number[] = [];
+    const clines: number[] = [];
+    for (let p = 0; p < CROWN_PIECES; p++) {
+      const centre = (p + 1) * CROWN_VERTS - 1;
+      for (let i = 0; i < CROWN_COLUMNS; i++) {
+        const a = p * CROWN_VERTS + 2 * i; // inner; a + 1 outer
+        const b = a + 2;
+        clines.push(a, a + 1, centre, a);
+        if (i + 1 < CROWN_COLUMNS) {
+          cidx.push(a, a + 1, b, b, a + 1, b + 1, centre, a, b);
+          clines.push(a, b, a + 1, b + 1, a + 1, b);
+        }
+      }
+    }
+    this.crownCount = cidx.length;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(cidx), gl.STATIC_DRAW);
+    this.wireCrownVao = gl.createVertexArray();
+    gl.bindVertexArray(this.wireCrownVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.crownVbo);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, CB, 0);
+    this.wireCrown = clines.length;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(clines), gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
     // the floor at a point: a float texel per ground column, read exactly (texelFetch), filled by build()
     this.groundAtTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.groundAtTex);
@@ -508,6 +611,16 @@ export class ForestRenderer {
     // the tree and its relief (data: mipmapped like a picture, the normals average out with distance)
     this.treeTex = texture(gl, a.tree, 'clamp', 'clamp');
     this.reliefTex = texture(gl, a['tree-relief'], 'clamp', 'clamp');
+    // the crown's leaves: the canopy strip (cut into cells like the ground strip, so clamped) and its leaf fill
+    // (hex-tiled, so repeating); the fill's colour matched to the strip's dense top, whose brightness the season's
+    // colours map from
+    this.canopyTex = texture(gl, a['canopy-beech'], 'clamp', 'clamp');
+    this.leafTex = texture(gl, a['leaf-2'], 'repeat', 'repeat');
+    this.canopySolid = solidRows(a['canopy-beech']);
+    const leafTop = soilColor(a['canopy-beech'], 0, 0.8 * this.canopySolid);
+    const fill = soilColor(a['leaf-2'], 0, 1);
+    this.leafGain = leafTop.map((v, k) => Math.max(0.6, Math.min(1.6, v / Math.max(0.01, fill[k]!)))) as RGB;
+    this.leafLuma = 0.299 * leafTop[0] + 0.587 * leafTop[1] + 0.114 * leafTop[2];
   }
 
   /** a new ground: eases in from the one shown, or snaps (`now`, or nothing shown yet) */
@@ -613,6 +726,7 @@ export class ForestRenderer {
     this.buildRidge(g);
     this.buildBuried(g);
     this.buildTree(g);
+    this.buildCrown(g);
     if (!gl || this.lost || !this.vbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
@@ -646,6 +760,66 @@ export class ForestRenderer {
     }
     if (!gl || this.lost || !this.treeVbo) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
+  }
+
+  /**
+   * The crown's pieces over the top of the trunk (crown.ts gives them relative to it). Per piece its outline, a U:
+   * the straight sides from high above down to its centre's height, the underside between, a superellipse wider on
+   * one side, wobbling a little. The canopy strip runs along it, its dense band inside the outline and its leaves
+   * hanging out of it along the outline's normal, u counting from the lowest point. The fan's centre sits high above,
+   * on the U's open top.
+   */
+  private buildCrown(g: Ground): void {
+    const gl = this.gl;
+    const f = frames[TREE];
+    const top = heightAt(g, TREE_X) - SINK + f.ay * f.s;
+    const sw = CANOPY.w * CANOPY.s;
+    const sh = CANOPY.h * CANOPY.s;
+    const din = this.canopySolid * sh;
+    const v = this.crownVerts;
+    // per column of the outline: x, y, the outward normal, arc length from the first
+    const e: number[][] = [];
+    g.crown.pieces.forEach(([dx, bottom, left, right, ry, round, wobble], p) => {
+      const cx = TREE_X + dx;
+      const cy = top + bottom + ry;
+      const high = Math.max(WORLD.top, cy) + CROWN_ABOVE;
+      this.pieces.set([cx, cy, left, right], p * 4);
+      this.pieceShape.set([ry, round], p * 2);
+      e.length = 0;
+      e.push([cx - left, high]);
+      for (let j = 0; j <= CROWN_COLS; j++) {
+        const a = Math.PI * (1 + j / CROWN_COLS);
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        // the wobble fades out toward the sides, where the outline turns into its straight sides
+        const k = 1 + WOBBLE * (0.6 * Math.sin(3 * a + wobble) + 0.4 * Math.sin(5 * a + 2 * wobble)) * s * s;
+        const x = Math.sign(c) * Math.abs(c) ** (2 / round) * (c < 0 ? left : right);
+        const y = -(Math.abs(s) ** (2 / round)) * ry;
+        e.push([cx + x * k, cy + y * k]);
+      }
+      e.push([cx + right, high]);
+      // outward normals from the neighbours (the outline runs down its left side, along its underside, up its right)
+      let arc = 0;
+      e.forEach((c, i) => {
+        const a = e[Math.max(0, i - 1)]!;
+        const b = e[Math.min(e.length - 1, i + 1)]!;
+        const tl = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!);
+        if (i > 0) arc += Math.hypot(c[0]! - a[0]!, c[1]! - a[1]!);
+        c.push((b[1]! - a[1]!) / tl, -(b[0]! - a[0]!) / tl, arc);
+      });
+      const lowest = e[1 + CROWN_COLS / 2]![4]!;
+      let o = p * CROWN_VERTS * CROWN_STRIDE;
+      for (const [x, y, nx, ny, s] of e as [number, number, number, number, number][]) {
+        const u = (s - lowest) / sw + p * PIECE_U;
+        v.set([x - nx * din, y - ny * din, u, 0, p, x + nx * (sh - din), y + ny * (sh - din), u, 1, p], o);
+        o += 2 * CROWN_STRIDE;
+      }
+      // the fan's centre: v keeps falling inward (only the fill shows there)
+      v.set([cx, high, p * PIECE_U, -(high - (cy - ry) - din) / sh, p], o);
+    });
+    if (!gl || this.lost || !this.crownVbo) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.crownVbo);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, v);
   }
 
@@ -775,7 +949,8 @@ export class ForestRenderer {
       !this.ridgeTex ||
       !this.mossFill ||
       !this.atlasTex.length ||
-      !this.treeTex
+      !this.treeTex ||
+      !this.canopyTex
     )
       return;
     this.time += dt;
@@ -814,6 +989,7 @@ export class ForestRenderer {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     const ri = this.ridge!;
     gl.useProgram(ri.prog);
+    this.crownUniforms(ri, FLOOR_SHADOW);
     gl.uniform4f(ri.u.uCam!, this.cam.x, this.cam.y, hw, hh);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.ridgeTex);
@@ -832,6 +1008,7 @@ export class ForestRenderer {
 
     const gr = this.ground!;
     gl.useProgram(gr.prog);
+    this.crownUniforms(gr, FLOOR_SHADOW);
     gl.uniform1f(gr.u.uCellSeed!, 0);
     gl.uniform4f(gr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
     gl.activeTexture(gl.TEXTURE0);
@@ -853,6 +1030,8 @@ export class ForestRenderer {
 
     // the tree, after the ground: its foot takes the ground over in height blends
     this.drawTree(hw, hh, g);
+    // its crown over it, back to front
+    this.drawCrown(hw, hh, g);
 
     // what lies buried, over the soil: the treasures' halos, every shadow (dropped a little, blurred), then the
     // pictures; an atlas a draw
@@ -914,6 +1093,7 @@ export class ForestRenderer {
     const gl = this.gl!;
     const tr = this.tree!;
     gl.useProgram(tr.prog);
+    this.crownUniforms(tr, CROWN_SHADOW);
     gl.uniform4f(tr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
     gl.uniform1f(tr.u.uSink!, SINK);
     gl.uniform3f(tr.u.uTint!, ...AIR.tint);
@@ -944,6 +1124,40 @@ export class ForestRenderer {
     gl.activeTexture(gl.TEXTURE0);
   }
 
+  /** the crown's pieces in one draw, back to front */
+  private drawCrown(hw: number, hh: number, g: Ground): void {
+    const gl = this.gl!;
+    const cr = this.crown!;
+    gl.useProgram(cr.prog);
+    gl.uniform4f(cr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    this.crownUniforms(cr, CROWN_SHADOW);
+    gl.uniform1fv(cr.u.uPieceShade!, PIECE_SHADE);
+    gl.uniform3f(cr.u.uTint!, ...AIR.tint);
+    gl.uniform1f(cr.u.uSolid!, this.canopySolid);
+    gl.uniform1f(cr.u.uSeason!, g.crown.season);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.canopyTex);
+    gl.uniform1i(cr.u.uStrip!, 0);
+    gl.uniform1f(cr.u.uCellSeed!, CROWN_SEED);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.leafTex);
+    gl.uniform1i(cr.u.uLeafFill!, 1);
+    gl.uniform1f(cr.u.uLeafTile!, LEAF_FILL.w * LEAF_FILL.s);
+    gl.uniform3f(cr.u.uLeafGain!, ...this.leafGain);
+    gl.uniform1f(cr.u.uLeafLuma!, this.leafLuma);
+    gl.bindVertexArray(this.crownVao);
+    gl.drawElements(gl.TRIANGLES, this.crownCount, gl.UNSIGNED_SHORT, 0);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
+  /** the crown's pieces and how dark its shade is, for a program that shades by it (shaders/crown.glsl) */
+  private crownUniforms(p: Program, dark: number): void {
+    const gl = this.gl!;
+    gl.uniform4fv(p.u.uPieces ?? null, this.pieces);
+    gl.uniform2fv(p.u.uPieceShape ?? null, this.pieceShape);
+    gl.uniform1f(p.u.uCrownShadow ?? null, dark);
+  }
+
   /** the materials the wireframe colours, with their triangles: what the legend lists */
   wireLegend(): WireMaterial[] {
     const quads = this.cols - 1;
@@ -954,6 +1168,7 @@ export class ForestRenderer {
       { name: 'ground.frag · strip', color: WIRE_COLOR.strip, tris: quads * 2 },
       { name: 'ground.frag · soil', color: WIRE_COLOR.soil, tris: quads * 2 },
       { name: 'tree.frag · tree', color: WIRE_COLOR.tree, tris: TREE_COLS * (TREE_ROWS.length - 1) * 2 },
+      { name: 'crown.frag · canopy pieces', color: WIRE_COLOR.crown, tris: this.crownCount / 3 },
       // drawn twice unless motion is reduced: halo, then the gems' glints
       {
         name: 'buried.frag · halos, glints',
@@ -998,6 +1213,9 @@ export class ForestRenderer {
     gl.bindVertexArray(this.wireTreeVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.tree);
     gl.drawElements(gl.LINES, this.wireTree, gl.UNSIGNED_SHORT, 0);
+    gl.bindVertexArray(this.wireCrownVao);
+    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.crown);
+    gl.drawElements(gl.LINES, this.wireCrown, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireBuriedVao);
     gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.buried);
     const things = this.buriedCount.reduce((s, n) => s + n, 0);

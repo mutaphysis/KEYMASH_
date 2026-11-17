@@ -80,5 +80,6 @@ void main() {
   vec4 g = groundAt(vWorld);
   float under = 1.0 - smoothstep(-uSink, 10.0, above + ragged(9.0, 10.0, 7.0));
   c = mix(c, groundOver(c, g), heightMix(h, stripHeight(g) + 0.2 * g.a, under, SHARP));
-  o = vec4(c.rgb * uTint, c.a);
+  // the trunk rises into the crown: in its shade, and inside it seen only through its leaves' gaps
+  o = vec4(c.rgb * uTint * crownShade(vWorld, -1) * crownOcclusion(vWorld, 0), c.a);
 }

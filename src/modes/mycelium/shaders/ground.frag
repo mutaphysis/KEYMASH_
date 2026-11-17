@@ -30,5 +30,7 @@ void main() {
   float k = under * heightMix(luma(s.rgb / max(s.a, 1e-4)), luma(g), t, 0.14);
   vec4 c = s + (1.0 - s.a) * under * vec4(g, 1.0);
   c = mix(c, vec4(g, 1.0), k);
-  o = vec4(c.rgb * uTint, c.a);
+  // under the crown the moss lies in its shade; the cut face below is lit from the front
+  float crownLit = mix(crownShade(vWorld, -1), 1.0, smoothstep(0.0, 150.0, vDepth));
+  o = vec4(c.rgb * uTint * crownLit, c.a);
 }

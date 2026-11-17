@@ -4,6 +4,8 @@
 import { hash, mulberry32 } from '../../lang/rng';
 import { readBuried } from './buried';
 import type { Buried } from './buried';
+import { mixCrown, readCrown } from './crown';
+import type { Crown } from './crown';
 
 /** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. 10 m wide. */
 export const WORLD = { x0: -1875, x1: 1875, top: 1100, bottom: -2200 } as const;
@@ -24,6 +26,8 @@ export interface Ground {
   ridge: [number, number, number, number][];
   /** treasure and stones in the soil (buried.ts); an edit swaps them for the new ones instead of easing them */
   buried: Buried[];
+  /** the crown over the tree (crown.ts): its canopy pieces and its leaves' season */
+  crown: Crown;
 }
 
 /** how many view units apart the hill's cushions stand, how far they rise over the floor, how tall a dome is from
@@ -76,7 +80,8 @@ export function readGround(src: string): Ground {
   }
   // its own random stream, so the ground's shape doesn't change with how many tries the scattering takes
   const buried = readBuried(mulberry32(hash(src) ^ 0x9e3779b9), [b0, b1, b2], WORLD.x0, WORLD.x1);
-  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, buried };
+  const crown = readCrown(mulberry32(hash(src) ^ 0x85ebca6b));
+  return { waves, bumps, bands: [b0, b1, b2], drift, moss, ridge, buried, crown };
 }
 
 /** cushion i's dome at x: its top, falling RIDGE_DOME to its foot as an ellipse over its half widths, so it ends at
@@ -129,5 +134,6 @@ export function mixGround(a: Ground, b: Ground, k: number): Ground {
     moss: a.moss.map((w, i) => row(w, b.moss[i]!)),
     ridge: a.ridge.map((w, i) => row(w, b.ridge[i]!)),
     buried: k < 0.5 ? a.buried : b.buried,
+    crown: mixCrown(a.crown, b.crown, k),
   };
 }

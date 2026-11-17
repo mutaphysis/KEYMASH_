@@ -5,7 +5,8 @@
 import { atlases, frames, textures } from './assets/manifest.json';
 
 /** what the scene uses: the ground strip, the strip of the moss hill behind it (star moss, lichen, clover) and the
- * moss carpets of its body, and the soil horizons in layer order (leafy humus is 3, stony 1) */
+ * moss carpets of its body, the soil horizons in layer order (leafy humus is 3, stony 1), and the crown's leaf cover:
+ * the beech's hanging canopy edge and its leaf fill (the fills come in the strips' order: birch, oak, beech, maple) */
 const TEXTURES = [
   'ground',
   'ground-c',
@@ -17,7 +18,12 @@ const TEXTURES = [
   'soil-1',
   'soil-2',
   'soil-3',
+  'canopy-beech',
+  'leaf-2',
 ] as const satisfies readonly (keyof typeof textures)[];
+/** the crown's leaves, as the manifest has them (`s`: view units per texel, so the strip's and the fill's leaves match) */
+export const CANOPY = textures['canopy-beech'];
+export const LEAF_FILL = textures['leaf-2'];
 /** and the atlases of what lies buried (buried.ts): treasure and pebbles, and the stones */
 export const ATLASES = ['underground-0', 'ground-0'] as const satisfies readonly (keyof typeof atlases)[];
 export type AtlasKey = (typeof ATLASES)[number];
@@ -48,6 +54,8 @@ const URLS = import.meta.glob<string>(
     './assets/tex-ground-c.webp',
     './assets/tex-moss-*.webp',
     './assets/tex-soil-*.webp',
+    './assets/tex-canopy-beech.webp',
+    './assets/tex-leaf-2.webp',
     './assets/atlas-underground-0.webp',
     './assets/atlas-ground-0.webp',
     // every tree page and its relief: the URLs only, a scene fetches the trees it shows

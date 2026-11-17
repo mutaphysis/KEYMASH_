@@ -22,7 +22,7 @@ void main() {
   float k = under * heightMix(luma(s.rgb / max(s.a, 1e-4)), luma(f), t, 0.14);
   vec4 c = s + (1.0 - s.a) * under * vec4(f, 1.0);
   c = mix(c, vec4(f, 1.0), k);
-  // the foot of the hill lies in the floor's shade
+  // the foot of the hill lies in the floor's shade, the hill under the crown in the crown's
   float foot = 1.0 - 0.35 * smoothstep(1.0, 3.0, vUV.y);
-  o = vec4(c.rgb * uTint * uShade * foot, c.a);
+  o = vec4(c.rgb * uTint * uShade * foot * crownShade(vWorld, -1), c.a);
 }
