@@ -46,11 +46,13 @@ export function program(gl: GL, vs: string, fs: string): Program {
 export interface Target {
   fbo: WebGLFramebuffer;
   tex: WebGLTexture;
+  /** painter's order as depth (render.ts), so opaque layers in front hide what is behind them before it is shaded */
+  depth: WebGLRenderbuffer;
   w: number;
   h: number;
 }
 
-/** RGBA8 colour, linear filter, clamped; no depth: layers are drawn back to front */
+/** RGBA8 colour, linear filter, clamped; a 16-bit depth buffer beside it */
 export function target(gl: GL, w: number, h: number): Target {
   const tex = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -62,13 +64,18 @@ export function target(gl: GL, w: number, h: number): Target {
   const fbo = gl.createFramebuffer()!;
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const depth = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return { fbo, tex, w, h };
+  return { fbo, tex, depth, w, h };
 }
 
 export function freeTarget(gl: GL, t: Target): void {
   gl.deleteFramebuffer(t.fbo);
   gl.deleteTexture(t.tex);
+  gl.deleteRenderbuffer(t.depth);
 }
 
 export type Wrap = 'clamp' | 'repeat' | 'mirror';

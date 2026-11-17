@@ -24,5 +24,5 @@ void main() {
   c = mix(c, vec4(f, 1.0), k);
   // the foot of the hill lies in the floor's shade, the hill under the crown in the crown's
   float foot = 1.0 - 0.35 * smoothstep(1.0, 3.0, vUV.y);
-  o = vec4(c.rgb * uTint * uShade * foot * crownShade(vWorld, 0, uPieceCount, -1), c.a);
+  o = vec4(c.rgb * uTint * uShade * foot * shadeAt(vWorld, 0.0).r, c.a);
 }
