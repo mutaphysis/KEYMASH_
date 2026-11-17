@@ -125,6 +125,9 @@ const PASS = { picture: 0, shadow: 1, halo: 2, glint: 3 } as const;
 
 /** where the tree (assets.ts: TREE, its frame in the manifest; its page of the trees atlas) stands */
 const TREE_X = 140;
+/** the tree drawn this much larger than the library's size: at that size it looked small beside the moss and the
+ * hill. Its crown (crown.ts, in the tree's units) grows with it; the leaves keep their size */
+const TREE_SCALE = 1.2;
 /** its mesh: this many columns; the rows below KNEE (a share of the picture from the top) bend with the floor */
 const TREE_COLS = 16;
 const KNEE = 0.82;
@@ -742,8 +745,8 @@ export class ForestRenderer {
   private buildTree(g: Ground): void {
     const gl = this.gl;
     const f = frames[TREE];
-    const w = f.w * f.s;
-    const h = f.h * f.s;
+    const w = f.w * f.s * TREE_SCALE;
+    const h = f.h * f.s * TREE_SCALE;
     const foot = f.ay / f.h;
     const base = heightAt(g, TREE_X) - SINK;
     const v = this.treeVerts;
@@ -773,15 +776,17 @@ export class ForestRenderer {
   private buildCrown(g: Ground): void {
     const gl = this.gl;
     const f = frames[TREE];
-    const top = heightAt(g, TREE_X) - SINK + f.ay * f.s;
+    const top = heightAt(g, TREE_X) - SINK + f.ay * f.s * TREE_SCALE;
     const sw = CANOPY.w * CANOPY.s;
     const sh = CANOPY.h * CANOPY.s;
     const din = this.canopySolid * sh;
     const v = this.crownVerts;
     // per column of the outline: x, y, the outward normal, arc length from the first
     const e: number[][] = [];
-    g.crown.pieces.forEach(([dx, bottom, left, right, ry, round, wobble], p) => {
-      const cx = TREE_X + dx;
+    g.crown.pieces.forEach(([dx, b, l, r, h, round, wobble], p) => {
+      // crown.ts gives the pieces in the tree's units
+      const [bottom, left, right, ry] = [b, l, r, h].map((n) => n * TREE_SCALE) as [number, number, number, number];
+      const cx = TREE_X + dx * TREE_SCALE;
       const cy = top + bottom + ry;
       const high = Math.max(WORLD.top, cy) + CROWN_ABOVE;
       this.pieces.set([cx, cy, left, right], p * 4);

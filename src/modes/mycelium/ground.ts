@@ -7,8 +7,9 @@ import type { Buried } from './buried';
 import { mixCrown, readCrown } from './crown';
 import type { Crown } from './crown';
 
-/** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. 10 m wide. */
-export const WORLD = { x0: -1875, x1: 1875, top: 1100, bottom: -2200 } as const;
+/** The world in view units (3.75 per cm, the assets' scale, ASSETS.md); y up, the forest floor near y = 0. 10 m wide.
+ * Its top reaches a little into the tree's crown (render.ts, crown.ts): the view never goes above the trees. */
+export const WORLD = { x0: -1875, x1: 1875, top: 1300, bottom: -2200 } as const;
 
 export interface Ground {
   /** gentle swells, long to short: amplitude, frequency (per unit), phase */

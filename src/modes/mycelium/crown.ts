@@ -4,10 +4,10 @@
 // leans to one side, each piece is wider on one side than the other, its underside rounder or flatter and wobbling,
 // and one bough hangs lower than the rest.
 
-/** One canopy piece, relative to the top of the trunk (x right, y up): its centre's x, the y of its lowest point, its
- * width left and right of the centre, the height of its underside, how round that is (the exponent of a
- * superellipse: 2 an ellipse, more flatter, less pointier), and where its outline's wobble starts. Above its centre
- * its sides run straight up, out of the world. */
+/** One canopy piece, relative to the top of the trunk, in the tree's units (render.ts scales them with the tree),
+ * x right, y up: its centre's x, the y of its lowest point, its width left and right of the centre, the height of its
+ * underside, how round that is (the exponent of a superellipse: 2 an ellipse, more flatter, less pointier), and where
+ * its outline's wobble starts. Above its centre its sides run straight up, out of the world. */
 export type Piece = [dx: number, bottom: number, left: number, right: number, ry: number, round: number, wobble: number];
 
 export interface Crown {
@@ -42,6 +42,9 @@ export function readCrown(r: () => number): Crown {
   const side = r() < 0.5 ? -1 : 1;
   const lean = span(40, 130) * side;
   const low = r() < 0.5 ? 3 : 4;
+  // the whole crown sits higher or lower on its trunk; at its highest the front piece's body still covers the
+  // trunk's cut top
+  const rise = span(-170, 70);
   const pieces = plan.map(([x, jx, y, w0, w1], i): Piece => {
     const w = span(w0, w1);
     // wider toward the lean
@@ -53,7 +56,7 @@ export function readCrown(r: () => number): Crown {
     const drop = i === low ? span(50, 110) : 0;
     return [
       side * x + lean * (0.4 + 0.6 * (i / plan.length)) + span(-jx, jx),
-      y + span(-50, 50) - drop,
+      y + rise + span(-50, 50) - drop,
       left,
       right,
       ry,
