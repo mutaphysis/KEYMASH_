@@ -149,6 +149,11 @@ by a shader wave. So the library holds only what that animation needs:
 - Whole trees (crown to roots), trunks leaving the top (the one edge they may touch), and snapped dead snags are all
   `tree`. Snags are snapped off, so half the size of a tree that leaves the top (450 units). Generated two per 4K sheet, with a wide gap so their roots don't touch (the grid cut through the roots of
   trunks that did).
+- The forest's trunks (`trunk-*`, `trunks-row-*`) are slender living trunks leaving the top, roots ending at the bottom
+  with nothing around them (the floor's moss climbs them at runtime). Say "slender, about four metres in view": without
+  it the model draws close-ups of fat trunks whose root flare is wider than half their height. Leave out the "never
+  sawn" line for living trunks: it splinters their roots. One per 9:16 sheet works; five in a row on a 16:9 4K sheet
+  work as well (3072 px tall, more than a trunk's 1800 texels) at a fifth of the price, with very wide gaps and no grid.
 - No low-resolution duplicates: the prototype's old 4-trunk strip is retired (cut through by the grid, and the 4K
   trunks replace it).
 

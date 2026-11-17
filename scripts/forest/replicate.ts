@@ -11,8 +11,9 @@ const LEDGER = join(SAMPLES, 'ledger.json');
 const API = 'https://api.replicate.com/v1';
 
 /** Dollars. The spike had 5 EUR (about $5.40); collecting the real assets added $5 more, the mycelium mode's moss
- * fill $3. The guard stays a little below the total, with room for estimates that run low. */
-export const BUDGET = 13.0;
+ * fill $3. After the first trunks the account held $1.16 with the ledger at $11.48: the guard is that, so the ledger's
+ * estimates (rounded up) stop a run before the account runs dry. */
+export const BUDGET = 12.64;
 
 /** Estimated price per run in dollars. Replicate does not publish these through the API,
  * so they are read from the model pages and rounded up. Unknown models are refused. */

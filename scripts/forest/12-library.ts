@@ -140,6 +140,42 @@ const LIFE = (what: string, grow: string, decay: string) =>
   'The stem base ends at the bottom edge of the cell. ' +
   NOTHING_UNDER_INK +
   GRID(4, 3);
+/** One trunk per 9:16 sheet (no grid, no neighbour: the grid cut through trunks-a's roots and drew a line across
+ * its oak). Its top leaves the picture, the crown hides it; its roots end at the bottom (trunks-b stood in clumps of
+ * moss and lichen): the floor's moss climbs the foot at runtime. Without "slender … four metres" the model drew
+ * close-ups of fat trunks with root flares wider than half their height; with NATURAL it splintered their roots. */
+const TRUNK = (what: string) =>
+  STYLE +
+  `One single tall slender living tree trunk seen from a few metres away, exact side view at eye level: ${what}. ` +
+  'About four metres of the trunk are in view: it is narrow, about a sixth as wide as the image is tall, with wide plain ' +
+  'background on both sides. It rises from gently flaring, rounded living roots at the bottom edge of the image and continues ' +
+  'straight out of the top edge of the image: no crown, no leaves, no side branches. The roots are whole and alive, not broken ' +
+  'or splintered, and end at the bottom edge: no ground, no soil, no moss carpet, no lichen, no fallen leaves around them, ' +
+  'the plain grey continues around them down to the bottom edge. ' +
+  'Plain flat even light grey background, no shadow. ' +
+  NO_TEXT;
+/** a trunk sheet: one cell, tall, 4K */
+const trunk = (why: string, what: string): Sheet => ({ why, type: 'tree', prompt: TRUNK(what), aspect: '9:16', grid: [1, 1], res: '4K' });
+/** Five slender trunks in a row on a 16:9 4K sheet: 3072 px tall, still more than a trunk's 1800 texels, so five
+ * trunks cost what one did. No grid (it draws lines), wide gaps instead: the slicer cuts at the emptiest columns. */
+const TRUNK_ROW = (what: string) =>
+  STYLE +
+  `Five different tall slender living tree trunks standing side by side in a row, seen from a few metres away, exact side view at eye level: ${what}. ` +
+  'About four metres of each trunk are in view, each narrow. Very wide empty gaps of plain background between the trunks: no two ' +
+  'trunks or roots touch or overlap. Each rises from gently flaring, rounded living roots at the bottom edge of the image and ' +
+  'continues straight out of the top edge of the image: no crowns, no leaves, no side branches. The roots are whole and alive, not ' +
+  'broken or splintered, and end at the bottom edge: no ground, no soil, no moss carpet, no lichen, no fallen leaves around them, ' +
+  'the plain grey continues around them down to the bottom edge. ' +
+  'Plain flat even light grey background, no shadow, no grid lines, no panels. ' +
+  NO_TEXT;
+const trunkRow = (why: string, what: string): Sheet => ({
+  why,
+  type: 'tree',
+  prompt: TRUNK_ROW(what),
+  aspect: '16:9',
+  grid: [5, 1],
+  res: '4K',
+});
 
 // ---- the plan -----------------------------------------------------------------------------------------------
 
@@ -570,6 +606,37 @@ export const LIBRARY: Record<string, Sheet> = {
     grid: [2, 1],
     res: '4K',
   },
+  // the forest's trunks under the beech canopy: one per sheet
+  'trunk-beech': trunk(
+    'A forest of trunks under a beech canopy: a second beech.',
+    'a smooth silver-grey beech with a few dark eye-shaped scars of lost branches and streaks of green algae, its roots ' +
+      'spreading like sinews, moss in the hollows between them',
+  ),
+  'trunk-hornbeam': trunk(
+    'A forest of trunks: a twisted one.',
+    'an old hornbeam with a fluted, twisting, sinewy grey trunk, ridged like muscles, patches of pale lichen, moss on its root flare',
+  ),
+  'trunk-oak': trunk(
+    'A forest of trunks: a rough one.',
+    'an oak with deeply furrowed dark grey-brown bark, a gnarled burl, grey-green lichen and a coat of moss climbing one side',
+  ),
+  'trunk-forked': trunk(
+    'A forest of trunks: one that splits.',
+    'a beech that forks into two slim trunks about two thirds of the way up, both continuing out of the top edge, a healed ' +
+      'bark seam down the fork, small bracket fungi on one side, moss on its roots',
+  ),
+  // more trunks, five per sheet: with five pictures the same trunk showed two or three times on one screen
+  'trunks-row-a': trunkRow(
+    'A forest of trunks: five more, so a screen rarely shows one twice.',
+    'a young smooth grey beech with a slight S-curve, a sweet chestnut with deep furrows spiralling up it, a silver-grey ' +
+      'hornbeam with a fluted base, a sycamore maple whose bark flakes off in pale patches, an old ash with ridged diamond-patterned bark',
+  ),
+  'trunks-row-b': trunkRow(
+    'A forest of trunks: five more, so a screen rarely shows one twice.',
+    'a beech with long wrinkles of bark under an old branch scar, a lime tree with a cluster of small burrs low on its trunk, ' +
+      'a wild cherry with shiny red-brown bark in horizontal bands, an alder with dark cracked bark and pale lichen, a beech with ' +
+      'a narrow healed wound and a few small bracket fungi',
+  ),
   'trunks-tall': retired('The prototype strip at low resolution, trunks touching: the grid cut through them. The 4K trunks replace it.'),
 
   // -- textures ---------------------------------------------------------------------------------------------------

@@ -136,6 +136,136 @@
     "file": "relief-trees-9.webp",
     "bytes": 160910
    }
+  },
+  "trees-10": {
+   "file": "atlas-trees-10.webp",
+   "w": 618,
+   "h": 1832,
+   "bytes": 117920,
+   "relief": {
+    "file": "relief-trees-10.webp",
+    "bytes": 90076
+   }
+  },
+  "trees-11": {
+   "file": "atlas-trees-11.webp",
+   "w": 759,
+   "h": 1832,
+   "bytes": 152690,
+   "relief": {
+    "file": "relief-trees-11.webp",
+    "bytes": 111604
+   }
+  },
+  "trees-12": {
+   "file": "atlas-trees-12.webp",
+   "w": 524,
+   "h": 1832,
+   "bytes": 131008,
+   "relief": {
+    "file": "relief-trees-12.webp",
+    "bytes": 99858
+   }
+  },
+  "trees-13": {
+   "file": "atlas-trees-13.webp",
+   "w": 532,
+   "h": 1832,
+   "bytes": 144930,
+   "relief": {
+    "file": "relief-trees-13.webp",
+    "bytes": 105538
+   }
+  },
+  "trees-14": {
+   "file": "atlas-trees-14.webp",
+   "w": 559,
+   "h": 1832,
+   "bytes": 126880,
+   "relief": {
+    "file": "relief-trees-14.webp",
+    "bytes": 106712
+   }
+  },
+  "trees-15": {
+   "file": "atlas-trees-15.webp",
+   "w": 584,
+   "h": 1832,
+   "bytes": 198490,
+   "relief": {
+    "file": "relief-trees-15.webp",
+    "bytes": 159690
+   }
+  },
+  "trees-16": {
+   "file": "atlas-trees-16.webp",
+   "w": 586,
+   "h": 1832,
+   "bytes": 139002,
+   "relief": {
+    "file": "relief-trees-16.webp",
+    "bytes": 110324
+   }
+  },
+  "trees-17": {
+   "file": "atlas-trees-17.webp",
+   "w": 508,
+   "h": 1832,
+   "bytes": 139344,
+   "relief": {
+    "file": "relief-trees-17.webp",
+    "bytes": 114888
+   }
+  },
+  "trees-18": {
+   "file": "atlas-trees-18.webp",
+   "w": 603,
+   "h": 1832,
+   "bytes": 209440,
+   "relief": {
+    "file": "relief-trees-18.webp",
+    "bytes": 165992
+   }
+  },
+  "trees-19": {
+   "file": "atlas-trees-19.webp",
+   "w": 516,
+   "h": 1832,
+   "bytes": 203624,
+   "relief": {
+    "file": "relief-trees-19.webp",
+    "bytes": 161536
+   }
+  },
+  "trees-20": {
+   "file": "atlas-trees-20.webp",
+   "w": 504,
+   "h": 1832,
+   "bytes": 156822,
+   "relief": {
+    "file": "relief-trees-20.webp",
+    "bytes": 133556
+   }
+  },
+  "trees-21": {
+   "file": "atlas-trees-21.webp",
+   "w": 580,
+   "h": 1832,
+   "bytes": 250498,
+   "relief": {
+    "file": "relief-trees-21.webp",
+    "bytes": 197440
+   }
+  },
+  "trees-22": {
+   "file": "atlas-trees-22.webp",
+   "w": 546,
+   "h": 1832,
+   "bytes": 184726,
+   "relief": {
+    "file": "relief-trees-22.webp",
+    "bytes": 145806
+   }
   }
  },
  "frames": {
@@ -2430,6 +2560,136 @@
    "ax": 369.2,
    "ay": 1799.1,
    "s": 0.5
+  },
+  "trunk-beech/00": {
+   "atlas": "trees-10",
+   "x": 16,
+   "y": 16,
+   "w": 586,
+   "h": 1800,
+   "ax": 292.9,
+   "ay": 1799.3,
+   "s": 0.5
+  },
+  "trunk-hornbeam/00": {
+   "atlas": "trees-11",
+   "x": 16,
+   "y": 16,
+   "w": 727,
+   "h": 1800,
+   "ax": 363.6,
+   "ay": 1799.3,
+   "s": 0.5
+  },
+  "trunk-oak/00": {
+   "atlas": "trees-12",
+   "x": 16,
+   "y": 16,
+   "w": 493,
+   "h": 1800,
+   "ax": 246.6,
+   "ay": 1799.3,
+   "s": 0.5
+  },
+  "trunk-forked/00": {
+   "atlas": "trees-13",
+   "x": 16,
+   "y": 16,
+   "w": 500,
+   "h": 1800,
+   "ax": 249.8,
+   "ay": 1799.3,
+   "s": 0.5
+  },
+  "trunks-row-a/00": {
+   "atlas": "trees-14",
+   "x": 16,
+   "y": 16,
+   "w": 527,
+   "h": 1800,
+   "ax": 263.4,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-a/01": {
+   "atlas": "trees-15",
+   "x": 16,
+   "y": 16,
+   "w": 553,
+   "h": 1800,
+   "ax": 276.7,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-a/02": {
+   "atlas": "trees-16",
+   "x": 16,
+   "y": 16,
+   "w": 554,
+   "h": 1800,
+   "ax": 277.0,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-a/03": {
+   "atlas": "trees-17",
+   "x": 16,
+   "y": 16,
+   "w": 477,
+   "h": 1800,
+   "ax": 238.6,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-a/04": {
+   "atlas": "trees-18",
+   "x": 16,
+   "y": 16,
+   "w": 571,
+   "h": 1800,
+   "ax": 285.7,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-b/01": {
+   "atlas": "trees-19",
+   "x": 16,
+   "y": 16,
+   "w": 485,
+   "h": 1800,
+   "ax": 242.4,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-b/02": {
+   "atlas": "trees-20",
+   "x": 16,
+   "y": 16,
+   "w": 473,
+   "h": 1800,
+   "ax": 236.4,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-b/03": {
+   "atlas": "trees-21",
+   "x": 16,
+   "y": 16,
+   "w": 548,
+   "h": 1800,
+   "ax": 274.1,
+   "ay": 1798.8,
+   "s": 0.5
+  },
+  "trunks-row-b/04": {
+   "atlas": "trees-22",
+   "x": 16,
+   "y": 16,
+   "w": 514,
+   "h": 1800,
+   "ax": 257.2,
+   "ay": 1798.8,
+   "s": 0.5
   }
  },
  "sequences": {
@@ -2683,5 +2943,5 @@
    "wrap": "mirror"
   }
  },
- "bytes": 9079084
+ "bytes": 12937478
 }

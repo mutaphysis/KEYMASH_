@@ -341,5 +341,12 @@
   "level": "drop",
   "check": "drop",
   "detail": "A grid line drawn behind the trunks (the repair only finds lines drawn over subjects) stays across the oak."
+ },
+ {
+  "sheet": "trunks-row-b",
+  "cell": 0,
+  "level": "reject",
+  "check": "cut",
+  "detail": "touches right (10%)"
  }
 ]
