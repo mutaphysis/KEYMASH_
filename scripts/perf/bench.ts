@@ -134,7 +134,7 @@ function look(r: ForestRenderer, zoom: number, y?: number): void {
 
 const NAMES = new Map(
   Object.entries(SHADERS)
-    .filter(([k]) => k.endsWith('_FS'))
+    .filter((e): e is [string, string] => e[0].endsWith('_FS') && typeof e[1] === 'string')
     .map(([k, src]) => [src, k.slice(0, -3).toLowerCase()]),
 );
 const PASS_NAMES = Object.fromEntries(Object.entries(PASS).map(([k, v]) => [v, k]));

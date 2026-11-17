@@ -62,7 +62,8 @@ export class GLTrace {
   readonly timer: TimerExt | null;
   /** groups, or single draws (`group#n`), not drawn */
   skip = new Set<string>();
-  /** when set, only these groups or draws are drawn */
+  /** when set, only these groups or draws are drawn; while counting the others still are, colour masked, so what
+   * they hide in the depth buffer stays hidden (a counting twin has no discard: a cut-out draw hides its whole mesh) */
   only: Set<string> | null = null;
   /** uniform name (without [0]) → values, set before every draw whose program has it */
   overrides: Record<string, number[]> = {};
@@ -260,15 +261,19 @@ export class GLTrace {
     const n = this.nth.get(group) ?? 0;
     this.nth.set(group, n + 1);
     const label = `${group}#${n}`;
-    if (this.skip.has(group) || this.skip.has(label) || (this.only && !this.only.has(group) && !this.only.has(label))) return;
+    const other = !!this.only && !this.only.has(group) && !this.only.has(label);
+    if (this.skip.has(group) || this.skip.has(label) || (other && !this.counting)) return;
     this.override();
     const counting = this.counting && p ? this.countWith(p) : null;
+    if (other) this.gl.colorMask(false, false, false, false);
     const t = this.timing ? this.timer : null;
     const query = t ? (this.pool.pop() ?? this.gl.createQuery()) : null;
     if (t && query) this.gl.beginQuery(t.TIME_ELAPSED_EXT, query);
     run();
     if (t && query) this.gl.endQuery(t.TIME_ELAPSED_EXT);
+    if (other) this.gl.colorMask(true, true, true, true);
     if (counting) this.uncount();
+    if (other) return;
     this.draws.push({ group, n, fbo: this.fbo, count, mode, query });
   }
 
