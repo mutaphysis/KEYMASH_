@@ -155,10 +155,11 @@ onto the drawer.
 The genome viewer (look, or a tap on a tile or the bench) shows the genes as a turning double
 helix: one base pair per base, a band per gene coloured by its group (form, motion, food,
 defence, social, colour). Point at a band to read the gene and its value; double-tap it to step
-the gene to its next state. The name, the picture, the abilities and the bars (a cell's age,
-hunger and speed; a specimen's speed and life span) follow. **Keep** gives a cell the new genes
-(a new species), puts them into the drawer (from a built-in: as a new specimen), or onto the
-bench; **discard**, Esc or a tap outside closes it.
+the gene to its next state. The name, the picture, the abilities (in the picture's top left
+corner) and the bars (a cell's age, hunger and speed; a specimen's speed and life span) follow.
+Once a gene has changed, **keep** gives a cell the new genes (a new species), puts them into the
+drawer (from a built-in: as a new specimen), or onto the bench, and **discard** drops them; Esc
+or a tap outside closes the viewer.
 
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over

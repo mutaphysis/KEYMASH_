@@ -11,7 +11,6 @@ import type { Entry } from './specimens';
 import { GENE_OF_BASE, drawHelix, pairAt } from './helix';
 import type { HelixLook } from './helix';
 import * as css from './viewer.css';
-import type { KmButton } from '../../../ui/components/button';
 import { ctx2d } from '../../../ui/dom';
 import { iconEl } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
@@ -67,12 +66,14 @@ export class Viewer {
   private helixCv = document.createElement('canvas');
   private helixCtx = ctx2d(this.helixCv);
   private captionEl = document.createElement('div');
+  /** the preview, its abilities in its top left corner */
+  private stage = document.createElement('div');
   private previewCv = document.createElement('canvas');
   private previewCtx = ctx2d(this.previewCv);
   private abilitiesEl = document.createElement('div');
   private statsEl = document.createElement('div');
+  /** discard / keep: only once a gene has changed */
   private buttonsEl = document.createElement('div');
-  private keepBtn!: KmButton;
   private target: ViewTarget | null = null;
   /** the specimen as it came, its genes, and the genes as edited (and what they grow into) */
   private sp!: Species;
@@ -97,11 +98,13 @@ export class Viewer {
     this.nameEl.className = css.name;
     this.helixCv.className = css.helix;
     this.captionEl.className = css.caption;
+    this.stage.className = css.stage;
     this.previewCv.className = css.preview;
     this.abilitiesEl.className = css.abilities;
+    this.stage.append(this.previewCv, this.abilitiesEl);
     this.statsEl.className = css.stats;
     this.buttonsEl.className = css.buttons;
-    this.panel.append(this.nameEl, this.helixCv, this.captionEl, this.previewCv, this.abilitiesEl, this.statsEl, this.buttonsEl);
+    this.panel.append(this.nameEl, this.helixCv, this.captionEl, this.stage, this.statsEl, this.buttonsEl);
     this.el.append(this.panel);
     // a tap outside the panel or Esc: discard
     this.el.addEventListener('pointerdown', (e) => {
@@ -143,7 +146,7 @@ export class Viewer {
       return b;
     };
     button('close', t('labDiscard'), () => this.close());
-    this.keepBtn = button('check', t('labKeep'), () => this.keep(), true);
+    button('check', t('labKeep'), () => this.keep(), true);
   }
 
   get open(): boolean {
@@ -158,7 +161,6 @@ export class Viewer {
     this.look = { hover: -1, flash: -1, flashT: 0 };
     this.lastTap = { gene: -1, t: 0 };
     this.captionEl.replaceChildren();
-    this.keepBtn.button.hidden = target.kind === 'debris';
     this.buildStats();
     this.changed();
     this.el.hidden = false;
@@ -219,7 +221,8 @@ export class Viewer {
     this.shown = edited ? specimen(this.g) : this.sp;
     this.nameEl.textContent = edited ? nameOf(this.g) : this.sp.name;
     this.nameEl.style.color = `hsl(${this.shown.hue | 0} 70% 75%)`;
-    this.keepBtn.button.disabled = !edited;
+    // nothing to keep or throw away until a gene changed; debris is only looked at
+    this.buttonsEl.hidden = !edited || this.target?.kind === 'debris';
     const sp = this.shown;
     const items: [IconName, string][] = [[DIET_ICON[sp.diet], t(sp.diet)]];
     if (sp.toxic >= 0.25) items.push(['toxin', t('toxic')]);
@@ -292,7 +295,7 @@ export class Viewer {
     }
     drawHelix(this.helixCtx, w, h, encodeGenome(this.g), this.rot, this.look, d);
     const n = Math.round(PREVIEW * d);
-    if (this.previewCv.width !== n) this.previewCv.width = this.previewCv.height = n;
+    if (this.previewCv.width !== n || this.previewCv.height !== n) this.previewCv.width = this.previewCv.height = n;
     this.previewCtx.setTransform(1, 0, 0, 1, 0, 0);
     this.previewCtx.clearRect(0, 0, n, n);
     this.host.r.portrait(this.previewCtx, this.shown, n / 2, n / 2, n * 0.26, this.time, d);

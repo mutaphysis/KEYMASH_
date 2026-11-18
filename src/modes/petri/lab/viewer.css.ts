@@ -46,22 +46,32 @@ export const caption = style({
 });
 export const dot = style({ width: 12, height: 12, borderRadius: 6, display: 'inline-block' });
 
+/** the preview in the middle, the abilities stacked in its top left corner */
+export const stage = style({ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' });
 export const preview = style({ width: 150, height: 150 });
 
-export const abilities = style({ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px 12px' });
-export const ability = style({
+export const abilities = style({
+  position: 'absolute',
+  left: 0,
+  top: 0,
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
-  gap: 2,
-  fontSize: 9.5,
-  color: vars.color.dim,
+  alignItems: 'flex-start',
+  gap: 6,
+  pointerEvents: 'none',
 });
-globalStyle(`${ability} i`, { fontSize: 20, color: vars.color.text });
+export const ability = style({ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, letterSpacing: 0.5, color: vars.color.dim });
+globalStyle(`${ability} i`, { fontSize: 18, color: vars.color.text });
 
 export const stats = style({ width: '100%', display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center', gap: '6px 8px' });
 export const statIcon = style({ fontSize: 16, color: vars.color.dim });
 export const bar = style({ height: 6, borderRadius: 3, background: rgba(fg, 0.12), overflow: 'hidden' });
 export const fill = style({ height: '100%', borderRadius: 3, background: rgba(fg, 0.75), transition: 'width .3s' });
 
-export const buttons = style({ display: 'flex', gap: 10, width: '100%', justifyContent: 'center' });
+export const buttons = style({
+  display: 'flex',
+  gap: 10,
+  width: '100%',
+  justifyContent: 'center',
+  selectors: { '&[hidden]': { display: 'none' } },
+});
