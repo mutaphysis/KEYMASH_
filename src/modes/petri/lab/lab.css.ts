@@ -197,6 +197,16 @@ export const half = style({
 });
 globalStyle(`${half} i`, { fontSize: 26 });
 
+// ---------- the toolbar's auto feed ----------
+/** the algae's green, as the dish draws them */
+const algae = (a: number) => `hsla(96, 65%, 58%, ${a})`;
+const fedPulse = keyframes({
+  from: { color: algae(1), borderColor: algae(0.9), background: algae(0.16), boxShadow: `0 0 14px ${algae(0.5)}` },
+});
+/** the auto feed button as it drops algae into the dish: lit green, fading out */
+export const fed = style({});
+globalStyle(`${fed} > button`, { animation: `${fedPulse} .8s ease-out` });
+
 // ---------- dragging a specimen ----------
 export const over = style({ outline: `2px dashed ${rgba(fg, 0.45)}`, outlineOffset: -6 });
 const wiggle = keyframes({ from: { transform: 'rotate(-8deg)' }, to: { transform: 'rotate(8deg)' } });

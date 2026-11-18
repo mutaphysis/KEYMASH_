@@ -178,6 +178,7 @@ export class Lab {
     acts.className = css.acts;
     this.toolsEl.append(acts);
     this.feedBtn = this.button(acts, 'tool', 'autoFeed', t('toolAutoFeed'), () => this.setAutoFeed(!this.autoFeed));
+    this.feedBtn.addEventListener('animationend', () => this.feedBtn.classList.remove(css.fed));
     this.sweepBtn = this.button(acts, 'tool', 'sweep', t('toolClear'), () => this.sweep());
     this.timeBtn = this.button(acts, 'tool', 'play', '', () => this.setPace((this.pace + 1) % SPEEDS.length));
     this.viewer.mount();
@@ -629,7 +630,9 @@ export class Lab {
     else if (pr && !pr.carrying && now - pr.t0 >= HOLD_MS) this.carry();
     if (this.feeding && (this.feeding.next -= dt) <= 0) this.feed();
     const speed = SPEEDS[this.pace].speed;
-    if (speed && this.autoFeed) this.feedDish(p.world, dt * speed);
+    // the auto feed button lights up green as algae go in; a pulse plays out before the next one starts (animationend
+    // takes the class off), so a busy feeder blinks instead of staying lit
+    if (speed && this.autoFeed && this.feedDish(p.world, dt * speed)) this.feedBtn.classList.add(css.fed);
     this.flush();
     if (speed) for (const ev of p.tick(dt * speed)) this.route(ev);
     this.hovering();
@@ -652,15 +655,18 @@ export class Lab {
     this.feedBtn.icon = on ? 'autoFeed' : 'autoFeedOff';
   }
 
-  /** auto feed: single algae at random spots, as many per second as the dish's cells need */
-  private feedDish(W: World, dt: number): void {
+  /** auto feed: single algae at random spots, as many per second as the dish's cells need; true when some dropped */
+  private feedDish(W: World, dt: number): boolean {
     const n = W.cells.length;
-    if (W.food.length >= FOOD_ENOUGH[0] + n * FOOD_ENOUGH[1]) return;
+    if (W.food.length >= FOOD_ENOUGH[0] + n * FOOD_ENOUGH[1]) return false;
     this.feedAcc += dt * (FEED_BASE + n * FEED_PER_CELL);
+    let fed = false;
     for (; this.feedAcc >= 1; this.feedAcc--) {
       const a = Math.random() * Math.PI * 2,
         d = Math.sqrt(Math.random()) * DISH_R * 0.85;
       W.addFood(Math.cos(a) * d, Math.sin(a) * d, 1, 'algae', 0);
+      fed = true;
     }
+    return fed;
   }
 }
