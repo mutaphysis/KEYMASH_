@@ -486,6 +486,8 @@ export function typeGenome(body: Body): Genome {
   set('body', BODIES.indexOf(body));
   const photo = body === 'diatom' || body === 'volvox';
   if (photo) set('diet', DIETS.indexOf('photo'));
+  // the lab's one predator: amoebae engulf their prey
+  if (body === 'amoeba') set('diet', DIETS.indexOf('hunter'));
   set('flagella', body === 'spirillum' ? 2 : body === 'flagellate' || body === 'bacillus' ? 1 : 0);
   if (body === 'amoeba') set('wobble', 3);
   if (body === 'diatom') set('armor', 2);

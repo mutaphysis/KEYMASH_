@@ -172,7 +172,8 @@ six seconds the button undoes it); the **time** button shows the speed running a
 water still moves; a cell put down in a pause shows at its small starting size and grows once
 time runs, a cell killed in a pause begins to dissolve and finishes once time runs).
 
-Under the toolbar (on the left in split view) is the specimen drawer: the eight body types,
+Under the toolbar (on the left in split view) is the specimen drawer: the eight body types
+(the amoeba among them a hunter, the lab's one predator),
 always there, and the specimens you keep (up to 40, stored in the browser as their gene
 sequences). Drag a tile into the dish for a new cell of it. Carry a cell out of the dish with
 the hand onto the drawer to keep it (it leaves the dish); dropped anywhere else it goes back.
