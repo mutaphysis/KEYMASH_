@@ -6,7 +6,7 @@ import type { MicroPlayer } from '../player';
 import { MicroRenderer } from '../render';
 import { Ambient } from '../ambient';
 import { DISH_R } from '../sim';
-import type { Cell, DishState, Food } from '../sim';
+import type { Cell, DishState, Food, World } from '../sim';
 import { mutateGenome, specimen } from '../genome';
 import type { Genome, Species } from '../genome';
 import { t } from '../messages';
@@ -35,6 +35,11 @@ const HOLD_MS = 250;
 const HOLD_PX = 8;
 /** how long clear can be undone (ms) */
 const UNDO_MS = 6000;
+/** auto feed: algae per second of dish time, for the dish and for each cell in it */
+const FEED_BASE = 0.2;
+const FEED_PER_CELL = 0.15;
+/** it pauses while this much food lies about: a base and so many pieces per cell */
+const FOOD_ENOUGH = [8, 4] as const;
 
 /** a press of the hand on a cell: a poke when it ends soon and close by, else the cell is carried */
 interface Press {
@@ -62,6 +67,7 @@ export class Lab {
   private tool: ToolId = 'hand';
   private toolBtns = new Map<ToolId, KmButton>();
   private sweepBtn!: KmButton;
+  private feedBtn!: KmButton;
   private pauseBtn!: KmButton;
   private fastBtn!: KmButton;
   private paused = false;
@@ -76,6 +82,9 @@ export class Lab {
   private feeding: { x: number; y: number; next: number } | null = null;
   /** what clear took out of the dish, while it can be put back */
   private undo: DishState | null = null;
+  /** on by default: algae drift in by themselves, more the more cells there are */
+  private autoFeed = true;
+  private feedAcc = 0;
 
   constructor(audio: AudioEngine) {
     this.audio = audio;
@@ -127,6 +136,7 @@ export class Lab {
     const div = document.createElement('div');
     div.className = css.divider;
     this.toolsEl.append(div);
+    this.feedBtn = this.button(this.toolsEl, 'tool', 'autoFeed', t('toolAutoFeed'), () => this.setAutoFeed(!this.autoFeed));
     this.sweepBtn = this.button(this.toolsEl, 'tool', 'sweep', t('toolClear'), () => this.sweep());
     this.pauseBtn = this.button(this.toolsEl, 'tool', 'pause', t('toolPause'), () => this.setPaused(!this.paused));
     this.fastBtn = this.button(this.toolsEl, 'tool', 'fast', t('toolFast'), () => this.setSpeed(this.speed === 1 ? 3 : 1));
@@ -163,6 +173,7 @@ export class Lab {
     this.pick('hand');
     this.setPaused(false);
     this.setSpeed(1);
+    this.setAutoFeed(true);
     this.armUndo(null);
     this.amb.configure(hash(from?.src ?? 'lab'));
     this.audio.init();
@@ -526,6 +537,7 @@ export class Lab {
     if (pr && (pr.cell.gone || pr.cell.state !== 'live')) this.letGo();
     else if (pr && !pr.carrying && now - pr.t0 >= HOLD_MS) this.carry();
     if (this.feeding && (this.feeding.next -= dt) <= 0) this.feed();
+    if (!this.paused && this.autoFeed) this.feedDish(p.world, dt * this.speed);
     this.flush();
     if (!this.paused) for (const ev of p.tick(dt * this.speed)) this.route(ev);
     this.hovering();
@@ -535,5 +547,22 @@ export class Lab {
     this.r.frame(dt, p.world, this.amb.activity);
     this.shelf.frame(dt);
     this.viewer.frame(dt);
+  }
+
+  private setAutoFeed(on: boolean): void {
+    this.autoFeed = on;
+    this.feedBtn.toggleAttribute('active', on);
+  }
+
+  /** auto feed: single algae at random spots, as many per second as the dish's cells need */
+  private feedDish(W: World, dt: number): void {
+    const n = W.cells.length;
+    if (W.food.length >= FOOD_ENOUGH[0] + n * FOOD_ENOUGH[1]) return;
+    this.feedAcc += dt * (FEED_BASE + n * FEED_PER_CELL);
+    for (; this.feedAcc >= 1; this.feedAcc--) {
+      const a = Math.random() * Math.PI * 2,
+        d = Math.sqrt(Math.random()) * DISH_R * 0.85;
+      W.addFood(Math.cos(a) * d, Math.sin(a) * d, 1, 'algae', 0);
+    }
   }
 }

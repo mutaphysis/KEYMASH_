@@ -59,6 +59,7 @@ const ICONS: Record<string, string> = {
   hunger: 'battery-2-fill',
   speed: 'run-fill',
   life: 'heartbeat-fill',
+  autoFeed: 'leafy-green-fill',
 };
 
 const ROOT = new URL('..', import.meta.url).pathname;

@@ -1,6 +1,7 @@
 // Written by `bun scripts/ui-icons.ts` (the list lives there): mingcute icons from Iconify, one URL each.
 import age from './age.svg?url';
 import armor from './armor.svg?url';
+import autoFeed from './autoFeed.svg?url';
 import bond from './bond.svg?url';
 import breed from './breed.svg?url';
 import check from './check.svg?url';
@@ -54,6 +55,7 @@ import up from './up.svg?url';
 export const ICONS = {
   age,
   armor,
+  autoFeed,
   bond,
   breed,
   check,
