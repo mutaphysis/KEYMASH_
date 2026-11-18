@@ -300,6 +300,7 @@ function openView(): void {
       app.classList.remove('viewing');
       layout();
     },
+    next: () => void switchMode(nextMode(target)),
   });
 }
 $('btn-view').addEventListener('click', openView);

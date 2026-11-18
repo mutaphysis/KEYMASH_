@@ -69,6 +69,8 @@ const en = {
   labOpen: 'lab: experiment by hand',
   labTitle: 'LAB',
   labBack: 'back to the code',
+  /** the lab's status line: "12 CELLS · 3 SPECIES" */
+  labCells: { one: '{n} CELL', other: '{n} CELLS' },
   toolHand: 'hand',
   toolLook: 'look',
   toolKill: 'kill',
@@ -195,6 +197,7 @@ const de: Translation<typeof en> = {
   labOpen: 'Labor: selbst experimentieren',
   labTitle: 'LABOR',
   labBack: 'zurück zum Code',
+  labCells: { one: '{n} ZELLE', other: '{n} ZELLEN' },
   toolHand: 'Hand',
   toolLook: 'Lupe',
   toolKill: 'töten',

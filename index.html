@@ -89,13 +89,14 @@
           <km-mode-icon id="mode-icon"></km-mode-icon>
           <div class="logo" data-text="KEYMASH_">KEYMASH_</div>
           <span id="version" class="ver"></span>
-          <div id="status">
+          <div id="status" class="status">
             <b class="ok" id="st-ok">0 ERRORS</b> · <span id="st-threads">0</span> <span id="st-unit">THREADS</span> ·
             <span id="st-glyphs">0</span> <span data-i18n="glyphs">GLYPHS</span><b id="st-live"> · LIVE</b>
           </div>
+          <!-- a mode's view (PETRI_'s lab) second from the right: its own header has its toggle there too -->
           <div class="hbtns">
-            <km-button id="btn-view" variant="header"></km-button>
             <km-button id="btn-sheet" variant="header" icon="sheet" title-key="sheetTitle"></km-button>
+            <km-button id="btn-view" variant="header"></km-button>
             <km-mute id="btn-mute-edit" variant="header"></km-mute>
           </div>
         </header>

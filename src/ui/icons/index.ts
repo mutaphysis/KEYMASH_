@@ -31,6 +31,7 @@ import life from './life.svg?url';
 import look from './look.svg?url';
 import mutate from './mutate.svg?url';
 import mute from './mute.svg?url';
+import note from './note.svg?url';
 import omni from './omni.svg?url';
 import open from './open.svg?url';
 import pause from './pause.svg?url';
@@ -86,6 +87,7 @@ export const ICONS = {
   look,
   mutate,
   mute,
+  note,
   omni,
   open,
   pause,

@@ -10,7 +10,8 @@ import { DISH_R } from '../sim';
 import type { Cell, DishState, Food, World, WorldSave } from '../sim';
 import { decodeGenome, encodeGenome, mutateGenome, specimen } from '../genome';
 import type { Genome, Species } from '../genome';
-import { t } from '../messages';
+import { t, tn } from '../messages';
+import { petri } from '../index';
 import { ON_CELL, SPEEDS, TOOLS } from './tools';
 import type { ToolId } from './tools';
 import { Shelf } from './shelf';
@@ -27,6 +28,8 @@ import { iconCursor } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
 import { hash } from '../../../lang/rng';
 import { readJson, writeJson } from '../../../ui/storage';
+import { t as tShell } from '../../../i18n';
+import { BUILD_TIME, VERSION_LABEL } from '../../../version';
 
 /** the tools' cursors: white with a black outline, readable over the dark water and the bright cells alike */
 const CURSOR = '#fff';
@@ -79,6 +82,7 @@ export class Lab {
   private dishEl = document.createElement('div');
   private canvas = document.createElement('canvas');
   private toolsEl = document.createElement('div');
+  private statusEl = document.createElement('div');
   private shelf: Shelf;
   private viewer: Viewer;
   private r: MicroRenderer;
@@ -130,13 +134,25 @@ export class Lab {
   /** the DOM, once: the first open() puts it into the app */
   private build(parent: HTMLElement): void {
     this.root.className = css.root;
-    const top = document.createElement('div');
+    // a header like the editor's, so nothing jumps between the two: the same mode icon (a tap goes to the next
+    // mode, as there), the lab's name as the logo, the status line, and the toggle where the flask is
+    const top = document.createElement('header');
     top.className = css.top;
-    const title = document.createElement('div');
-    title.className = css.title;
-    title.textContent = t('labTitle');
-    const mute = document.createElement('km-mute');
-    mute.setAttribute('variant', 'header');
+    const icon = document.createElement('km-mode-icon');
+    icon.mode = petri;
+    icon.addEventListener('next', () => this.next());
+    const logo = document.createElement('div');
+    logo.className = 'logo';
+    logo.textContent = logo.dataset.text = t('labTitle');
+    logo.addEventListener('click', () => this.next());
+    const ver = document.createElement('span');
+    ver.className = 'ver';
+    ver.textContent = VERSION_LABEL;
+    ver.title = tShell('built', { time: BUILD_TIME });
+    this.statusEl.className = 'status';
+    const btns = document.createElement('div');
+    btns.className = 'hbtns';
+    top.append(icon, logo, ver, this.statusEl, btns);
     this.dishEl.className = css.dish;
     this.dishEl.dataset.drop = 'dish';
     this.canvas.className = css.canvas;
@@ -146,10 +162,12 @@ export class Lab {
     this.root.append(top, this.shelf.benchEl, this.dishEl, this.toolsEl, this.shelf.drawer, this.viewer.el, this.shelf.ghost);
     parent.append(this.root);
     // km-buttons build their <button> once connected: texts and titles go on after that
-    const back = this.button(top, 'header', 'left', '', () => this.close());
+    const back = this.button(btns, 'header', 'note', '', () => this.close());
     back.button.title = t('labBack');
     back.button.setAttribute('aria-label', t('labBack'));
-    top.append(title, mute);
+    const mute = document.createElement('km-mute');
+    mute.setAttribute('variant', 'header');
+    btns.append(mute);
 
     for (const tool of TOOLS) {
       const b = this.button(this.toolsEl, 'tool', tool.icon, t(tool.label), () => this.pick(tool.id));
@@ -230,6 +248,21 @@ export class Lab {
     const ctx = this.ctx;
     this.ctx = null;
     ctx?.close();
+  }
+
+  /** the mode icon in the lab's header: the lab closes and the next mode comes, as from the editor */
+  private next(): void {
+    const ctx = this.ctx;
+    this.close();
+    ctx?.next();
+  }
+
+  /** the status line, as the editor's counts species: "12 CELLS · 3 SPECIES" */
+  private status(W: World): void {
+    let kinds = 0;
+    for (const n of W.counts.values()) if (n > 0) kinds++;
+    const s = `${tn('labCells', W.cells.length)} · ${kinds} ${tn('species', kinds)}`;
+    if (this.statusEl.textContent !== s) this.statusEl.textContent = s;
   }
 
   /** a Petri dish holding the saved dish; null when there is none or it doesn't load (an older format) */
@@ -600,6 +633,7 @@ export class Lab {
     this.r.frame(dt, p.world, this.amb.activity, speed);
     this.shelf.frame(dt);
     this.viewer.frame(dt);
+    this.status(p.world);
     if ((this.saveIn -= dt) <= 0) {
       this.saveIn = SAVE_EVERY;
       this.persist(true);

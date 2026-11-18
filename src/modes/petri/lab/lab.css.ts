@@ -32,22 +32,13 @@ export const root = style({
 /** everything in the left column of the split view gets a border on its right */
 const column = { [split]: { borderRight: `1px solid ${vars.color.line}` } };
 
+/** the lab's header is a shell <header> (the shell's styles lay it out), so it lines up with the editor's: the same
+ * mode icon, logo, version, status and buttons in the same places */
 export const top = style({
   gridArea: 'top',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: `calc(4px + ${layout.safeTop}) 12px 4px`,
+  // the shell pads its panes by the safe areas they touch (--pl, --pr); the lab's root already keeps off them
+  vars: { '--pl': '0px', '--pr': '0px' },
   selectors: column,
-});
-
-export const title = style({
-  flex: 1,
-  fontFamily: layout.display,
-  fontSize: 20,
-  letterSpacing: 2,
-  color: rgba(fg, 1),
-  textShadow: `0 0 10px ${rgba(fg, 0.6)}`,
 });
 
 export const dish = style({

@@ -37,6 +37,7 @@ const ICONS: Record<string, string> = {
   grid: 'grid-fill',
   lab: 'flask-fill',
   hand: 'hand-finger-2-fill',
+  note: 'document-fill',
   look: 'search-fill',
   kill: 'skull-fill',
   mutate: 'dna-fill',

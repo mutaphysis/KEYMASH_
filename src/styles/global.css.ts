@@ -106,7 +106,7 @@ globalStyle('header .ver', {
   overflow: 'hidden',
   textOverflow: 'ellipsis',
 });
-globalStyle('header #status', { gridArea: 'status', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
+globalStyle('header .status', { gridArea: 'status', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
 globalStyle('header .hbtns', { gridArea: 'btns', display: 'flex', gap: 10 });
 globalStyle('.logo', {
   fontFamily: layout.display,
@@ -129,7 +129,7 @@ globalStyle('.logo::before, .logo::after', {
 });
 globalStyle('.logo::before', { color: rgba(accent, 1), left: 2, animation: `${glitchA} 2.6s infinite linear alternate-reverse` });
 globalStyle('.logo::after', { color: rgba(accent2, 1), left: -2, animation: `${glitchB} 3.1s infinite linear alternate-reverse` });
-globalStyle('#status', { fontSize: 11, color: vars.color.dim, letterSpacing: 1 });
+globalStyle('.status', { fontSize: 11, color: vars.color.dim, letterSpacing: 1 });
 globalStyle('#status .ok', { color: rgba(fg, 1), animation: `${blink} 1.2s infinite steps(2)` });
 globalStyle('#st-live', { display: 'none', color: rgba(accent, 1) });
 globalStyle('#app.split.playing #st-live', { display: 'inline' });
@@ -339,7 +339,8 @@ globalStyle('#codeview span.seen', { color: vars.color.code, textShadow: `0 0 6p
 // ---------- side by side (iPad landscape, desktop) ----------
 globalStyle('#app.split', { flexDirection: 'row' });
 globalStyle('#app.split section', { display: 'flex' });
-globalStyle('#app.split #edit', { flex: '0 0 42%', maxWidth: 640, borderRight: `1px solid ${vars.color.line}` });
+// minWidth 0: the key bar's row of keys must not widen the pane past its 42 % (the lab's left column matches it)
+globalStyle('#app.split #edit', { flex: '0 0 42%', maxWidth: 640, minWidth: 0, borderRight: `1px solid ${vars.color.line}` });
 globalStyle('#app.split #play', { flex: 1 });
 globalStyle('#app.split #stageWrap', { flex: '0 0 68%' });
 globalStyle('#app.split #btn-stop', { display: 'none' });

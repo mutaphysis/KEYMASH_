@@ -138,4 +138,6 @@ export interface ViewContext {
   wasPlaying: boolean;
   /** back to the editor */
   close(): void;
+  /** the view's own header has the mode icon too: a tap there leaves the view (the view closes itself first) for the next mode */
+  next(): void;
 }
