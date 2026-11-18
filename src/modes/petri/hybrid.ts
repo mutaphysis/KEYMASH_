@@ -1,7 +1,12 @@
 // PETRI_ gene transfer: a cell that eats another (or the debris a dead one left) may take up part of
 // its genome and become a new species, a hybrid. Pure: the world calls hybridise() with its own rng.
 import { GENES, GENE_INDEX, express } from './genome';
-import type { GeneId, Species } from './genome';
+import type { Diet, GeneId, Species } from './genome';
+
+/** the chance a cell that hunts (hunter, omni) takes up a diet that doesn't, when its meal offers one: rare, so
+ * hunters stay hunters although most of what they eat grazes */
+export const LOSE_HUNTING = 0.03;
+const HUNTS: Record<Diet, boolean> = { hunter: true, omni: true, grazer: false, photo: false };
 
 /** steps from state a to state b of a gene with `n` states: the short way round for colours */
 function delta(kind: 'level' | 'circle' | 'switch', n: number, a: number, b: number): number {
@@ -32,13 +37,15 @@ export interface Hybrid {
 /**
  * The eater `a` takes up 1–3 of the donor's genes that differ from its own: levels and colours move a third to
  * half of the way (at least one step), switches are taken over. Each one may mutate at the eater's mutation rate.
- * The main colour always moves toward the donor's, so the hybrid can be told apart. Null when the two share every
- * gene. `taken` says whether a species name is in use.
+ * A hunting diet is given up for one that doesn't only at LOSE_HUNTING. The main colour always moves toward the
+ * donor's, so the hybrid can be told apart. Null when the two share every gene. `taken` says whether a species
+ * name is in use.
  */
 export function hybridise(a: Species, b: Species, rnd: () => number, taken: (name: string) => boolean): Hybrid | null {
   const ga = a.genome,
     gb = b.genome;
-  const open = GENES.map((_, i) => i).filter((i) => ga[i] !== gb[i]);
+  const keepDiet = HUNTS[a.diet] && !HUNTS[b.diet] && rnd() >= LOSE_HUNTING;
+  const open = GENES.map((_, i) => i).filter((i) => ga[i] !== gb[i] && !(keepDiet && i === GENE_INDEX.diet));
   if (!open.length) return null;
   const picked: number[] = [];
   for (let n = 1 + Math.floor(rnd() * 3); n > 0 && open.length; n--) picked.push(open.splice(Math.floor(rnd() * open.length), 1)[0]!);

@@ -123,7 +123,9 @@ until it is eaten or rots). The eater takes up one to three genes that differ fr
 graded genes (size, speed, toxin, armour, glow, colony, fertility, life span, mutation rate,
 saturation, wobble, organelles, lobes, flagella) and the second colour move a third to half of
 the way toward the donor's, at least one step; body plan, diet, spores and symbiosis are taken
-over outright. Each may mutate at the eater's mutation rate (`?` in its line). The main colour
+over outright — except that a hunter (or an omnivore) gives up hunting for a diet that doesn't
+hunt only in 3 % of the meals that could pass it on, so hunters stay hunters although most of
+what they eat grazes. Each may mutate at the eater's mutation rate (`?` in its line). The main colour
 moves toward the donor's, too.
 
 The eater becomes a new species right away, a hybrid named the way botanists write them:

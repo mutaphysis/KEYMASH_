@@ -138,6 +138,23 @@ test('a meal passes 1–3 genes on: each moves toward the donor, the hybrid name
   expect(hybridise(a, a, r, () => false)).toBeNull(); // nothing to take up from its own kind
 });
 
+test('hunters stay hunters: a meal of grazers or photosynthesisers only rarely takes their hunting away', () => {
+  const hunter = specimen(typeGenome('amoeba'));
+  const prey = BODIES.map((b) => specimen(typeGenome(b))).filter((sp) => sp.diet === 'grazer' || sp.diet === 'photo');
+  const r = mulberry32(3);
+  let meals = 0,
+    lost = 0;
+  for (const b of prey)
+    for (let i = 0; i < 500; i++) {
+      const h = hybridise(hunter, b, r, () => false)!;
+      meals++;
+      if (h.sp.diet !== 'hunter' && h.sp.diet !== 'omni') lost++;
+    }
+  expect(hunter.diet).toBe('hunter');
+  expect(lost).toBeGreaterThan(0); // rare, not impossible
+  expect(lost / meals).toBeLessThan(0.02);
+});
+
 test('hybrids live on: their daughters inherit the new genome, and only a few hybrid species live at once', () => {
   const p = new Petri('jfkdlsöä asdfghjkl JJJJJJJJJ\nkkkkk ddddd h h hhhh 🌿 5\nWOOF!!! ölkjhg qqqqqqq');
   let hybrids = 0,
