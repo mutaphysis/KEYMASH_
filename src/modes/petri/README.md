@@ -157,6 +157,7 @@ toolbar under the dish (in a column beside it in split view) picks what a touch 
 | divide | it divides at once (unless the dish or the species is full) |
 | food | drop algae where you touch, more while you hold |
 | stream | drag: a current along the arrow, stronger the longer; tap: a swirl |
+| light | a pool of light: algae bloom in it, photosynthetic cells swim to it and feed (as ☀️ in a text) |
 | toxin | a cloud of poison: cells that aren't toxic themselves starve in it |
 
 The cell the tool would act on is marked with a reticle and a glow. At the toolbar's end (the

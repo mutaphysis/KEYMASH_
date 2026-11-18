@@ -28,6 +28,7 @@ import kill from './kill.svg?url';
 import lab from './lab.svg?url';
 import left from './left.svg?url';
 import life from './life.svg?url';
+import light from './light.svg?url';
 import look from './look.svg?url';
 import mutate from './mutate.svg?url';
 import mute from './mute.svg?url';
@@ -84,6 +85,7 @@ export const ICONS = {
   lab,
   left,
   life,
+  light,
   look,
   mutate,
   mute,

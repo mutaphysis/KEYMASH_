@@ -2,7 +2,7 @@
 import type { IconName } from '../../../ui/icon';
 import type { PetriMsg } from '../messages';
 
-export type ToolId = 'hand' | 'look' | 'kill' | 'mutate' | 'divide' | 'food' | 'stream' | 'toxin';
+export type ToolId = 'hand' | 'look' | 'kill' | 'mutate' | 'divide' | 'food' | 'stream' | 'light' | 'toxin';
 export interface ToolDef {
   id: ToolId;
   icon: IconName;
@@ -17,6 +17,7 @@ export const TOOLS: readonly ToolDef[] = [
   { id: 'divide', icon: 'divide', label: 'toolDivide' },
   { id: 'food', icon: 'food', label: 'toolFood' },
   { id: 'stream', icon: 'stream', label: 'toolStream' },
+  { id: 'light', icon: 'light', label: 'toolLight' },
   { id: 'toxin', icon: 'toxin', label: 'toolToxin' },
 ];
 

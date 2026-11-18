@@ -426,6 +426,12 @@ export class Lab {
         W.addZone('toxin', x, y, { r: 95, dur: 12 });
         this.amb.touch(x);
         break;
+      case 'light':
+        // as ☀️ in a text: algae bloom in it, photosynthetic cells come to it and feed
+        W.addZone('light', x, y, { r: 150, dur: 14 });
+        this.r.ripple(x, y, 10, 150, 2, 48, 0.2);
+        this.amb.touch(x);
+        break;
       case 'look': {
         // a cell, or a piece of debris that still carries a genome: open its genes
         const f = c ? null : W.foodAt(x, y, this.slack());

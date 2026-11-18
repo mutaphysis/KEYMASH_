@@ -45,6 +45,7 @@ const ICONS: Record<string, string> = {
   food: 'leaf-fill',
   stream: 'wave-fill',
   toxin: 'virus-fill',
+  light: 'desk-lamp-fill',
   sweep: 'broom-fill',
   pause: 'pause-fill',
   fast: 'fast-forward-fill',
