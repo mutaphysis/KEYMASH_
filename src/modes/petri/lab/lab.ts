@@ -596,8 +596,8 @@ export class Lab {
     this.hovering();
     this.amb.update(dt, p.world.crowd);
     this.audio.readLevel();
-    // real time even while paused: the water, wobbles and ripples keep moving
-    this.r.frame(dt, p.world, this.amb.activity);
+    // the water and ripples keep moving in real time; the cells' own movements follow the dish's speed
+    this.r.frame(dt, p.world, this.amb.activity, speed);
     this.shelf.frame(dt);
     this.viewer.frame(dt);
     if ((this.saveIn -= dt) <= 0) {

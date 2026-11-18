@@ -111,6 +111,10 @@ export class MicroRenderer {
   R = 1;
   k = 1;
   time = 0;
+  /** the cells' own clock (beating cilia and flagella, wobble, pulsing): it runs with the dish, so it stops in a pause */
+  private life = 0;
+  /** when each cell was first drawn (real time): a new cell fades in even while the dish is paused */
+  private born = new WeakMap<Cell, number>();
   /** CSS pixels at the bottom of the stage covered by the play buttons */
   reserveBottom = 0;
   gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -403,11 +407,13 @@ export class MicroRenderer {
   }
 
   // ---------- frame ----------
-  frame(dt: number, world: World, activity: number): void {
+  /** `pace`: dish seconds per second (the lab's pause and 3×); the water and ripples keep real time */
+  frame(dt: number, world: World, activity: number, pace = 1): void {
     // too slow for this many pixels: draw fewer from now on
     if (this.budget.frame(dt) && this.cssW) this.resize(this.cssW, this.cssH);
     dt = Math.min(dt, 0.05);
     this.time += dt;
+    this.life += dt * pace;
     const c = this.ctx,
       T = this.time,
       { W, H, k } = this;
@@ -657,8 +663,10 @@ export class MicroRenderer {
   private drawCell(c: Ctx, cell: Cell): void {
     if (cell === this.held && this.heldOut) return;
     const sp = cell.sp,
-      T = this.time;
-    let alpha = Math.min(1, cell.age * 2 + (cell.gen > 1 ? 1 : 0));
+      T = this.life;
+    let born = this.born.get(cell);
+    if (born === undefined) this.born.set(cell, (born = this.time));
+    let alpha = Math.min(1, Math.max(cell.age, this.time - born) * 2 + (cell.gen > 1 ? 1 : 0));
     // dying: the membrane dissolves first, the remains fade after
     this.dis = cell.state === 'dying' ? Math.min(1, cell.t / 2.6) : 0;
     if (this.dis) alpha *= 1 - smooth(0.55, 1, this.dis);
@@ -685,8 +693,8 @@ export class MicroRenderer {
     c.save();
     c.translate(cell.x + (sick ? Math.sin(T * 40 + cell.seed) * 0.6 : 0), cell.y);
     if (cell === this.held) {
-      // in the hand: it wriggles
-      c.rotate((this.gentle ? 0.06 : 0.18) * Math.sin(T * 10));
+      // in the hand: it wriggles (in real time: the hand moves it even in a pause)
+      c.rotate((this.gentle ? 0.06 : 0.18) * Math.sin(this.time * 10));
       c.scale(1.12, 1.12);
     }
     const jt = this.jiggles.get(cell);
