@@ -12,13 +12,13 @@ export interface ToolDef {
 export const TOOLS: readonly ToolDef[] = [
   { id: 'hand', icon: 'hand', label: 'toolHand' },
   { id: 'look', icon: 'look', label: 'toolLook' },
-  { id: 'kill', icon: 'kill', label: 'toolKill' },
   { id: 'mutate', icon: 'mutate', label: 'toolMutate' },
   { id: 'divide', icon: 'divide', label: 'toolDivide' },
   { id: 'food', icon: 'food', label: 'toolFood' },
   { id: 'stream', icon: 'stream', label: 'toolStream' },
   { id: 'light', icon: 'light', label: 'toolLight' },
   { id: 'toxin', icon: 'toxin', label: 'toolToxin' },
+  { id: 'kill', icon: 'kill', label: 'toolKill' },
 ];
 
 /** tools that work on one cell: they show the reticle on the cell under the pointer */

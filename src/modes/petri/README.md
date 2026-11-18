@@ -152,13 +152,13 @@ toolbar under the dish (in a column beside it in split view) picks what a touch 
 |---|---|
 | hand | tap a cell: it jiggles and swims off; hold it (or drag): it wriggles in your hand and goes where you put it |
 | look | open the cell's genes (or a piece of debris that still carries a genome) |
-| kill | the cell dissolves, leaving debris |
 | mutate | one to three of its genes change: a new species, named and introduced |
 | divide | it divides at once (unless the dish or the species is full) |
 | food | drop algae where you touch, more while you hold |
 | stream | drag: a current along the arrow, stronger the longer; tap: a swirl |
 | light | a pool of light: algae bloom in it, photosynthetic cells swim to it and feed (as ☀️ in a text) |
 | toxin | a cloud of poison: cells that aren't toxic themselves starve in it |
+| kill | the cell dissolves, leaving debris |
 
 The cell the tool would act on is marked with a reticle and a glow. At the toolbar's end (the
 bottom in split view) sit the buttons that act at once: **auto feed** (on when the lab opens;
