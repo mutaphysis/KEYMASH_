@@ -53,6 +53,32 @@ const GENE_LABEL: Record<GeneId, PetriMsg> = {
   glow: 'geneGlow',
 };
 const DIET_ICON: Record<Species['diet'], IconName> = { grazer: 'food', hunter: 'hunter', photo: 'photo', omni: 'omni' };
+const GENE_ICON: Record<GeneId, IconName> = {
+  body: 'body',
+  size: 'size',
+  lobes: 'lobes',
+  wobble: 'wobble',
+  organelles: 'organelles',
+  flagella: 'flagella',
+  speed: 'speed',
+  diet: 'diet',
+  fertility: 'fertility',
+  life: 'life',
+  mutation: 'mutation',
+  toxic: 'toxin',
+  armor: 'armor',
+  colony: 'colony',
+  symbiosis: 'bond',
+  spores: 'spores',
+  hue: 'hue',
+  hue2: 'hue2',
+  sat: 'sat',
+  glow: 'glow',
+};
+/** genes whose first state is none of it (no flagella, no buds, no toxin, …): there the icon is struck through */
+const NONE_AT_0 = new Set<GeneId>(['flagella', 'fertility', 'toxic', 'armor', 'colony', 'glow']);
+/** seconds the caption stays after a finger has tapped a gene (a mouse's goes when it leaves the helix) */
+const CAPTION_TOUCH = 1.5;
 /** seconds a gene's change plays on the helix */
 const CHANGE_TIME = 0.9;
 const HELIX_H = 120;
@@ -88,6 +114,8 @@ export class Viewer {
   /** seconds the helix stays still after a touch */
   private still = 0;
   private pointerOver = false;
+  /** a finger left the helix: the caption goes in this many seconds; null while it stays */
+  private captionHide: number | null = null;
   private look: HelixLook = { hover: -1, flash: -1, flashT: 0, from: '', gentle: false };
   private time = 0;
   /** a gene just changed: the preview turns from `before` into the new specimen while `t` counts 1 → 0 */
@@ -126,11 +154,13 @@ export class Viewer {
     });
     this.helixCv.addEventListener('pointermove', (e) => {
       this.pointerOver = true;
+      this.captionHide = null;
       this.point(this.geneAt(e));
     });
-    this.helixCv.addEventListener('pointerleave', () => {
+    this.helixCv.addEventListener('pointerleave', (e) => {
       this.pointerOver = false;
-      this.look.hover = -1;
+      if (e.pointerType === 'mouse') this.unpoint();
+      else this.captionHide = CAPTION_TOUCH;
     });
     this.helixCv.addEventListener('pointerdown', () => (this.still = 3));
     // a click, not a pointerdown: a swipe over the helix (scrolling the panel) changes nothing
@@ -164,7 +194,7 @@ export class Viewer {
     this.g = sp.genome.slice();
     this.look = { hover: -1, flash: -1, flashT: 0, from: '', gentle: false };
     this.morph = null;
-    this.captionEl.replaceChildren();
+    this.unpoint();
     this.buildStats();
     this.changed();
     this.el.hidden = false;
@@ -203,22 +233,49 @@ export class Viewer {
     return GENE_OF_BASE[pairAt(((e.clientX - b.left) / b.width) * this.helixCv.width, this.helixCv.width, GENE_OF_BASE.length)]!;
   }
 
-  /** one line about the gene pointed at: its name and its value */
+  /** one line about the gene pointed at: its icon showing its value, its name, and a word where the value is one */
   private point(gene: number): void {
     this.look.hover = gene;
     const d = GENES[gene]!,
       s = this.g[gene]!;
+    let icon = GENE_ICON[d.id],
+      fill = 1,
+      none = false,
+      word = '';
+    if (d.id === 'body') word = t(BODIES[s]!);
+    else if (d.id === 'diet') {
+      icon = DIET_ICON[DIETS[s]!];
+      word = t(DIETS[s]!);
+    } else if (d.kind === 'switch') none = !s;
+    else if (NONE_AT_0.has(d.id)) {
+      none = !s;
+      fill = s / (d.states - 1);
+    } else if (d.kind === 'level') fill = (s + 1) / d.states;
+    const gauge = document.createElement('span');
+    gauge.className = css.gauge;
+    gauge.title = `${s + 1}/${d.states}`;
+    const lit = iconEl(icon);
+    if (d.kind === 'circle') lit.style.color = `hsl(${s * HUE_STEP} 70% 62%)`;
+    if (none) gauge.classList.add(css.struck);
+    else if (fill < 1) {
+      const back = iconEl(icon);
+      back.classList.add(css.gaugeBack);
+      gauge.append(back);
+      lit.style.clipPath = `inset(${Math.round((1 - fill) * 100)}% 0 0 0)`;
+    }
+    gauge.append(lit);
     const label = document.createElement('b');
     label.textContent = t(GENE_LABEL[d.id]);
     const value = document.createElement('span');
-    if (d.id === 'body') value.textContent = t(BODIES[s]!);
-    else if (d.id === 'diet') value.textContent = t(DIETS[s]!);
-    else if (d.kind === 'switch') value.textContent = t(s ? 'geneOn' : 'geneOff');
-    else if (d.kind === 'circle') {
-      value.className = css.dot;
-      value.style.background = `hsl(${s * HUE_STEP} 70% 62%)`;
-    } else value.textContent = `${s + 1}/${d.states}`;
-    this.captionEl.replaceChildren(label, value);
+    value.textContent = word;
+    this.captionEl.replaceChildren(gauge, label, value);
+  }
+
+  /** nothing pointed at: the caption empties (its line keeps its room) */
+  private unpoint(): void {
+    this.look.hover = -1;
+    this.captionHide = null;
+    this.captionEl.replaceChildren();
   }
 
   /** a tap: the gene steps on to its next state; the helix and the preview play the change */
@@ -304,6 +361,7 @@ export class Viewer {
     if (gentle) this.rot = 0.4;
     else if (!this.pointerOver && this.still <= 0) this.rot += 0.6 * dt;
     this.still -= dt;
+    if (this.captionHide !== null && (this.captionHide -= dt) <= 0) this.unpoint();
     this.look.flashT = Math.max(0, this.look.flashT - dt / CHANGE_TIME);
     this.look.gentle = gentle;
     const w = Math.max(2, Math.round(this.helixCv.clientWidth * d)),

@@ -62,6 +62,19 @@ const ICONS: Record<string, string> = {
   hunger: 'battery-2-fill',
   speed: 'run-fill',
   life: 'heartbeat-fill',
+  // PETRI_'s genes (the genome viewer); the rest share the tools' and abilities' icons
+  body: 'egg-fill',
+  size: 'ruler-fill',
+  lobes: 'flower-2-fill',
+  wobble: 'audio-waveform-fill',
+  organelles: 'bubble-fill',
+  flagella: 'route-fill',
+  diet: 'fork-knife-fill',
+  fertility: 'baby-fill',
+  mutation: 'dices-fill',
+  hue: 'palette-fill',
+  hue2: 'color-picker-fill',
+  sat: 'contrast-fill',
 };
 
 /** our name → `badge` small in the bottom-right corner of a smaller `base`, a gap cut around it; `strike`: struck

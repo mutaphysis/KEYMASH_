@@ -32,6 +32,11 @@ export const panel = style({
 });
 
 export const name = style({
+  // one line, whatever the edits make of it: the panel keeps its height
+  maxWidth: '100%',
+  overflow: 'hidden',
+  whiteSpace: 'nowrap',
+  textOverflow: 'ellipsis',
   fontFamily: layout.serif,
   fontStyle: 'italic',
   fontSize: 22,
@@ -44,8 +49,9 @@ export const name = style({
 
 export const helix = style({ width: '100%', height: 120, touchAction: 'manipulation', cursor: 'pointer' });
 
+/** the gene pointed at; its line keeps its height when nothing is pointed at */
 export const caption = style({
-  minHeight: 18,
+  height: 40,
   display: 'flex',
   alignItems: 'center',
   gap: 6,
@@ -53,7 +59,32 @@ export const caption = style({
   letterSpacing: 0.5,
   color: vars.color.text,
 });
-export const dot = style({ width: 12, height: 12, borderRadius: 6, display: 'inline-block' });
+
+/** a gene's value as its icon: dim whole, lit from the bottom up as far as the gene goes (the lit one is clipped inline) */
+export const gauge = style({ position: 'relative', flex: 'none', width: 36, height: 36, fontSize: 36 });
+globalStyle(`${gauge} > i`, { position: 'absolute', inset: 0 });
+export const gaugeBack = style({ opacity: 0.25 });
+/** none or off: struck through, with a gap cut along the stroke (as the auto feed's off icon) */
+export const struck = style({});
+const gap = 'linear-gradient(45deg, #000 calc(50% - 4.5px), transparent calc(50% - 4.5px) calc(50% + 4.5px), #000 calc(50% + 4.5px))';
+globalStyle(`${struck} > i`, {
+  maskImage: `${gap}, var(--icon)`,
+  maskComposite: 'intersect',
+  WebkitMaskImage: `${gap}, var(--icon)`,
+  WebkitMaskComposite: 'source-in',
+});
+globalStyle(`${struck}::after`, {
+  content: '""',
+  position: 'absolute',
+  left: '50%',
+  top: '50%',
+  width: 44,
+  height: 3,
+  margin: '-1.5px 0 0 -22px',
+  borderRadius: 1.5,
+  background: 'currentColor',
+  transform: 'rotate(45deg)',
+});
 
 /** the preview in the middle, the abilities stacked in its top left corner */
 export const stage = style({ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' });
@@ -82,5 +113,6 @@ export const buttons = style({
   gap: 10,
   width: '100%',
   justifyContent: 'center',
-  selectors: { '&[hidden]': { display: 'none' } },
+  // hidden until a gene changed, its room kept: nothing jumps when they come
+  selectors: { '&[hidden]': { display: 'flex', visibility: 'hidden' } },
 });

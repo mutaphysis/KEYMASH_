@@ -185,7 +185,10 @@ dish or onto the drawer.
 
 The genome viewer (look, or a tap on a tile or the bench) shows the genes as a turning double
 helix: one base pair per base, a band per gene coloured by its group (form, motion, food,
-defence, social, colour). Point at a band to read the gene and its value; tap it to step the
+defence, social, colour). Point at a band to read the gene: its icon shows the value, lit from
+the bottom up as far as the gene goes (struck through where it is off or none of it: no flagella,
+no toxin, …; the body and diet are named, a colour shows in its colour), and the line empties as
+the pointer leaves (after a tap, a moment later). Tap a band to step the
 gene to its next state: its changed pairs unzip and zip up again in the new bases, and in the
 preview a ring of DNA in the gene's colour wiggles around the specimen while it turns into the
 new one. The name, the picture, the abilities (in the picture's top left
@@ -193,7 +196,8 @@ corner) and the bars (a cell's age, hunger and speed; a specimen's speed and lif
 A tap on the name copies the genome, as shown, to the clipboard as its ACGT sequence.
 Once a gene has changed, **keep** gives a cell the new genes (a new species), puts them into the
 drawer (from a built-in: as a new specimen), or onto the bench, and **discard** drops them; Esc
-or a tap outside closes the viewer.
+or a tap outside closes the viewer. Their room, and the gene line's, is kept while they are
+empty, so nothing in the panel moves.
 
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over
