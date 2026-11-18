@@ -67,6 +67,27 @@ vorax*); the epithet names its most striking trait when it has one (*vorax* a pr
 same genes get a number (*Chymella lula 2*). A species is introduced in the dish when it first
 appears.
 
+Every gene shows on every body, so two genomes never look alike:
+
+| Gene | Look |
+|---|---|
+| size | how big (above 24 units sizes bend toward the largest, 36, so no two steps look the same) |
+| lobes | amoeba and flagellate: lobes · bacillus: rod length · coccus: a slight 2–5-fold dent · spirillum: turns · diatom: round, boat, triangle, square · ciliate: width · volvox: daughter colonies |
+| wobble | how much the outline moves (a rod bends, a coccus or volvox breathes, a ciliate squishes, the glass diatom rocks) |
+| organelles | organelles; bacteria granules, a diatom oil drops, a volvox more cells on its surface |
+| flagella | 0–3 whips (a spirillum's tufts at both ends, a diatom's mucus threads, a ciliate's cirri, a volvox's paired flagella on its rim cells) |
+| speed | the cell's own movements run faster |
+| diet | grazer: food vacuoles · photosynthetic: green chloroplasts (a diatom: golden) · omnivore: both · predator: red digestive vacuoles and a mouth or food cup |
+| fertility | buds on the rim |
+| life span | a short-lived species is paler |
+| mutation | the second colour flickers |
+| toxin | little skulls inside |
+| armour | a thick wall, then plates, then studs |
+| colony | a mucus sheath around it |
+| symbiosis | tiny partners riding on the membrane |
+| spores | a spore sac |
+| colours, saturation, glow | membrane, nucleus (or DNA, cytoplasm, stripes), the halo |
+
 ## Every line is also a feeder
 The same line is read slowly, one token per beat (0.75 s), all lines in parallel:
 words release cells of that species, numbers drop algae, `.` crumbs, `*` light,

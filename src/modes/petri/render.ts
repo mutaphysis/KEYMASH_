@@ -2,7 +2,8 @@
 // out-of-focus specks drifting at two depths, slow caustic light, translucent glowing organisms.
 import type { Cell, Food, Zone, World, SimEvent } from './sim';
 import { DISH_R, DIVIDE_TIME, DIVIDE_GAP, TRANSVERSE } from './sim';
-import type { Species } from './genome';
+import type { GeneId, Species } from './genome';
+import { GENE_INDEX, levelOf } from './genome';
 import type { Note } from './culture';
 import { ctx2d } from '../../ui/dom';
 import { LADDER, PixelBudget } from '../../ui/budget';
@@ -17,25 +18,111 @@ const smooth = (a: number, b: number, x: number): number => {
 const BACTERIA = new Set(['bacillus', 'coccus', 'spirillum']);
 /** seconds of a death that play out even while the lab is paused: the cell is seen to begin dissolving */
 const DEATH_START = 0.9;
-/** how far a body's drawing reaches along its axis, behind and in front, in radii (flagella and mouth included):
- * a portrait fits all of it into its frame */
+
+/** what a species' genes look like; read once per species (a Species never changes) */
+interface Look {
+  /** states 0–3 of the level genes drawn by state */
+  lobes: number;
+  toxic: number;
+  armor: number;
+  colony: number;
+  fertility: number;
+  mutation: number;
+  wobble: number;
+  /** its own movements (beating, wobbling, drifting) run this much faster: ×0.8 … ×1.26 with the speed gene */
+  tempo: number;
+  symbiosis: boolean;
+  spores: boolean;
+}
+const looks = new WeakMap<Species, Look>();
+function lookOf(sp: Species): Look {
+  let l = looks.get(sp);
+  if (!l) {
+    const st = (id: GeneId) => sp.genome[GENE_INDEX[id]] ?? 0;
+    l = {
+      lobes: st('lobes'),
+      toxic: st('toxic'),
+      armor: st('armor'),
+      colony: st('colony'),
+      fertility: st('fertility'),
+      mutation: st('mutation'),
+      wobble: sp.wobble,
+      tempo: Math.cbrt(levelOf('speed', st('speed'))),
+      symbiosis: sp.symbiosis,
+      spores: sp.spores,
+    };
+    looks.set(sp, l);
+  }
+  return l;
+}
+/** drawn saturation: the sat gene spread wide enough to see, paler for a short life span */
+const satOf = (sp: Species): number => (45 + ((sp.sat - 55) * 50) / 30) * (0.7 + (0.3 * (sp.life - 70)) / 70);
+/** the mutation gene flickers the second colour: degrees and speed per state */
+const MUT_AMP = [0, 14, 28, 50];
+const MUT_RATE = [0, 2, 3.5, 6];
+/** where inside a body (u along, v across, see `spot`) its food sits, its skulls, and its buds on the rim (angle, radius) */
+const DIET_SPOTS: [number, number][] = [
+  [0.45, -0.4],
+  [-0.35, 0.5],
+  [0.55, 0.3],
+  [0.1, -0.65],
+];
+const SKULL_SPOTS: [number, number][] = [
+  [0.1, 0.45],
+  [-0.45, -0.35],
+  [0.62, -0.05],
+];
+const BUDS: [number, number][][] = [
+  [],
+  [[2.3, 0.2]],
+  [[2.3, 0.28]],
+  [
+    [2.3, 0.28],
+    [-2.2, 0.2],
+  ],
+];
+/** a diatom's shape by its lobes gene: round, boat, triangle, square; sides of the rounded polygon, reach in radii */
+const DIATOM_SIDES = [0, 0, 3, 4];
+const DIATOM_REACH = [1, 1.5, 1.25, 1.1];
+
+/** how far a body's drawing reaches along its axis, behind and in front, in radii (flagella, mouth and sheath
+ * included): a portrait fits all of it into its frame */
 function reach(sp: Species): [number, number] {
+  const L = lookOf(sp),
+    f = sp.flagella;
+  let back: number, front: number, rim: number;
   switch (sp.body) {
     case 'amoeba':
-      return [1.35, 1.35];
-    case 'bacillus':
-      return [sp.flagella ? 2.85 : 1.25, sp.diet === 'hunter' ? 1.45 : 1.25];
+      [back, front, rim] = [f ? 2.3 : 1.35, 1.35, 1];
+      break;
+    case 'bacillus': {
+      const l = 1.05 + 0.2 * L.lobes;
+      [back, front, rim] = [f ? l + 1.6 : l, sp.diet === 'hunter' ? l * 1.16 : l, l];
+      break;
+    }
+    case 'coccus':
+      [back, front, rim] = [f ? 2.4 : 1.1, 1.1, 1];
+      break;
     case 'spirillum':
-      return [2.45, 2.45];
+      back = front = f ? 2.45 : 1.7;
+      rim = 1.6;
+      break;
     case 'diatom':
-      return [1.5, 1.5];
+      // it turns: every direction reaches as far as its longest
+      rim = DIATOM_REACH[L.lobes]!;
+      back = front = rim + (f ? 1.2 : 0);
+      break;
     case 'ciliate':
-      return [1.75, 1.75];
+      [back, front, rim] = [f ? 1.95 : 1.75, 1.75, 1.45];
+      break;
     case 'flagellate':
-      return [1.35, sp.flagella ? 3.5 : 1.45];
+      [back, front, rim] = [1.35, f ? 3.5 : 1.45, 1.35];
+      break;
     default:
-      return [1, 1];
+      [back, front, rim] = [1.05 + 0.12 * f, 1.05 + 0.12 * f, 1];
   }
+  const sheath = L.colony ? rim * (1 + 0.12 * L.colony) + 0.08 * L.colony : 0;
+  return [Math.max(back, sheath), Math.max(front, sheath)];
 }
 const SERIF = 'Georgia, "Iowan Old Style", "Times New Roman", serif';
 const MONO = '"Share Tech Mono", ui-monospace, monospace';
@@ -685,7 +772,7 @@ export class MicroRenderer {
     if (alpha <= 0.01) return;
     const sick = cell.sick > 0;
     const hue = sick ? 72 : cell.shownHue,
-      sat = (sick ? 30 : sp.sat) * (1 - 0.75 * smooth(0, 0.4, this.dis));
+      sat = (sick ? 30 : satOf(sp)) * (1 - 0.75 * smooth(0, 0.4, this.dis));
     const R = Math.max(1.5, cell.r);
     const k = this.k,
       px = this.dpr / k;
@@ -782,6 +869,8 @@ export class MicroRenderer {
    */
   private dividing(c: Ctx, cell: Cell, sp: Species, R: number, hue: number, sat: number, px: number, t: number): void {
     const p = Math.min(1, cell.t / DIVIDE_TIME);
+    const t0 = t;
+    t = this.enter(sp, t);
     const bact = BACTERIA.has(sp.body);
     const e = smooth(0, 0.45, p),
       pinch = smooth(bact ? 0.45 : 0.35, 0.98, p);
@@ -793,7 +882,7 @@ export class MicroRenderer {
         c.translate(s * end * e, 0);
         c.rotate(cell.heading - cell.axis);
         c.scale(0.85, 0.85);
-        this.body(c, cell, sp, R, hue, sat, px, t);
+        this.body(c, cell, sp, R, hue, sat, px, t0);
         c.restore();
       }
       return;
@@ -816,7 +905,7 @@ export class MicroRenderer {
       i ? c.lineTo(x, y) : c.moveTo(x, y);
     }
     c.closePath();
-    this.skin(c, hue, sat, px);
+    this.skin(c, hue, sat, px, R);
     if (sp.cilia) {
       // cilia keep beating around the dividing body
       c.strokeStyle = `hsla(${hue},55%,82%,0.45)`;
@@ -847,7 +936,7 @@ export class MicroRenderer {
     if (bact) {
       // binary fission: the nucleoid doubles and separates, a septum grows inward
       const sep = smooth(0.1, 0.6, p);
-      c.strokeStyle = `hsla(${sp.hue2},50%,78%,0.45)`;
+      c.strokeStyle = `hsla(${this.h2},50%,78%,0.45)`;
       c.lineWidth = 0.8 * px;
       c.beginPath();
       for (const s of [-1, 1])
@@ -875,11 +964,11 @@ export class MicroRenderer {
     if (env > 0.01) {
       c.save();
       c.globalAlpha *= env;
-      c.fillStyle = `hsla(${sp.hue2},45%,32%,0.55)`;
+      c.fillStyle = `hsla(${this.h2},45%,32%,0.55)`;
       c.beginPath();
       c.arc(0, 0, R * (0.3 + 0.06 * smooth(0, 0.15, p)), 0, TAU);
       c.fill();
-      c.strokeStyle = `hsla(${sp.hue2},60%,72%,0.5)`;
+      c.strokeStyle = `hsla(${this.h2},60%,72%,0.5)`;
       c.lineWidth = 0.8 * px;
       c.stroke();
       c.restore();
@@ -889,7 +978,7 @@ export class MicroRenderer {
       const pull = smooth(0.48, 0.72, p) * end * 0.9; // … chromosomes line up, then are pulled to the poles
       const align = smooth(0.25, 0.45, p);
       // spindle fibres
-      c.strokeStyle = `hsla(${sp.hue2},40%,85%,${0.22 * chrom})`;
+      c.strokeStyle = `hsla(${this.h2},40%,85%,${0.22 * chrom})`;
       c.lineWidth = 0.6 * px;
       c.beginPath();
       for (let i = 0; i < 6; i++) {
@@ -900,7 +989,7 @@ export class MicroRenderer {
         }
       }
       c.stroke();
-      c.strokeStyle = `hsla(${sp.hue2},75%,80%,${0.9 * chrom})`;
+      c.strokeStyle = `hsla(${this.h2},75%,80%,${0.9 * chrom})`;
       c.lineWidth = 1.8 * px;
       c.lineCap = 'round';
       c.beginPath();
@@ -922,11 +1011,11 @@ export class MicroRenderer {
       for (const s of [-1, 1]) {
         c.save();
         c.globalAlpha *= reform;
-        c.fillStyle = `hsla(${sp.hue2},45%,32%,0.55)`;
+        c.fillStyle = `hsla(${this.h2},45%,32%,0.55)`;
         c.beginPath();
         c.arc(s * end * 0.9, 0, R * 0.24 * (0.6 + 0.4 * reform), 0, TAU);
         c.fill();
-        c.strokeStyle = `hsla(${sp.hue2},60%,72%,0.5)`;
+        c.strokeStyle = `hsla(${this.h2},60%,72%,0.5)`;
         c.lineWidth = 0.8 * px;
         c.stroke();
         c.restore();
@@ -961,8 +1050,57 @@ export class MicroRenderer {
 
   /** 0..1 while the cell being drawn is dying */
   private dis = 0;
+  /** the looks of the species being drawn (set by `enter`), its second colour as drawn (mutation flickers it) */
+  private look: Look | null = null;
+  private h2 = 0;
+  /** the body being drawn: its outline as an ellipse (A, B), its inside (ia, ib), how big what it carries is drawn
+   * (`ink`); a spirillum's wave and a bending rod shift all of it by yAt(x) */
+  private fA = 1;
+  private fB = 1;
+  private ia = 1;
+  private ib = 1;
+  private ink = 1;
+  private taper = 0;
+  private curve: 'none' | 'wave' | 'bend' = 'none';
+  private cAmp = 0;
+  private cFreq = 0;
+  private cPhase = 0;
 
-  private skin(c: Ctx, hue: number, sat: number, px: number, a = 1): void {
+  /** a species' looks for this draw; returns its clock, sped up by its speed gene */
+  private enter(sp: Species, t: number): number {
+    const L = (this.look = lookOf(sp));
+    t *= L.tempo;
+    const a = MUT_AMP[L.mutation]!,
+      f = MUT_RATE[L.mutation]!;
+    this.h2 = (sp.hue2 + a * (0.6 * Math.sin(t * f) + 0.4 * Math.sin(t * f * 2.3 + 1)) + 360) % 360;
+    return t;
+  }
+
+  private yAt(x: number): number {
+    if (this.curve === 'wave') return Math.sin(((x + this.fA) / (2 * this.fA)) * Math.PI * this.cFreq + this.cPhase) * this.cAmp;
+    if (this.curve === 'bend') return this.cAmp * (1 - (x / this.fA) ** 2);
+    return 0;
+  }
+  /** a point inside the body: u along it, v across, both -1..1 (contents drift out when the membrane goes) */
+  private spot(u: number, v: number): [number, number] {
+    const s = 1 + 1.2 * this.dis,
+      x = u * this.ia * s;
+    return [x, v * this.ib * s + this.yAt(x)];
+  }
+  /** a point on the outline at angle th, and its outward normal */
+  private edge(th: number): [number, number, number, number] {
+    const co = Math.cos(th),
+      si = Math.sin(th);
+    // a flagellate narrows toward its back
+    const tp = 1 - this.taper * Math.max(0, -co);
+    const x = co * this.fA * tp,
+      nx = co / this.fA,
+      ny = si / this.fB,
+      nl = Math.hypot(nx, ny);
+    return [x, si * this.fB * tp + this.yAt(x), nx / nl, ny / nl];
+  }
+
+  private skin(c: Ctx, hue: number, sat: number, px: number, R: number, a = 1): void {
     const d = this.dis;
     c.fillStyle = `hsla(${hue},${sat}%,52%,${0.2 * a * (1 - d)})`;
     c.fill();
@@ -975,21 +1113,54 @@ export class MicroRenderer {
     c.lineWidth = 1.4 * px;
     c.stroke();
     if (d > 0) c.setLineDash([]);
+    this.armour(c, hue, sat, R, a);
   }
 
-  private nucleus(c: Ctx, sp: Species, R: number, px: number, x = -0.15, y = 0.08): void {
+  /** the armour gene on the wall (the current path): a thick wall, then plates on it, then studs between them;
+   * `under` is the width of a wall drawn as a stroke (a spirillum's) */
+  private armour(c: Ctx, hue: number, sat: number, R: number, a = 1, under = 0): void {
+    const st = this.look?.armor ?? 0;
+    if (!st) return;
+    a *= 1 - this.dis;
+    // plates across a wall drawn as a stroke cover all of it: fainter there
+    const p = under ? 0.45 : 1;
+    c.lineCap = 'butt';
+    c.strokeStyle = `hsla(${hue},${sat * 0.5}%,80%,${0.2 * a})`;
+    c.lineWidth = under + R * 0.14;
+    c.stroke();
+    if (st >= 2) {
+      c.setLineDash([R * 0.34, R * 0.1]);
+      c.strokeStyle = `hsla(${hue},${sat * 0.5}%,84%,${0.4 * a * p})`;
+      c.lineWidth = under + R * 0.1;
+      c.stroke();
+    }
+    if (st >= 3) {
+      c.setLineDash([0, R * 0.44]);
+      c.lineDashOffset = -R * 0.39;
+      c.lineCap = 'round';
+      c.strokeStyle = `hsla(${hue},${sat * 0.4}%,92%,${0.8 * a * p})`;
+      c.lineWidth = under + R * 0.15;
+      c.stroke();
+      c.lineDashOffset = 0;
+    }
+    c.setLineDash([]);
+    c.lineCap = 'round';
+  }
+
+  private nucleus(c: Ctx, R: number, px: number, x = -0.15, y = 0.08): void {
     if (this.dis) {
       R *= 1 - 0.5 * this.dis;
       c.globalAlpha *= 1 - this.dis;
     }
-    c.fillStyle = `hsla(${sp.hue2},45%,32%,0.55)`;
+    const h2 = this.h2;
+    c.fillStyle = `hsla(${h2},45%,32%,0.55)`;
     c.beginPath();
     c.arc(R * x, R * y, R * 0.3, 0, TAU);
     c.fill();
-    c.strokeStyle = `hsla(${sp.hue2},60%,72%,0.45)`;
+    c.strokeStyle = `hsla(${h2},60%,72%,0.45)`;
     c.lineWidth = 0.8 * px;
     c.stroke();
-    c.fillStyle = `hsla(${sp.hue2},70%,82%,0.8)`;
+    c.fillStyle = `hsla(${h2},70%,82%,0.8)`;
     c.beginPath();
     c.arc(R * (x + 0.06), R * (y - 0.05), R * 0.08, 0, TAU);
     c.fill();
@@ -1004,6 +1175,19 @@ export class MicroRenderer {
       c.ellipse(Math.cos(a) * d, Math.sin(a) * d, R * 0.1, R * 0.055, a, 0, TAU);
       c.fill();
     }
+  }
+
+  /** what bacteria and diatoms have instead of organelles: n small round granules (oil drops in a diatom) */
+  private granules(c: Ctx, n: number, R: number, t: number, fill: string): void {
+    c.fillStyle = fill;
+    c.beginPath();
+    const r = R * 0.09 * this.ink;
+    for (let i = 0; i < n; i++) {
+      const [x, y] = this.spot(-0.75 + (1.5 * (i + 0.5)) / n, Math.sin(i * 2.7 + t * 0.2) * 0.55);
+      c.moveTo(x + r, y);
+      c.arc(x, y, r, 0, TAU);
+    }
+    c.fill();
   }
 
   private mouth(c: Ctx, R: number, hue: number, px: number): void {
@@ -1032,6 +1216,232 @@ export class MicroRenderer {
     c.stroke();
   }
 
+  /** n flagella fanned out from x0, y0 */
+  private whips(
+    c: Ctx,
+    n: number,
+    x0: number,
+    y0: number,
+    len: number,
+    amp: number,
+    t: number,
+    hue: number,
+    px: number,
+    dir = -1,
+    fan = 0.45,
+  ): void {
+    for (let i = 0; i < n; i++) {
+      c.save();
+      c.translate(x0, y0);
+      c.rotate((i - (n - 1) / 2) * fan);
+      this.flagellum(c, 0, len, amp, t + i * 0.7, hue, px, dir);
+      c.restore();
+    }
+  }
+
+  /** the outline and inside of the body about to be drawn (see fA … cPhase); a diatom turns here, so all it carries turns along */
+  private shape(c: Ctx, sp: Species, L: Look, R: number, t: number, seed: number): void {
+    const set = (A: number, B: number, ia: number, ib: number, ink = 1) => {
+      this.fA = A;
+      this.fB = B;
+      this.ia = ia;
+      this.ib = ib;
+      this.ink = ink;
+    };
+    this.curve = 'none';
+    this.taper = 0;
+    this.cAmp = 0;
+    switch (sp.body) {
+      case 'bacillus': {
+        const A = R * (1.05 + 0.2 * L.lobes),
+          B = R * 0.52;
+        set(A, B, A * 0.7, B * 0.5, 0.75);
+        this.curve = 'bend';
+        this.cAmp = R * 0.3 * L.wobble * Math.sin(t * 1.3 + seed);
+        break;
+      }
+      case 'spirillum':
+        set(R * 1.6, R * 0.21, R * 1.3, R * 0.1, 0.8);
+        this.curve = 'wave';
+        this.cAmp = R * (0.22 + 0.3 * L.wobble);
+        this.cFreq = L.lobes + 2;
+        this.cPhase = t * 7;
+        break;
+      case 'diatom': {
+        // glass does not wobble: a wobblier diatom rocks more as it turns
+        c.rotate(t * 0.05 + L.wobble * 0.4 * Math.sin(t * 0.9 + seed));
+        const e = DIATOM_REACH[L.lobes]!;
+        if (L.lobes === 1) set(R * 1.5, R * 0.55, R, R * 0.3, 0.8);
+        else set(R * e, R * e, R * 0.55, R * 0.55);
+        break;
+      }
+      case 'ciliate': {
+        const sq = L.wobble * 0.07 * Math.sin(t * 2.2 + seed);
+        const A = R * 1.45 * (1 + sq),
+          B = R * (0.65 + 0.2 * L.lobes) * (1 - sq);
+        set(A, B, A * 0.75, B * 0.6);
+        break;
+      }
+      case 'flagellate':
+        set(R * 1.35, R * 0.85, R * 0.9, R * 0.5);
+        this.taper = 0.35;
+        break;
+      default:
+        set(R, R, R * 0.6, R * 0.6);
+    }
+  }
+
+  /** the colony gene: a mucus sheath, behind the body */
+  private sheath(c: Ctx, L: Look, R: number, hue: number, sat: number, px: number): void {
+    if (!L.colony) return;
+    const g = 1 + 0.12 * L.colony,
+      e = R * 0.08 * L.colony;
+    const a = 1 - this.dis;
+    c.beginPath();
+    c.ellipse(0, this.curve === 'bend' ? this.cAmp * 0.6 : 0, this.fA * g + e, (this.fB + Math.abs(this.cAmp)) * g + e, 0, 0, TAU);
+    c.fillStyle = `hsla(${hue},${sat * 0.5}%,70%,${(0.04 + 0.025 * L.colony) * a})`;
+    c.fill();
+    c.setLineDash([2 * px, 3 * px]);
+    c.strokeStyle = `hsla(${hue},${sat * 0.4}%,82%,${0.2 * a})`;
+    c.lineWidth = 0.8 * px;
+    c.stroke();
+    c.setLineDash([]);
+  }
+
+  /** what every body carries, as its genes say: food it lives on, poison, a spore sac, buds, partners */
+  private carried(c: Ctx, sp: Species, L: Look, R: number, hue: number, sat: number, px: number, t: number): void {
+    const a0 = c.globalAlpha,
+      fade = 1 - this.dis;
+    // thin bodies draw their contents smaller, but not so small that a skull or spore sac can't be made out
+    const s = R * Math.max(this.ink, 0.9);
+    // diet: chloroplasts (the diatom has its own golden ones), food vacuoles, digestive vacuoles
+    const d = sp.diet;
+    let at = 0;
+    const next = (): [number, number] => {
+      const p = DIET_SPOTS[at++ % DIET_SPOTS.length]!;
+      return this.spot(p[0] + 0.06 * Math.sin(t * 0.35 + at), p[1] + 0.06 * Math.cos(t * 0.3 + at * 2));
+    };
+    if ((d === 'photo' || d === 'omni') && sp.body !== 'diatom') {
+      c.fillStyle = `hsla(108,60%,46%,${0.6 * fade})`;
+      for (let i = 0; i < (d === 'photo' ? 3 : 2); i++) {
+        const [x, y] = next();
+        c.beginPath();
+        c.ellipse(x, y, s * 0.17, s * 0.09, i * 1.3 + t * 0.05, 0, TAU);
+        c.fill();
+      }
+    } else if (d === 'omni') at = 2;
+    if (d === 'grazer' || d === 'omni') {
+      for (let i = 0; i < 2; i++) {
+        const [x, y] = next();
+        c.beginPath();
+        c.arc(x, y, s * 0.12, 0, TAU);
+        c.fillStyle = `rgba(200,230,210,${0.08 * fade})`;
+        c.fill();
+        c.strokeStyle = `rgba(225,240,230,${0.45 * fade})`;
+        c.lineWidth = 0.8 * px;
+        c.stroke();
+        c.fillStyle = `hsla(95,55%,62%,${0.6 * fade})`;
+        c.beginPath();
+        c.arc(x + s * 0.03, y - s * 0.02, s * 0.04, 0, TAU);
+        c.fill();
+      }
+    }
+    if (d === 'hunter') {
+      for (let i = 0; i < 2; i++) {
+        const [x, y] = next();
+        c.beginPath();
+        c.arc(x, y, s * 0.13, 0, TAU);
+        c.fillStyle = `hsla(12,65%,38%,${0.55 * fade})`;
+        c.fill();
+        c.strokeStyle = `hsla(12,70%,62%,${0.5 * fade})`;
+        c.lineWidth = 0.8 * px;
+        c.stroke();
+      }
+    }
+    // toxin: little skulls, kept upright however the cell turns
+    if (L.toxic) {
+      const m = c.getTransform(),
+        turn = Math.atan2(m.b, m.a);
+      const k = s * 0.24;
+      for (let i = 0; i < L.toxic; i++) {
+        const p = SKULL_SPOTS[i]!;
+        const [x, y] = this.spot(p[0], p[1]);
+        c.save();
+        c.translate(x, y);
+        c.rotate(-turn + 0.12 * Math.sin(t * 1.4 + i * 2));
+        c.globalAlpha = a0 * fade;
+        c.fillStyle = 'hsla(90,35%,86%,0.85)';
+        c.beginPath();
+        c.arc(0, -0.12 * k, 0.62 * k, 0, TAU);
+        c.rect(-0.34 * k, 0.2 * k, 0.68 * k, 0.4 * k);
+        c.fill();
+        c.fillStyle = `hsla(${hue},45%,10%,0.85)`;
+        c.beginPath();
+        c.arc(-0.24 * k, -0.08 * k, 0.17 * k, 0, TAU);
+        c.moveTo(0.41 * k, -0.08 * k);
+        c.arc(0.24 * k, -0.08 * k, 0.17 * k, 0, TAU);
+        c.rect(-0.05 * k, 0.32 * k, 0.1 * k, 0.28 * k);
+        c.fill();
+        c.restore();
+      }
+    }
+    // spores: a sac of bright dots at the back
+    if (L.spores) {
+      const [x, y] = this.spot(-0.6, -0.05);
+      c.beginPath();
+      c.ellipse(x, y, s * 0.27, s * 0.19, 0.3, 0, TAU);
+      c.fillStyle = `hsla(${hue},30%,18%,${0.45 * fade})`;
+      c.fill();
+      c.strokeStyle = `hsla(${hue},45%,82%,${0.75 * fade})`;
+      c.lineWidth = 0.9 * px;
+      c.stroke();
+      c.fillStyle = `hsla(${hue},60%,92%,${(0.7 + 0.25 * Math.sin(t * 3)) * fade})`;
+      c.beginPath();
+      for (let i = 0; i < 7; i++) {
+        const r = s * 0.05,
+          d = i ? 0.55 : 0,
+          sx = x + Math.cos(i * 1.05) * s * 0.27 * d,
+          sy = y + Math.sin(i * 1.05) * s * 0.19 * d;
+        c.moveTo(sx + r, sy);
+        c.arc(sx, sy, r, 0, TAU);
+      }
+      c.fill();
+    }
+    // fertility: buds growing on the rim
+    for (const [th, r] of BUDS[L.fertility]!) {
+      const [x, y, nx, ny] = this.edge(th + 0.05 * Math.sin(t * 0.8 + th));
+      const br = s * r,
+        bx = x + nx * br * 0.55,
+        by = y + ny * br * 0.55;
+      c.beginPath();
+      c.arc(bx, by, br, 0, TAU);
+      c.fillStyle = `hsla(${hue},${sat}%,52%,${0.22 * fade})`;
+      c.fill();
+      c.strokeStyle = `hsla(${hue},${sat}%,78%,${0.7 * fade})`;
+      c.lineWidth = 1.1 * px;
+      c.stroke();
+      c.fillStyle = `hsla(${this.h2},60%,72%,${0.6 * fade})`;
+      c.beginPath();
+      c.arc(bx + nx * br * 0.15, by + ny * br * 0.15, br * 0.3, 0, TAU);
+      c.fill();
+    }
+    // symbiosis: tiny partners riding on the membrane
+    if (L.symbiosis) {
+      c.fillStyle = `hsla(${(hue + 180) % 360},75%,72%,${0.85 * fade})`;
+      c.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const [x, y, nx, ny] = this.edge(i * 2.1 + t * 0.15 + 0.4);
+        const rx = s * 0.15,
+          ry = s * 0.09,
+          rot = Math.atan2(ny, nx) + Math.PI / 2;
+        c.moveTo(x + Math.cos(rot) * rx, y + Math.sin(rot) * rx);
+        c.ellipse(x, y, rx, ry, rot, 0, TAU);
+      }
+      c.fill();
+    }
+    c.globalAlpha = a0;
+  }
+
   private body(
     c: Ctx,
     cell: Pick<Cell, 'seed' | 'vx' | 'vy'>,
@@ -1042,25 +1452,50 @@ export class MicroRenderer {
     px: number,
     t: number,
   ): void {
+    t = this.enter(sp, t);
+    const L = this.look!;
     const seed = (cell.seed % 97) / 10;
+    this.shape(c, sp, L, R, t, seed);
+    this.sheath(c, L, R, hue, sat, px);
     switch (sp.body) {
       case 'amoeba': {
         const moving = Math.min(1, Math.hypot(cell.vx, cell.vy) / 12);
-        this.blob(c, R, 1.3, sp.lobes, seed, t * 0.7, 1 + 0.18 * moving, 1 - 0.08 * moving);
-        this.skin(c, hue, sat, px);
-        this.blob(c, R * 0.78, 1, sp.lobes, seed + 1, t * 0.7, 1, 1);
+        this.blob(c, R, 1.3 * L.wobble, sp.lobes, seed, t * 0.7, 1 + 0.18 * moving, 1 - 0.08 * moving);
+        this.skin(c, hue, sat, px, R);
+        this.blob(c, R * 0.78, L.wobble, sp.lobes, seed + 1, t * 0.7, 1, 1);
         c.fillStyle = `hsla(${hue},${sat}%,68%,0.09)`;
         c.fill();
+        this.whips(c, sp.flagella, -R * 0.95, 0, R * 1.35, R * 0.18, t, hue, px);
+        if (sp.diet === 'hunter') {
+          // a food cup: two pseudopods reaching forward around the prey
+          c.strokeStyle = `hsla(${hue},${sat}%,78%,${0.7 * (1 - this.dis)})`;
+          c.lineWidth = 1.4 * px;
+          c.beginPath();
+          for (const s of [-1, 1]) {
+            const r = 1 + 0.06 * Math.sin(t * 1.5 + s);
+            c.moveTo(R * 0.85, s * R * 0.5);
+            c.quadraticCurveTo(R * 1.38 * r, s * R * 0.5, R * 1.3 * r, s * R * 0.12);
+          }
+          c.stroke();
+        }
         this.organelles(c, sp, R, t, 0.6);
-        this.nucleus(c, sp, R, px, -0.1 + Math.sin(t * 0.3) * 0.1, 0.05);
+        this.nucleus(c, R, px, -0.1 + Math.sin(t * 0.3) * 0.1, 0.05);
         break;
       }
       case 'coccus': {
+        // a round cell with a slight n-fold dent (lobes); the wall breathes as much as it wobbles
+        const n = L.lobes + 2,
+          br = 1 + L.wobble * 0.05 * Math.sin(t * 2 + seed);
         c.beginPath();
-        c.arc(0, 0, R, 0, TAU);
-        this.skin(c, hue, sat, px);
+        for (let i = 0; i < 48; i++) {
+          const th = (i / 48) * TAU,
+            r = R * br * (1 - 0.08 * Math.cos(n * th) + L.wobble * 0.03 * Math.sin(3 * th + t * 1.5 + seed));
+          i ? c.lineTo(Math.cos(th) * r, Math.sin(th) * r) : c.moveTo(r, 0);
+        }
+        c.closePath();
+        this.skin(c, hue, sat, px, R);
         // the cytoplasm drifts slowly about inside the wall
-        c.fillStyle = `hsla(${hue},${sat}%,75%,0.18)`;
+        c.fillStyle = `hsla(${this.h2},${Math.max(60, sat)}%,68%,0.28)`;
         c.beginPath();
         c.arc(
           R * (-0.12 + 0.13 * Math.sin(t * 0.7 + seed)),
@@ -1070,79 +1505,109 @@ export class MicroRenderer {
           TAU,
         );
         c.fill();
+        this.granules(c, sp.organelles, R, t, `hsla(${(hue + 30) % 360},70%,78%,0.6)`);
+        this.whips(c, sp.flagella, -R, 0, R * 1.4, R * 0.2, t, hue, px);
         break;
       }
       case 'bacillus': {
-        const L = R * 1.25,
-          w = R * 0.52;
-        c.beginPath();
-        c.moveTo(-L + w, -w);
-        c.lineTo(L - w, -w);
-        c.arc(L - w, 0, w, -Math.PI / 2, Math.PI / 2);
-        c.lineTo(-L + w, w);
-        c.arc(-L + w, 0, w, Math.PI / 2, Math.PI * 1.5);
-        c.closePath();
-        this.skin(c, hue, sat, px);
-        // the nucleoid: bacteria have no nucleus, just a tangle of DNA
-        c.strokeStyle = `hsla(${sp.hue2},50%,75%,0.35)`;
-        c.lineWidth = 0.8 * px;
+        // a rod (long as its lobes gene) along a spine that bends as much as it wobbles
+        const A = this.fA,
+          w = this.fB,
+          Ls = A - w,
+          b = this.cAmp;
+        const slope = (x: number) => (-2 * b * x) / (A * A);
         c.beginPath();
         for (let i = 0; i <= 10; i++) {
-          const x = -L * 0.5 + (i / 10) * L,
-            y = Math.sin(i * 1.9 + seed) * w * 0.35;
+          const x = -Ls + (2 * Ls * i) / 10,
+            m = slope(x),
+            nl = Math.hypot(1, m);
+          c.lineTo(x + (m / nl) * w, this.yAt(x) - w / nl);
+        }
+        const aR = Math.atan(slope(Ls)),
+          aL = Math.atan(slope(-Ls));
+        c.arc(Ls, this.yAt(Ls), w, aR - Math.PI / 2, aR + Math.PI / 2);
+        for (let i = 10; i >= 0; i--) {
+          const x = -Ls + (2 * Ls * i) / 10,
+            m = slope(x),
+            nl = Math.hypot(1, m);
+          c.lineTo(x - (m / nl) * w, this.yAt(x) + w / nl);
+        }
+        c.arc(-Ls, this.yAt(-Ls), w, aL + Math.PI / 2, aL + Math.PI * 1.5);
+        c.closePath();
+        this.skin(c, hue, sat, px, R);
+        // the nucleoid: bacteria have no nucleus, just a tangle of DNA
+        c.strokeStyle = `hsla(${this.h2},65%,72%,0.6)`;
+        c.lineWidth = 1.1 * px;
+        c.beginPath();
+        for (let i = 0; i <= 10; i++) {
+          const x = -A * 0.5 + (i / 10) * A,
+            y = Math.sin(i * 1.9 + seed) * w * 0.35 + this.yAt(x);
           i ? c.lineTo(x, y) : c.moveTo(x, y);
         }
         c.stroke();
-        if (sp.flagella) this.flagellum(c, -L, R * 1.6, w * 0.6, t, hue, px);
-        if (sp.diet === 'hunter') this.mouth(c, L * 0.95, hue, px);
+        this.granules(c, sp.organelles, R, t, `hsla(${(hue + 30) % 360},70%,78%,0.6)`);
+        this.whips(c, sp.flagella, -A, 0, R * 1.6, w * 0.6, t, hue, px);
+        if (sp.diet === 'hunter') this.mouth(c, A * 0.95, hue, px);
         break;
       }
       case 'spirillum': {
-        const L = R * 1.6,
-          // where the wave leaves the body at either end: the flagella start there
-          end = Math.sin(t * 7) * R * 0.38;
+        // a corkscrew: its lobes gene counts the turns, wobble how deep they are
+        const A = this.fA,
+          n = this.cFreq,
+          end = Math.sin(this.cPhase) * this.cAmp;
         c.lineCap = 'round';
         const path = () => {
           c.beginPath();
           for (let i = 0; i <= 30; i++) {
-            const s = i / 30,
-              x = -L + s * 2 * L,
-              y = Math.sin(s * Math.PI * 3 + t * 7) * R * 0.38;
-            i ? c.lineTo(x, y) : c.moveTo(x, y);
+            const x = -A + (i / 30) * 2 * A;
+            i ? c.lineTo(x, this.yAt(x)) : c.moveTo(x, this.yAt(x));
           }
         };
         path();
         c.strokeStyle = `hsla(${hue},${sat}%,55%,0.45)`;
         c.lineWidth = R * 0.42;
         c.stroke();
+        this.armour(c, hue, sat, R, 1, R * 0.42);
+        c.lineCap = 'round';
         path();
-        c.strokeStyle = `hsla(${hue},${sat}%,82%,0.75)`;
-        c.lineWidth = 1 * px;
+        c.strokeStyle = `hsla(${this.h2},80%,70%,0.85)`;
+        c.lineWidth = 1.4 * px;
         c.stroke();
-        this.flagellum(c, -L, R * 0.8, R * 0.2, t * 1.5, hue, px, -1, end);
-        this.flagellum(c, L, R * 0.8, R * 0.2, t * 1.5, hue, px, 1, -end);
+        this.granules(c, sp.organelles, R, t, `hsla(${(hue + 30) % 360},70%,82%,0.7)`);
+        // a tuft of flagella at either end, where the wave leaves the body
+        this.whips(c, sp.flagella, -A, end, R * 0.8, R * 0.2, t * 1.5, hue, px, -1, 0.4);
+        this.whips(c, sp.flagella, A, n % 2 ? -end : end, R * 0.8, R * 0.2, t * 1.5, hue, px, 1, 0.4);
         break;
       }
       case 'diatom': {
-        // a glass house: centric (round) or pennate (boat shaped)
-        c.rotate(t * 0.05);
-        const pennate = cell.seed % 2 === 0;
-        if (pennate) {
-          c.beginPath();
-          c.ellipse(0, 0, R * 1.5, R * 0.55, 0, 0, TAU);
-        } else {
-          c.beginPath();
-          c.arc(0, 0, R, 0, TAU);
-        }
-        c.fillStyle = `hsla(${hue},35%,62%,0.13)`;
+        // a glass house, shaped by its lobes gene: round, boat, triangle, square
+        const boat = L.lobes === 1,
+          poly = DIATOM_SIDES[L.lobes]!,
+          e = DIATOM_REACH[L.lobes]!;
+        const rAt = (th: number): number => {
+          if (!poly) return R;
+          const seg = TAU / poly,
+            u = (((th % seg) + seg) % seg) - seg / 2;
+          return R * e * (0.75 * (Math.cos(Math.PI / poly) / Math.cos(u)) + 0.25);
+        };
+        c.beginPath();
+        if (boat) c.ellipse(0, 0, R * 1.5, R * 0.55, 0, 0, TAU);
+        else
+          for (let i = 0; i <= 48; i++) {
+            const th = (i / 48) * TAU - Math.PI / 2,
+              r = rAt(th + Math.PI / 2);
+            i ? c.lineTo(Math.cos(th) * r, Math.sin(th) * r) : c.moveTo(Math.cos(th) * r, Math.sin(th) * r);
+          }
+        c.fillStyle = `hsla(${hue},${sat * 0.5}%,62%,0.13)`;
         c.fill();
-        c.strokeStyle = `hsla(${hue},40%,85%,0.8)`;
+        c.strokeStyle = `hsla(${hue},${sat * 0.55}%,85%,0.8)`;
         c.lineWidth = 1.3 * px;
         c.stroke();
-        c.strokeStyle = `hsla(${hue},40%,85%,0.3)`;
+        this.armour(c, hue, sat, R);
+        c.strokeStyle = `hsla(${this.h2},70%,70%,0.45)`;
         c.lineWidth = 0.7 * px;
         c.beginPath();
-        if (pennate) {
+        if (boat) {
           for (let i = -6; i <= 6; i++) {
             const x = (i / 6) * R * 1.3,
               h = R * 0.5 * Math.sqrt(Math.max(0, 1 - (x / (R * 1.5)) ** 2));
@@ -1153,31 +1618,54 @@ export class MicroRenderer {
           c.lineTo(R * 1.4, 0);
         } else {
           for (let i = 0; i < 16; i++) {
-            const a = (i / 16) * TAU;
-            c.moveTo(Math.cos(a) * R * 0.25, Math.sin(a) * R * 0.25);
-            c.lineTo(Math.cos(a) * R * 0.92, Math.sin(a) * R * 0.92);
+            const th = (i / 16) * TAU - Math.PI / 2,
+              r = rAt(th + Math.PI / 2);
+            c.moveTo(Math.cos(th) * R * 0.25, Math.sin(th) * R * 0.25);
+            c.lineTo(Math.cos(th) * r * 0.9, Math.sin(th) * r * 0.9);
           }
           c.moveTo(R * 0.25, 0);
           c.arc(0, 0, R * 0.25, 0, TAU);
         }
         c.stroke();
-        // golden chloroplasts
-        c.fillStyle = 'hsla(44,70%,55%,0.45)';
-        for (const s of [-1, 1]) {
+        // mucus threads it glides on
+        if (sp.flagella) {
+          c.strokeStyle = `hsla(${hue},20%,85%,${0.35 * (1 - this.dis)})`;
+          c.lineWidth = 0.7 * px;
           c.beginPath();
-          c.ellipse(s * R * (pennate ? 0.6 : 0.35), 0, R * 0.32, R * 0.2, 0, 0, TAU);
-          c.fill();
+          const x0 = -this.fA;
+          for (let j = 0; j < sp.flagella; j++) {
+            const a = (j - (sp.flagella - 1) / 2) * 0.3;
+            for (let i = 0; i <= 12; i++) {
+              const s = i / 12,
+                d = s * R * 1.2,
+                w = Math.sin(t * 0.8 - s * 5 + j) * R * 0.12 * s;
+              const x = x0 - Math.cos(a) * d - Math.sin(a) * w,
+                y = -Math.sin(a) * d + Math.cos(a) * w;
+              i ? c.lineTo(x, y) : c.moveTo(x, y);
+            }
+          }
+          c.stroke();
         }
+        // golden chloroplasts when it lives on light
+        if (sp.diet === 'photo' || sp.diet === 'omni') {
+          c.fillStyle = 'hsla(44,70%,55%,0.45)';
+          for (const s of sp.diet === 'photo' ? [-1, 1] : [1]) {
+            c.beginPath();
+            c.ellipse(s * R * (boat ? 0.6 : 0.35), 0, R * 0.32, R * 0.2, 0, 0, TAU);
+            c.fill();
+          }
+        }
+        this.granules(c, sp.organelles, R, t, 'hsla(52,80%,86%,0.55)');
         break;
       }
       case 'ciliate': {
-        const a = R * 1.45,
-          b = R * 0.85;
+        const a = this.fA,
+          b = this.fB;
         c.beginPath();
         c.ellipse(0, 0, a, b, 0, 0, TAU);
-        this.skin(c, hue, sat, px);
+        this.skin(c, hue, sat, px, R);
         // cilia beating in a wave around the body (they stop and fade when the cell dies)
-        c.strokeStyle = `hsla(${hue},55%,82%,${0.55 * (1 - this.dis)})`;
+        c.strokeStyle = `hsla(${hue},${sat * 0.75}%,82%,${0.55 * (1 - this.dis)})`;
         c.lineWidth = 0.8 * px;
         const n = 34;
         c.beginPath();
@@ -1196,6 +1684,20 @@ export class MicroRenderer {
           c.lineTo(x + (ux * Math.cos(beat) - uy * Math.sin(beat)) * L, y + (ux * Math.sin(beat) + uy * Math.cos(beat)) * L);
         }
         c.stroke();
+        // cirri: tufts of fused cilia at the back, one per flagellum
+        if (sp.flagella) {
+          c.lineWidth = 1.5 * px;
+          c.beginPath();
+          for (let j = 0; j < sp.flagella; j++) {
+            const [x, y, nx, ny] = this.edge(Math.PI + (j - (sp.flagella - 1) / 2) * 0.45);
+            for (let i = -1; i <= 1; i++) {
+              const ang = Math.atan2(ny, nx) + i * 0.14 + Math.sin(t * 4 + j) * 0.3;
+              c.moveTo(x, y);
+              c.lineTo(x + Math.cos(ang) * R * 0.5, y + Math.sin(ang) * R * 0.5);
+            }
+          }
+          c.stroke();
+        }
         // oral groove and a pulsing contractile vacuole
         c.strokeStyle = `hsla(${hue},40%,35%,0.5)`;
         c.lineWidth = 1.4 * px;
@@ -1209,23 +1711,17 @@ export class MicroRenderer {
         c.arc(-a * 0.55, -b * 0.25, R * (0.1 + 0.12 * pulse), 0, TAU);
         c.fill();
         this.organelles(c, sp, R, t, 0.7);
-        this.nucleus(c, sp, R, px, 0.05, 0.1);
+        this.nucleus(c, R, px, 0.05, 0.1);
         if (sp.diet === 'hunter') this.mouth(c, a * 0.95, hue, px);
         break;
       }
       case 'flagellate': {
-        this.blob(c, R, 0.35, 3, seed, t, 1.35, 0.85, 0.35);
-        this.skin(c, hue, sat, px);
+        this.blob(c, R, 0.875 * L.wobble, sp.lobes, seed, t, 1.35, 0.85, 0.35);
+        this.skin(c, hue, sat, px, R);
         // flagella pull from the front, like Euglena
-        for (let i = 0; i < sp.flagella; i++) {
-          c.save();
-          c.translate(R * 1.3, 0);
-          c.rotate((i - (sp.flagella - 1) / 2) * 0.5);
-          this.flagellum(c, 0, R * 2.2, R * 0.28, t + i, hue, px, 1);
-          c.restore();
-        }
+        this.whips(c, sp.flagella, R * 1.3, 0, R * 2.2, R * 0.28, t, hue, px, 1, 0.5);
         this.organelles(c, sp, R, t, 0.5);
-        this.nucleus(c, sp, R, px, -0.25, 0);
+        this.nucleus(c, R, px, -0.25, 0);
         c.fillStyle = 'hsla(2,85%,55%,0.85)';
         c.beginPath();
         c.arc(R * 0.85, -R * 0.18, R * 0.12, 0, TAU);
@@ -1235,35 +1731,61 @@ export class MicroRenderer {
       }
       case 'volvox': {
         c.beginPath();
-        c.arc(0, 0, R, 0, TAU);
+        for (let i = 0; i < 48; i++) {
+          const th = (i / 48) * TAU,
+            r = R * (1 + L.wobble * (0.035 * Math.sin(3 * th + t * 1.2 + seed) + 0.02 * Math.sin(5 * th - t)));
+          i ? c.lineTo(Math.cos(th) * r, Math.sin(th) * r) : c.moveTo(r, 0);
+        }
+        c.closePath();
         c.fillStyle = `hsla(${hue},${sat}%,45%,0.14)`;
         c.fill();
         c.strokeStyle = `hsla(${hue},${sat}%,75%,0.5)`;
         c.lineWidth = 1 * px;
         c.stroke();
-        // hundreds of little cells on the surface (a few dozen here), turning as it rolls
+        this.armour(c, hue, sat, R);
+        // little cells on the surface (as many as its organelles gene says), turning as it rolls
+        const cells = 16 + 6 * sp.organelles;
         c.fillStyle = `hsla(${hue},${sat}%,72%,0.75)`;
         c.beginPath();
-        for (let i = 0; i < 36; i++) {
+        for (let i = 0; i < cells; i++) {
           const a = i * 2.39996 + t * 0.15,
-            d = R * Math.sqrt((i + 0.5) / 36) * 0.97,
+            d = R * Math.sqrt((i + 0.5) / cells) * 0.97,
             x = Math.cos(a) * d,
             y = Math.sin(a) * d;
           c.moveTo(x + R * 0.045, y);
           c.arc(x, y, R * 0.045, 0, TAU);
         }
         c.fill();
-        // daughter colonies inside
-        for (let i = 0; i < 3; i++) {
-          const a = i * 2.1 + t * 0.1;
-          c.fillStyle = `hsla(${(hue + 15) % 360},${sat}%,55%,0.4)`;
+        // each cell on the rim beats a pair of flagella, longer with the gene
+        if (sp.flagella) {
+          const len = R * (0.06 + 0.06 * sp.flagella);
+          c.strokeStyle = `hsla(${hue},50%,80%,${0.5 * (1 - this.dis)})`;
+          c.lineWidth = 0.7 * px;
           c.beginPath();
-          c.arc(Math.cos(a) * R * 0.42, Math.sin(a) * R * 0.42, R * 0.2, 0, TAU);
+          for (let i = 0; i < 18; i++) {
+            const a = (i / 18) * TAU + t * 0.15;
+            const x = Math.cos(a) * R,
+              y = Math.sin(a) * R;
+            for (const s of [-1, 1]) {
+              const b = a + s * 0.35 + 0.3 * Math.sin(t * 8 + i);
+              c.moveTo(x, y);
+              c.lineTo(x + Math.cos(b) * len, y + Math.sin(b) * len);
+            }
+          }
+          c.stroke();
+        }
+        // daughter colonies inside, as many as its lobes gene says
+        c.fillStyle = `hsla(${this.h2},${sat}%,55%,0.4)`;
+        for (let i = 0; i < sp.lobes; i++) {
+          const a = (i * TAU) / sp.lobes + t * 0.1;
+          c.beginPath();
+          c.arc(Math.cos(a) * R * 0.42, Math.sin(a) * R * 0.42, R * (0.26 - 0.02 * sp.lobes), 0, TAU);
           c.fill();
         }
         break;
       }
     }
+    this.carried(c, sp, L, R, hue, sat, px, t);
   }
 
   /** a specimen on its own (the lab's drawer, bench, viewer) around x, y: radius R canvas pixels, smaller where the
@@ -1287,7 +1809,7 @@ export class MicroRenderer {
       c.globalCompositeOperation = 'source-over';
       c.globalAlpha = a0;
     }
-    this.body(c, { seed: sp.seed, vx: 0, vy: 0 }, sp, sp.size, sp.hue, sp.sat, dpr / s, t + (sp.seed % 1000));
+    this.body(c, { seed: sp.seed, vx: 0, vy: 0 }, sp, sp.size, sp.hue, satOf(sp), dpr / s, t + (sp.seed % 1000));
     c.restore();
   }
 
