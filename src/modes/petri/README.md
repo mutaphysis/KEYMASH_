@@ -143,7 +143,8 @@ more for every cell in it, and holds back while plenty lies about; **clear** emp
 six seconds the button undoes it); the **time** button shows the speed running and steps through
 **1×**, **3×** and **pause** (time stops: the cells freeze, flagella and cilia too, while the
 water still moves; a cell put down in a pause shows at its small starting size and grows once
-time runs). The arrow at the top goes back to the code.
+time runs, a cell killed in a pause begins to dissolve and finishes once time runs). The arrow at
+the top goes back to the code.
 
 Under the toolbar (on the left in split view) is the specimen drawer: the eight body types,
 always there, and the specimens you keep (up to 40, stored in the browser as their gene

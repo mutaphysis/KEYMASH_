@@ -15,6 +15,8 @@ const smooth = (a: number, b: number, x: number): number => {
   return u * u * (3 - 2 * u);
 };
 const BACTERIA = new Set(['bacillus', 'coccus', 'spirillum']);
+/** seconds of a death that play out even while the lab is paused: the cell is seen to begin dissolving */
+const DEATH_START = 0.9;
 /** how far a body's drawing reaches along its axis, behind and in front, in radii (flagella and mouth included):
  * a portrait fits all of it into its frame */
 function reach(sp: Species): [number, number] {
@@ -115,6 +117,8 @@ export class MicroRenderer {
   private life = 0;
   /** when each cell was first drawn (real time): a new cell fades in even while the dish is paused */
   private born = new WeakMap<Cell, number>();
+  /** when each cell was first drawn dying (real time): a death's first moments play even while the dish is paused */
+  private died = new WeakMap<Cell, number>();
   /** CSS pixels at the bottom of the stage covered by the play buttons */
   reserveBottom = 0;
   gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -667,8 +671,15 @@ export class MicroRenderer {
     let born = this.born.get(cell);
     if (born === undefined) this.born.set(cell, (born = this.time));
     let alpha = Math.min(1, Math.max(cell.age, this.time - born) * 2 + (cell.gen > 1 ? 1 : 0));
-    // dying: the membrane dissolves first, the remains fade after
-    this.dis = cell.state === 'dying' ? Math.min(1, cell.t / 2.6) : 0;
+    // dying: the membrane dissolves first, the remains fade after. In a pause (cell.t stands still) the first
+    // DEATH_START seconds still play, then it waits; at 1× real time and cell.t run alike, so nothing jumps
+    let t = cell.t;
+    if (cell.state === 'dying') {
+      let died = this.died.get(cell);
+      if (died === undefined) this.died.set(cell, (died = this.time));
+      t = Math.max(t, Math.min(DEATH_START, this.time - died));
+    }
+    this.dis = cell.state === 'dying' ? Math.min(1, t / 2.6) : 0;
     if (this.dis) alpha *= 1 - smooth(0.55, 1, this.dis);
     if (cell.state === 'eaten') alpha *= Math.max(0, 1 - cell.t / 1.5) * 0.8;
     if (alpha <= 0.01) return;
