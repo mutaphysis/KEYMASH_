@@ -160,8 +160,10 @@ dish or onto the drawer.
 
 The genome viewer (look, or a tap on a tile or the bench) shows the genes as a turning double
 helix: one base pair per base, a band per gene coloured by its group (form, motion, food,
-defence, social, colour). Point at a band to read the gene and its value; double-tap it to step
-the gene to its next state. The name, the picture, the abilities (in the picture's top left
+defence, social, colour). Point at a band to read the gene and its value; tap it to step the
+gene to its next state: its changed pairs unzip and zip up again in the new bases, and in the
+preview a ring of DNA in the gene's colour wiggles around the specimen while it turns into the
+new one. The name, the picture, the abilities (in the picture's top left
 corner) and the bars (a cell's age, hunger and speed; a specimen's speed and life span) follow.
 A tap on the name copies the genome, as shown, to the clipboard as its ACGT sequence.
 Once a gene has changed, **keep** gives a cell the new genes (a new species), puts them into the

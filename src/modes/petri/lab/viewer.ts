@@ -1,5 +1,5 @@
 // The genome viewer: a specimen's genes as a turning double helix. Point at a band to read its gene,
-// double-tap it to step the gene on; the preview, abilities and name follow. Keep puts the new genes
+// tap it to step the gene on; the preview, abilities and name follow. Keep puts the new genes
 // where the specimen came from (the cell in the dish, the drawer, the bench); debris is read only.
 import { BODIES, DIETS, GENES, HUE_STEP, encodeGenome, nameOf, specimen } from '../genome';
 import type { GeneId, Genome, Species } from '../genome';
@@ -8,7 +8,7 @@ import type { MicroRenderer } from '../render';
 import { t } from '../messages';
 import type { PetriMsg } from '../messages';
 import type { Entry } from './specimens';
-import { GENE_OF_BASE, drawHelix, pairAt } from './helix';
+import { GENE_OF_BASE, GROUP_HUE, drawHelix, pairAt } from './helix';
 import type { HelixLook } from './helix';
 import * as css from './viewer.css';
 import { $, ctx2d } from '../../../ui/dom';
@@ -53,8 +53,8 @@ const GENE_LABEL: Record<GeneId, PetriMsg> = {
   glow: 'geneGlow',
 };
 const DIET_ICON: Record<Species['diet'], IconName> = { grazer: 'food', hunter: 'hunter', photo: 'photo', omni: 'omni' };
-/** two taps on the same gene within this long (ms) step it on */
-const DOUBLE_TAP = 350;
+/** seconds a gene's change plays on the helix */
+const CHANGE_TIME = 0.9;
 const HELIX_H = 120;
 const PREVIEW = 150;
 
@@ -88,9 +88,10 @@ export class Viewer {
   /** seconds the helix stays still after a touch */
   private still = 0;
   private pointerOver = false;
-  private look: HelixLook = { hover: -1, flash: -1, flashT: 0 };
-  private lastTap = { gene: -1, t: 0 };
+  private look: HelixLook = { hover: -1, flash: -1, flashT: 0, from: '', gentle: false };
   private time = 0;
+  /** a gene just changed: the preview turns from `before` into the new specimen while `t` counts 1 → 0 */
+  private morph: { before: Species; hue: number; t: number } | null = null;
 
   constructor(host: ViewerHost) {
     this.host = host;
@@ -131,16 +132,9 @@ export class Viewer {
       this.pointerOver = false;
       this.look.hover = -1;
     });
-    this.helixCv.addEventListener('pointerdown', (e) => {
-      const gene = this.geneAt(e);
-      this.still = 3;
-      this.point(gene);
-      const now = performance.now();
-      if (gene === this.lastTap.gene && now - this.lastTap.t < DOUBLE_TAP) {
-        this.step(gene);
-        this.lastTap = { gene: -1, t: 0 };
-      } else this.lastTap = { gene, t: now };
-    });
+    this.helixCv.addEventListener('pointerdown', () => (this.still = 3));
+    // a click, not a pointerdown: a swipe over the helix (scrolling the panel) changes nothing
+    this.helixCv.addEventListener('click', (e) => this.step(this.geneAt(e)));
   }
 
   /** the buttons, once the viewer is in the document (km-buttons build themselves when connected) */
@@ -168,8 +162,8 @@ export class Viewer {
     this.sp = sp;
     this.seq0 = encodeGenome(sp.genome);
     this.g = sp.genome.slice();
-    this.look = { hover: -1, flash: -1, flashT: 0 };
-    this.lastTap = { gene: -1, t: 0 };
+    this.look = { hover: -1, flash: -1, flashT: 0, from: '', gentle: false };
+    this.morph = null;
     this.captionEl.replaceChildren();
     this.buildStats();
     this.changed();
@@ -204,7 +198,7 @@ export class Viewer {
   }
 
   /** the gene under a pointer on the helix */
-  private geneAt(e: PointerEvent): number {
+  private geneAt(e: MouseEvent): number {
     const b = this.helixCv.getBoundingClientRect();
     return GENE_OF_BASE[pairAt(((e.clientX - b.left) / b.width) * this.helixCv.width, this.helixCv.width, GENE_OF_BASE.length)]!;
   }
@@ -227,11 +221,14 @@ export class Viewer {
     this.captionEl.replaceChildren(label, value);
   }
 
-  /** a double tap: the gene steps on to its next state */
+  /** a tap: the gene steps on to its next state; the helix and the preview play the change */
   private step(gene: number): void {
+    const before = this.shown;
+    this.look.from = encodeGenome(this.g);
     this.g[gene] = (this.g[gene]! + 1) % GENES[gene]!.states;
     this.look.flash = gene;
     this.look.flashT = 1;
+    if (!this.host.r.gentle) this.morph = { before, hue: GROUP_HUE[GENES[gene]!.group], t: 1 };
     this.point(gene);
     this.changed();
   }
@@ -307,7 +304,8 @@ export class Viewer {
     if (gentle) this.rot = 0.4;
     else if (!this.pointerOver && this.still <= 0) this.rot += 0.6 * dt;
     this.still -= dt;
-    this.look.flashT = Math.max(0, this.look.flashT - dt / 0.6);
+    this.look.flashT = Math.max(0, this.look.flashT - dt / CHANGE_TIME);
+    this.look.gentle = gentle;
     const w = Math.max(2, Math.round(this.helixCv.clientWidth * d)),
       h = Math.round(HELIX_H * d);
     if (this.helixCv.width !== w || this.helixCv.height !== h) {
@@ -319,10 +317,85 @@ export class Viewer {
     if (this.previewCv.width !== n || this.previewCv.height !== n) this.previewCv.width = this.previewCv.height = n;
     this.previewCtx.setTransform(1, 0, 0, 1, 0, 0);
     this.previewCtx.clearRect(0, 0, n, n);
-    this.host.r.portrait(this.previewCtx, this.shown, n / 2, n / 2, n * 0.26, n * 0.42, this.time, d);
+    if (this.morph && (this.morph.t -= dt / CHANGE_TIME) > 0) this.drawMorph(n, d);
+    else {
+      this.morph = null;
+      this.host.r.portrait(this.previewCtx, this.shown, n / 2, n / 2, n * 0.26, n * 0.42, this.time, d);
+    }
     if ((this.statT -= dt) <= 0) {
       this.statT = 0.3;
       for (const s of this.stats) s.fill.style.width = `${Math.round(Math.max(0, Math.min(1, s.value())) * 100)}%`;
     }
+  }
+
+  /** the preview changing: a ring of DNA in the gene's colour wiggles around it, the old specimen shrinks away inside,
+   * the new one wobbles into its place */
+  private drawMorph(n: number, d: number): void {
+    const g = this.previewCtx,
+      { before, hue, t } = this.morph!,
+      p = 1 - t,
+      T = this.time,
+      cx = n / 2,
+      cy = n / 2,
+      r = this.host.r;
+    const ease = (a: number, b: number) => {
+      const u = Math.max(0, Math.min(1, (p - a) / (b - a)));
+      return u * u * (3 - 2 * u);
+    };
+    // the ring: two strands around the specimen, wiggling across each other, rungs between, turning as it tightens
+    const env = Math.sin(Math.PI * p),
+      R = n * 0.37 * (1.05 - 0.1 * p),
+      spin = T * 1.5 + p * 4,
+      at = (a: number, s: 1 | -1): [number, number] => {
+        const rr = R + s * Math.sin(a * 7 + T * 9) * n * 0.03 * (0.4 + env);
+        return [cx + Math.cos(a + spin) * rr, cy + Math.sin(a + spin) * rr];
+      };
+    g.globalCompositeOperation = 'lighter';
+    g.lineCap = 'round';
+    g.lineWidth = 1.6 * d;
+    for (const s of [1, -1] as const) {
+      g.strokeStyle = `hsla(${hue},80%,72%,${0.75 * env})`;
+      g.beginPath();
+      for (let i = 0; i <= 96; i++) {
+        const [x, y] = at((i / 96) * Math.PI * 2, s);
+        i ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.stroke();
+    }
+    g.lineWidth = 1.2 * d;
+    g.strokeStyle = `hsla(${hue},70%,78%,${0.4 * env})`;
+    g.beginPath();
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2,
+        [x0, y0] = at(a, 1),
+        [x1, y1] = at(a, -1);
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+    }
+    g.stroke();
+    // a soft flash in the middle as the old turns into the new
+    const flash = Math.sin(Math.PI * Math.max(0, Math.min(1, (p - 0.25) / 0.35)));
+    if (flash > 0) {
+      const f = g.createRadialGradient(cx, cy, 0, cx, cy, n * 0.32);
+      f.addColorStop(0, `hsla(${hue},80%,85%,${0.35 * flash})`);
+      f.addColorStop(1, `hsla(${hue},80%,85%,0)`);
+      g.fillStyle = f;
+      g.fillRect(0, 0, n, n);
+    }
+    g.globalCompositeOperation = 'source-over';
+    // the old specimen shrinks and fades; the new one grows in with a jelly wobble that settles
+    const out = ease(0, 0.45);
+    if (out < 1) {
+      const k = 1 - 0.35 * out;
+      g.globalAlpha = 1 - out;
+      r.portrait(g, before, cx, cy, n * 0.26 * k, n * 0.42 * k, T, d);
+    }
+    const grow = ease(0.25, 0.65);
+    if (grow > 0) {
+      const k = (0.65 + 0.35 * grow) * (1 + 0.1 * Math.sin(p * Math.PI * 5) * (1 - p));
+      g.globalAlpha = grow;
+      r.portrait(g, this.shown, cx, cy, n * 0.26 * k, n * 0.42 * k, T, d);
+    }
+    g.globalAlpha = 1;
   }
 }
