@@ -54,6 +54,8 @@ const smooth = (a: number, b: number, x: number) => {
 };
 /** overshoots a little and settles: the hybrid popping out */
 const backOut = (q: number) => 1 + 2.7 * (q - 1) ** 3 + 1.7 * (q - 1) ** 2;
+/** the bench shows sizes: the smallest species at 80 %, ramping up to the full picture for the biggest */
+const benchScale = (sp: Species) => 0.8 + 0.2 * clamp01((sp.size - 6) / 30);
 
 export class Shelf {
   readonly drawer = document.createElement('div');
@@ -289,7 +291,10 @@ export class Shelf {
     const x = n / 2 + (still ? 0 : Math.sin(T * 0.5) * n * 0.035),
       y = n / 2 + (still ? 0 : Math.sin(T * 0.37 + 1) * n * 0.03);
     if (this.crossing) this.paintCross(g, n, d, x, y);
-    else if (this.bench) this.host.r.portrait(g, this.bench, x, y, n * 0.26, n * 0.42, T, d);
+    else if (this.bench) {
+      const k = benchScale(this.bench);
+      this.host.r.portrait(g, this.bench, x, y, n * 0.26 * k, n * 0.42 * k, T, d);
+    }
   }
 
   /** a cross: the two parents whirl into the middle, their DNA swirls there in a wiggling double strand, and in a
@@ -378,7 +383,7 @@ export class Shelf {
     // the hybrid pops out
     const q = clamp01((p - 0.62) / 0.38);
     if (q > 0 && this.bench) {
-      const k = backOut(q);
+      const k = backOut(q) * benchScale(this.bench);
       g.globalAlpha = Math.min(1, q * 3);
       r.portrait(g, this.bench, cx, cy, n * 0.26 * k, n * 0.42 * k, T, d);
       g.globalAlpha = 1;
