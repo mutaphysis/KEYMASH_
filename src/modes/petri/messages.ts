@@ -92,6 +92,9 @@ const en = {
   labSame: 'SAME GENES — NOTHING TO CROSS',
   labBred: 'CROSSED: {name}',
   labDelete: 'remove',
+  labClearBench: 'empty the bench',
+  /** a specimen's diameter on the bench (one world unit is a micrometre) */
+  labSize: '⌀ {n} µm',
   labReplace: 'replace',
   labBreed: 'cross',
   labKeep: 'keep',
@@ -220,6 +223,8 @@ const de: Translation<typeof en> = {
   labSame: 'GLEICHE GENE — NICHTS ZU KREUZEN',
   labBred: 'GEKREUZT: {name}',
   labDelete: 'rausnehmen',
+  labClearBench: 'Bank leeren',
+  labSize: '⌀ {n} µm',
   labReplace: 'ersetzen',
   labBreed: 'kreuzen',
   labKeep: 'übernehmen',

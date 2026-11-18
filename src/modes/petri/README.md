@@ -177,11 +177,11 @@ the hand onto the drawer to keep it (it leaves the dish); dropped anywhere else 
 A kept specimen goes by its genus and can be taken out again with its ×.
 
 In split view there is a bench above the drawer: a round dish for one specimen, which sways
-gently in it. Drop a tile or a carried cell on it; a bench that already holds one splits in two
+gently in it, its name and diameter (in µm) under it. Drop a tile or a carried cell on it; a bench that already holds one splits in two
 while you drag over it: the left half replaces it, the right half crosses the two (the bench's
 specimen takes up genes from the new one, as a meal would pass them on): the two whirl into the
 middle, their DNA swirls into one, and the hybrid pops out. Drag the bench's specimen into the
-dish or onto the drawer.
+dish or onto the drawer; the × at its corner empties the bench.
 
 The genome viewer (look, or a tap on a tile or the bench) shows the genes as a turning double
 helix: one base pair per base, a band per gene coloured by its group (form, motion, food,

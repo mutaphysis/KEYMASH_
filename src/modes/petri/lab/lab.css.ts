@@ -159,12 +159,14 @@ export const bench = style({
   gridArea: 'bench',
   display: 'none',
   justifyContent: 'center',
-  padding: '4px 12px 8px',
+  padding: '16px 12px 18px',
   selectors: { [split]: { display: 'flex', borderRight: `1px solid ${vars.color.line}` } },
 });
+/** the round frame and, at its corner, the x that empties it */
+export const benchWrap = style({ position: 'relative', width: 'min(100%, 34vh)' });
 export const benchFrame = style({
   position: 'relative',
-  width: 'min(100%, 34vh)',
+  width: '100%',
   aspectRatio: '1',
   borderRadius: '50%',
   overflow: 'hidden',
@@ -174,6 +176,31 @@ export const benchFrame = style({
   cursor: 'grab',
 });
 export const benchCanvas = style({ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' });
+/** the specimen's name and size, low in the dish as the big dish's captions */
+export const benchLabel = style({
+  position: 'absolute',
+  left: '18%',
+  right: '18%',
+  bottom: '9%',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 1,
+  pointerEvents: 'none',
+  textAlign: 'center',
+  transition: 'opacity .4s',
+  selectors: { '&[hidden]': { display: 'flex', opacity: 0 } },
+});
+export const benchName = style({
+  maxWidth: '100%',
+  overflow: 'hidden',
+  whiteSpace: 'nowrap',
+  textOverflow: 'ellipsis',
+  fontFamily: layout.serif,
+  fontStyle: 'italic',
+  fontSize: 14,
+});
+export const benchSize = style({ fontSize: 10, letterSpacing: 1, color: vars.color.dim });
 /** while a specimen is dragged over a full bench: replace it (left) or cross the two (right) */
 export const halves = style({
   position: 'absolute',

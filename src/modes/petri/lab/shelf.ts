@@ -70,6 +70,13 @@ export class Shelf {
   private halves: [HTMLElement, HTMLElement];
   private tiles: { entry: Entry; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }[] = [];
   private benchCtx = ctx2d(this.benchCanvas);
+  /** the bench's specimen by name and size; the x that empties the bench */
+  private benchLabel = document.createElement('div');
+  private benchName = document.createElement('span');
+  private benchSize = document.createElement('span');
+  private benchDel = document.createElement('button');
+  /** what the label shows, so it is only rewritten when the bench changes */
+  private labelled: Species | null = null;
   private ghostCtx = ctx2d(this.ghost);
   /** what the ghost shows; null when nothing is dragged out of its place */
   private dragged: Species | null = null;
@@ -99,8 +106,26 @@ export class Shelf {
     const halves = document.createElement('div');
     halves.className = css.halves;
     halves.append(...this.halves);
-    this.benchBox.append(this.benchCanvas, halves);
-    this.benchEl.append(this.benchBox);
+    this.benchLabel.className = css.benchLabel;
+    this.benchName.className = css.benchName;
+    this.benchSize.className = css.benchSize;
+    this.benchLabel.append(this.benchName, this.benchSize);
+    this.benchLabel.hidden = true;
+    this.benchBox.append(this.benchCanvas, this.benchLabel, halves);
+    this.benchDel.type = 'button';
+    this.benchDel.className = css.tileDel;
+    this.benchDel.title = t('labClearBench');
+    this.benchDel.setAttribute('aria-label', t('labClearBench'));
+    this.benchDel.append(iconEl('close'));
+    this.benchDel.hidden = true;
+    this.benchDel.addEventListener('click', () => {
+      this.bench = null;
+      this.crossing = null;
+    });
+    const wrap = document.createElement('div');
+    wrap.className = css.benchWrap;
+    wrap.append(this.benchBox, this.benchDel);
+    this.benchEl.append(wrap);
     this.ghost.className = css.ghost;
     this.listen(this.benchBox, () => (this.bench ? { from: 'bench', sp: this.bench } : null), { kind: 'bench' });
     this.render();
@@ -266,7 +291,10 @@ export class Shelf {
     if (this.crossing && (this.crossing.t += dt) >= CROSS_TIME) this.crossing = null;
     const d = dpr();
     for (const tile of this.tiles) this.paint(tile.canvas, tile.ctx, tile.entry.sp, 64, d);
-    if (this.benchEl.offsetParent) this.paintBench(d);
+    if (this.benchEl.offsetParent) {
+      this.paintBench(d);
+      this.labelBench();
+    }
     if (this.dragged) this.paint(this.ghost, this.ghostCtx, this.dragged, 72, d);
   }
 
@@ -290,13 +318,29 @@ export class Shelf {
       n = this.clear(this.benchCanvas, g, this.benchBox.clientWidth, d),
       T = this.time,
       still = this.host.r.gentle;
+    // a little above the middle: the name and size sit under it
     const x = n / 2 + (still ? 0 : Math.sin(T * 0.5) * n * 0.035),
-      y = n / 2 + (still ? 0 : Math.sin(T * 0.37 + 1) * n * 0.03);
+      y = n * 0.44 + (still ? 0 : Math.sin(T * 0.37 + 1) * n * 0.03);
     if (this.crossing) this.paintCross(g, n, d, x, y);
     else if (this.bench) {
       const k = benchScale(this.bench);
-      this.host.r.portrait(g, this.bench, x, y, n * 0.26 * k, n * 0.42 * k, T, d);
+      this.host.r.portrait(g, this.bench, x, y, n * 0.26 * k, n * 0.36 * k, T, d);
     }
+  }
+
+  /** the name and size under the specimen (not while a cross plays: the hybrid is named once it is out) and the x */
+  private labelBench(): void {
+    const sp = this.crossing ? null : this.bench;
+    if (sp !== this.labelled) {
+      this.labelled = sp;
+      this.benchLabel.hidden = !sp;
+      if (sp) {
+        this.benchName.textContent = sp.name;
+        this.benchName.style.color = `hsl(${sp.hue | 0} 70% 75%)`;
+        this.benchSize.textContent = t('labSize', { n: Math.round(sp.size * 2) });
+      }
+    }
+    if (this.benchDel.hidden !== !this.bench) this.benchDel.hidden = !this.bench;
   }
 
   /** a cross: the two parents whirl into the middle, their DNA swirls there in a wiggling double strand, and in a
