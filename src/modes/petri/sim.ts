@@ -182,6 +182,8 @@ export interface WorldSave {
 
 const TAU = Math.PI * 2;
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+/** the radius a cell grows to: its size, a little less when hungry, a little more when well fed */
+const grownR = (size: number, energy: number, sp: Species) => size * (0.8 + 0.35 * Math.min(1.1, energy / sp.divideAt));
 
 export class World {
   cells: Cell[] = [];
@@ -284,15 +286,17 @@ export class World {
     this.contacts = now;
   }
 
+  /** `grown`: at its full size at once (the lab puts a whole specimen down); otherwise it swells in from small */
   spawnCell(
     sp: Species,
     x: number,
     y: number,
-    o: { energy?: number; gen?: number; hue?: number; size?: number; speed?: number } = {},
+    o: { energy?: number; gen?: number; hue?: number; size?: number; speed?: number; grown?: boolean } = {},
   ): Cell | null {
     if (this.cells.length >= MAX_CELLS || (this.counts.get(kindOf(sp)) ?? 0) >= MAX_PER_SPECIES) return null;
     [x, y] = this.inside(x, y, sp.size + 8);
     const size = o.size ?? sp.size * (0.9 + this.r() * 0.2);
+    const energy = o.energy ?? sp.divideAt * (0.45 + this.r() * 0.15);
     const c: Cell = {
       id: this.nextId++,
       sp,
@@ -302,8 +306,8 @@ export class World {
       vy: 0,
       heading: this.r() * TAU,
       size,
-      r: size * 0.4,
-      energy: o.energy ?? sp.divideAt * (0.45 + this.r() * 0.15),
+      r: o.grown ? grownR(size, energy, sp) : size * 0.4,
+      energy,
       age: 0,
       life: sp.life * (0.8 + this.r() * 0.4),
       gen: o.gen ?? 1,
@@ -777,7 +781,7 @@ export class World {
     const stress = this.stress();
     c.energy -=
       dt * (0.5 + moving * moving * 1.1) * (c.size / 14) * T * (c.sick ? 1.6 : 1) * (1 + stress * 1.8 + Math.min(4, c.touching) * 0.12);
-    const target = c.size * (0.8 + 0.35 * Math.min(1.1, c.energy / sp.divideAt));
+    const target = grownR(c.size, c.energy, sp);
     c.r += (target - c.r) * Math.min(1, dt * 1.5);
 
     // a sick cell does not divide: the meal that poisoned it does not become offspring right away

@@ -329,11 +329,12 @@ function analyse(toks: Token[]): Stats {
   return st;
 }
 
+/** a body's size against the size gene; bacteria are the small ones, but still big enough to make out in the dish */
 const SIZE: Record<Body, number> = {
   amoeba: 1.55,
-  bacillus: 0.75,
-  coccus: 0.6,
-  spirillum: 0.75,
+  bacillus: 1.1,
+  coccus: 0.9,
+  spirillum: 1.0,
   diatom: 1.1,
   ciliate: 1.3,
   flagellate: 0.9,
