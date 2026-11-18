@@ -35,7 +35,7 @@ const ICONS: Record<string, string> = {
   enter: 'corner-down-left-fill',
   grid: 'grid-fill',
   lab: 'flask-fill',
-  hand: 'hand-grab-fill',
+  hand: 'hand-finger-2-fill',
   look: 'search-fill',
   kill: 'skull-fill',
   mutate: 'dna-fill',
