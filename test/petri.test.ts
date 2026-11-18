@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { readCulture, pronounce, kindOf } from '../src/modes/petri/genome';
+import { readCulture, kindOf, encodeGenome, decodeGenome, typeGenome, nameOf, GENES, GENE_INDEX, BODIES } from '../src/modes/petri/genome';
 import type { Species } from '../src/modes/petri/genome';
 import { Petri } from '../src/modes/petri/culture';
 import { hybridise } from '../src/modes/petri/hybrid';
@@ -47,7 +47,22 @@ test('every line is a species (unless it has no letters), every species has a na
     expect(s.size).toBeGreaterThan(5);
   }
   expect(c.species[1]!.diet).toBe('hunter');
-  expect(pronounce('jjjjkkkkllll', mulberry32(1))).toMatch(/^j[aeiou]?k/);
+});
+
+test('a genome reads back from its sequence; a shorter, older sequence keeps its genes and gets fallbacks after', () => {
+  for (const b of BODIES) {
+    const g = typeGenome(b);
+    expect(decodeGenome(encodeGenome(g))).toEqual(g);
+    const short = decodeGenome(encodeGenome(g).slice(0, 11));
+    expect(short.slice(0, 7)).toEqual(g.slice(0, 7));
+    expect(short.slice(7)).toEqual(GENES.slice(7).map((d) => d.fallback));
+  }
+});
+
+test('names come from the genome: the same line is called the same, any genome gets a binomial', () => {
+  expect(readCulture('qwert zuiop\nasdf').species[0]!.name).toBe(readCulture('xx\nqwert zuiop').species[1]!.name);
+  const r = mulberry32(5);
+  for (let i = 0; i < 200; i++) expect(nameOf(GENES.map((d) => Math.floor(r() * d.states)))).toMatch(/^[A-Z][a-z]+ [a-z]+$/);
 });
 
 test('species keep their identity across a live edit', () => {
@@ -97,14 +112,15 @@ test('a meal passes 1–3 genes on: each moves toward the donor, the hybrid name
   for (let i = 0; i < 50; i++) {
     const h = hybridise(a, b, r, () => false)!;
     expect(h.sp.parents).toEqual([a, b]);
-    expect(h.sp.name).toMatch(/^Asd\w* × [a-z]+$/);
+    expect(h.sp.name).toMatch(new RegExp('^' + a.name.split(' ')[0] + ' × [a-z]+$'));
     expect(h.genes.length).toBeGreaterThanOrEqual(1);
     expect(h.genes.length).toBeLessThanOrEqual(3);
     for (const g of h.genes) {
-      if (g === 'hue2') continue;
-      const [va, vb, vh] = [a[g], b[g], h.sp[g]];
-      if (typeof va === 'number') expect(Math.abs((vh as number) - (vb as number))).toBeLessThanOrEqual(Math.abs(va - (vb as number)));
-      else expect(vh).toBe(vb);
+      const i = GENE_INDEX[g],
+        d = GENES[i]!;
+      const [sa, sb, sh] = [a.genome[i]!, b.genome[i]!, h.sp.genome[i]!];
+      if (d.kind === 'level') expect(Math.abs(sh - sb)).toBeLessThanOrEqual(Math.abs(sa - sb));
+      else if (d.kind === 'switch') expect(sh).toBe(sb);
     }
   }
   expect(hybridise(a, a, r, () => false)).toBeNull(); // nothing to take up from its own kind

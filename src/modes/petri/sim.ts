@@ -1,8 +1,7 @@
 // PETRI_ simulation: a little pond in a dish. Pure (no DOM, no audio), seeded, fixed time step.
 import { kindOf } from './genome';
-import type { Species, FoodKind } from './genome';
+import type { Species, FoodKind, GeneId } from './genome';
 import { genomeDistance, hybridise } from './hybrid';
-import type { Gene } from './hybrid';
 import { mulberry32 } from '../../lang/rng';
 
 export const DISH_R = 420;
@@ -145,7 +144,7 @@ export type SimEvent =
   | { type: 'extinct'; sp: Species }
   | { type: 'first'; sp: Species }
   /** a cell took up genes from `donor` and became the new species `sp` (it was `from`) */
-  | { type: 'hybrid'; x: number; y: number; sp: Species; from: Species; donor: Species; genes: Gene[] };
+  | { type: 'hybrid'; x: number; y: number; sp: Species; from: Species; donor: Species; genes: GeneId[] };
 
 const TAU = Math.PI * 2;
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));

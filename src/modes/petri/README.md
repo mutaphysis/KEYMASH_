@@ -56,8 +56,16 @@ How a line was typed decides what grows from it:
 | `+` | divides sooner |
 | spaces | calmer, slower |
 
-Every species gets a binomial name made from its own keysmash (*Asdifella jkulula*,
-*Hunterophyta grana*) and is introduced in the dish when it first appears.
+Each trait lands on one of a few steps of its gene: a genome is a sequence of 20 genes
+(body, size, lobes, wobble, organelles, flagella, speed, diet, fertility, life span, mutation,
+toxin, armour, colony, symbiosis, spores, colour, second colour, saturation, glow), written as
+29 bases `A C G T`. New genes only ever go at the end, so an older, shorter sequence still reads:
+the missing genes take their default. Every species gets a binomial name made from its genes,
+so the same genome is called the same wherever it came from (*Chymella lula*, *Chypomonas
+vorax*); the epithet names its most striking trait when it has one (*vorax* a predator, *toxica*,
+*armata*, *lucens*, *sporifera*, *socialis*, *gregaria*, *viridis*, *omnivora*). Two lines with the
+same genes get a number (*Chymella lula 2*). A species is introduced in the dish when it first
+appears.
 
 ## Every line is also a feeder
 The same line is read slowly, one token per beat (0.75 s), all lines in parallel:
@@ -89,14 +97,14 @@ the list and back up, resting at either end (with reduced motion it steps a row 
 A meal can change the eater's genome. Engulfing a live cell passes genes on in 40 % of
 meals, a piece of the debris a dead cell leaves in 6 % (debris carries its cell's genome
 until it is eaten or rots). The eater takes up one to three genes that differ from its own:
-numbers (size, speed, sense, agility, toxin, armour, glow, colony, energy to divide, life
-span, mutation rate, colour saturation, wobble, organelles, lobes, flagella, second colour)
-move a third to half of the way toward the donor's; body plan, diet, spores, symbiosis and
-cilia are taken over outright. Each may mutate at the eater's mutation rate (`?` in its
-line). The main colour moves toward the donor's, too.
+graded genes (size, speed, toxin, armour, glow, colony, fertility, life span, mutation rate,
+saturation, wobble, organelles, lobes, flagella) and the second colour move a third to half of
+the way toward the donor's, at least one step; body plan, diet, spores and symbiosis are taken
+over outright. Each may mutate at the eater's mutation rate (`?` in its line). The main colour
+moves toward the donor's, too.
 
 The eater becomes a new species right away, a hybrid named the way botanists write them:
-its own genus and an epithet spliced from both parents (*Hunterophyta × grosa*). Its
+its own genus and an epithet spliced from both parents (*Chypomonas × vorula*). Its
 daughters inherit the new genome. A hybrid is introduced like any newcomer, gets a field
 note (who took up whose genes), a short phrase on the eater's, donor's and its own
 instrument, a place in the census while it lives, and can go extinct. Hybrids can take up
