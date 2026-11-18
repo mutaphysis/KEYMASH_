@@ -48,6 +48,12 @@ export const DIVIDE_GAP = 0.82;
 /** ciliates and bacteria split across the body (front/back daughters), the rest side by side */
 export const TRANSVERSE = new Set(['ciliate', 'bacillus', 'spirillum']);
 const SWIM_TURN: Partial<Record<string, number>> = { flagellate: 3.2, ciliate: 2.4, spirillum: 3.6, bacillus: 0, diatom: 1.1 };
+/** a bacillus checks whether food got closer every RUN_CHECK units of swimming, so a fast one does not overshoot between checks */
+const RUN_CHECK = 25;
+/** a cell that wants food slows down near it, to the speed it may have at its distance (a floor plus a share per unit),
+ * so fast swimmers turn in instead of circling and stay on the food long enough to eat it */
+const APPROACH_MIN = 8;
+const APPROACH_PER = 1.5;
 
 export interface Food {
   id: number;
@@ -639,10 +645,11 @@ export class World {
         c.tumble -= dt;
         const dist = c.food ? Math.hypot(c.food.x - c.x, c.food.y - c.y) : 1e9;
         if (c.tumble <= 0) {
+          const pace = RUN_CHECK / Math.max(1, c.speed);
           if (dist > c.lastFood - 1 || !c.food) {
             c.heading += (this.r() - 0.5) * 3.5;
-            c.tumble = 0.4 + this.r() * 1.2;
-          } else c.tumble = 0.6;
+            c.tumble = pace * (0.7 + this.r() * 2);
+          } else c.tumble = pace;
           c.lastFood = dist;
         }
         break;
@@ -666,6 +673,10 @@ export class World {
       case 'spirillum':
         speed *= 1.1;
         break;
+    }
+    if (c.food) {
+      const gap = Math.hypot(c.food.x - c.x, c.food.y - c.y) - c.r * (EXTENT[sp.body] ?? 1);
+      speed = Math.min(speed, APPROACH_MIN + Math.max(0, gap) * APPROACH_PER);
     }
     let tx: number, ty: number;
     const turnRate = SWIM_TURN[sp.body];

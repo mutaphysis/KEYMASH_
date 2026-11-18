@@ -99,8 +99,10 @@ Tap the dish to drop food.
 
 ## Life in the dish
 Cells sense food, prey and threats. Rod bacteria run and tumble (keep running while
-food gets closer — real chemotaxis), flagellates dart, amoebae crawl, cocci jiggle and
-cluster, volvox rolls. Grazers eat algae, photosynthetic cells feed on light,
+food gets closer — real chemotaxis; a fast one checks more often, so it does not shoot past),
+flagellates dart, amoebae crawl, cocci jiggle and cluster, volvox rolls. A cell going for
+food slows down as it gets close, so fast swimmers turn in and stay on it long enough to eat.
+Grazers eat algae, photosynthetic cells feed on light,
 predators engulf smaller cells of other species (toxic prey makes them sick: they crawl,
 lose part of the life they had left and cannot divide until it wears off), symbionts
 even out their energy when they touch. Cells divide with small mutations, age and
