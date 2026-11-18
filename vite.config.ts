@@ -1,8 +1,37 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import checker from 'vite-plugin-checker';
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+// The modes a build ships; `bun run dev` has every mode. The header cycles through them in the
+// order of src/modes/index.ts.
+const BUILD_MODES = ['keymash', 'petri'];
+
+// The registry's import of every other mode resolves to `export const <id> = null` in a build, so
+// none of its code, styles or assets (nor the chunk of its dynamic import) reach dist/.
+function onlyModes(): Plugin {
+  const registry = fileURLToPath(new URL('./src/modes/index.ts', import.meta.url));
+  const all = readdirSync(new URL('./src/modes', import.meta.url), { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+  for (const id of BUILD_MODES) if (!all.includes(id)) throw new Error(`BUILD_MODES: no mode '${id}' in src/modes/`);
+  const dropped = all.filter((id) => !BUILD_MODES.includes(id));
+  const STUB = '\0dropped-mode:';
+  return {
+    name: 'only-modes',
+    apply: 'build',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      const id = source.slice(2);
+      return importer === registry && source.startsWith('./') && dropped.includes(id) ? STUB + id : null;
+    },
+    load(id) {
+      return id.startsWith(STUB) ? `export const ${id.slice(STUB.length)} = null;` : null;
+    },
+  };
+}
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
@@ -28,6 +57,7 @@ export default defineConfig(({ command, mode }) => ({
   base: './',
   plugins: [
     vanillaExtractPlugin(),
+    onlyModes(),
     checker({
       enableBuild: false,
       overlay: { initialIsOpen: false },

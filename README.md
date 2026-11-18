@@ -17,7 +17,7 @@ TypeScript (strict) + Vite, with bun as package manager and test runner.
 ```sh
 bun install
 bun run dev           # Vite dev server with hot reload; TypeScript, oxlint and oxfmt problems show in the terminal and an in-page overlay (closed until you click its badge)
-bun run build         # tsc typecheck + vite build -> dist/ (index.html, a main chunk, one chunk per mode)
+bun run build         # tsc typecheck + vite build -> dist/ (index.html, a main chunk, one chunk per shipped mode)
 bun run preview       # serve the production build (it needs http, opening dist/index.html from disk won't work)
 bun test              # fuzz + unit tests for the interpreter and the culture
 bun run lint          # oxlint
@@ -46,7 +46,9 @@ every push runs the tests. `LEFTHOOK=0` skips them once.
 
 The build is what GitHub Pages serves: a small `index.html` and main chunk with the shell,
 and every mode as a chunk of its own, fetched when the mode is first used (the one you start
-in right away). Cheat-sheet pictures load when the sheet opens.
+in right away). Cheat-sheet pictures load when the sheet opens. A build ships only the modes listed
+in `BUILD_MODES` (`vite.config.ts`, now KEYMASH_ and PETRI_); the others' code and assets stay out of
+`dist/`, and links or saved state pointing at them open the first mode. `bun run dev` has every mode.
 
 It is an installable web app (`public/manifest.webmanifest`) with the fonts baked in (no
 external requests at all) and it respects the system's "reduce motion" setting: on iOS use Share → Add to
