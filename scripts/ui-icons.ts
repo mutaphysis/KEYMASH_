@@ -40,7 +40,7 @@ const ICONS: Record<string, string> = {
   note: 'document-fill',
   look: 'search-fill',
   kill: 'skull-fill',
-  mutate: 'dna-fill',
+  mutate: 'magic-2-fill',
   divide: 'scissors-fill',
   food: 'leaf-fill',
   stream: 'wave-fill',
