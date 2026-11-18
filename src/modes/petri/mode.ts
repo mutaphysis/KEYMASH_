@@ -5,7 +5,7 @@ import { MicroPlayer } from './player';
 import { Plankton } from './backdrop';
 import { DEMOS } from './demos';
 import { SHEET } from './sheet';
-import { Lab } from './lab/lab';
+import { Lab, labWasOpen } from './lab/lab';
 import { t, tn } from './messages';
 
 /** the play mode's player: the lab takes over its culture when it opens while one runs */
@@ -57,5 +57,6 @@ export const mode: ModeCode = {
     icon: 'lab',
     title: t('labOpen'),
     open: (ctx) => (lab ??= new Lab(ctx.audio)).open(ctx, ctx.wasPlaying ? micro : null),
+    reopen: labWasOpen,
   },
 };

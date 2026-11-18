@@ -213,9 +213,10 @@ in every language.
    `scripts/sheet/shoot.ts`; then `bun scripts/sheet.ts`. `README.md` documents the mode's
    language, with the `sheet:start` / `sheet:end` markers for the picture table.
 5. Optional: `drawer(ctx)` in `ModeCode` returns extra drawer sections (KEYMASH_ adds VOICE);
-   `view` (`ModeView`: icon, title, `open(ctx)`) puts a button into the header that opens a second
-   view over the whole app (PETRI_'s lab). The shell stops a running program first and hides the
-   editor and stage (`#app.viewing`) until the view calls `ctx.close()`.
+   `view` (`ModeView`: icon, title, `open(ctx)`, optional `reopen()`) puts a button into the header
+   that opens a second view over the whole app (PETRI_'s lab). The shell stops a running program
+   first and hides the editor and stage (`#app.viewing`) until the view calls `ctx.close()`. When
+   `reopen()` says it was open as the page was left, the shell opens it again at start.
 6. Add it to `MODES` in `src/modes/index.ts`. The header icon, the mode select,
    storage (`keymash.slots.<id>.v1`, `keymash.draft.<id>.v1`) and the theme switch pick it up.
 

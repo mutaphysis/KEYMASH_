@@ -120,7 +120,9 @@ the further it has drifted (`SPLIT_DRIFT`).
 
 ## The lab
 The flask in the header opens the lab: the dish without a text feeding it. When a culture is
-running it carries over, cells and all (the feeder stops); otherwise a fresh dish starts. The
+running it carries over, cells and all (the feeder stops); otherwise the last lab dish comes back
+(a fresh one the first time). The lab keeps itself in the browser: its dish, tools, speed, auto
+feed and bench, and whether it was open, so a reload shows it as it was. The
 toolbar under the dish (in a column beside it in split view) picks what a touch does:
 
 | Tool | What it does |

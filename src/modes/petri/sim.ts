@@ -1,5 +1,5 @@
 // PETRI_ simulation: a little pond in a dish. Pure (no DOM, no audio), seeded, fixed time step.
-import { kindOf } from './genome';
+import { decodeGenome, encodeGenome, express, kindOf } from './genome';
 import type { Species, FoodKind, GeneId } from './genome';
 import { genomeDistance, hybridise } from './hybrid';
 import { mulberry32 } from '../../lang/rng';
@@ -157,6 +157,27 @@ export interface DishState {
   spores: Spore[];
   zones: Zone[];
   counts: Map<Species, number>;
+}
+
+/** a species as stored: its genes and identity; the species it refers to are indices into the same table */
+export interface SpeciesSave {
+  g: string;
+  seed: number;
+  line: number;
+  name: string;
+  parents: [number, number] | null;
+  variantOf: number | null;
+}
+/** a dish as JSON (the lab keeps its dish across reloads). Each species once, in a table; cells, food and spores
+ * point into it. What a cell is after (food, prey, threat, partner) is not kept: it looks again. */
+export interface WorldSave {
+  time: number;
+  temp: number;
+  species: SpeciesSave[];
+  cells: (Omit<Cell, 'sp'> & { sp: number })[];
+  food: (Omit<Food, 'sp'> & { sp: number | null })[];
+  spores: (Omit<Spore, 'sp'> & { sp: number })[];
+  zones: Zone[];
 }
 
 const TAU = Math.PI * 2;
@@ -884,6 +905,58 @@ export class World {
   restore(s: DishState): void {
     ({ cells: this.cells, food: this.food, spores: this.spores, zones: this.zones, counts: this.counts } = s);
     this.contacts.clear();
+  }
+
+  /** the dish as plain data (see WorldSave); a cell being eaten is left out, it is all but gone */
+  save(): WorldSave {
+    const table: Species[] = [],
+      index = new Map<Species, number>();
+    const id = (sp: Species): number => {
+      let i = index.get(sp);
+      if (i === undefined) {
+        index.set(sp, (i = table.length));
+        table.push(sp);
+        // the species it refers to go into the table too
+        if (sp.variantOf) id(sp.variantOf);
+        for (const p of sp.parents ?? []) id(p);
+      }
+      return i;
+    };
+    const none = { food: null, prey: null, threat: null, partner: null, eatenBy: null, held: false };
+    const cells = this.cells.filter((c) => !c.gone && c.state !== 'eaten').map((c) => ({ ...c, ...none, sp: id(c.sp) }));
+    const food = this.food.filter((f) => !f.gone).map((f) => ({ ...f, sp: f.sp && id(f.sp) }));
+    const spores = this.spores.map((s) => ({ ...s, sp: id(s.sp) }));
+    const species = table.map((sp) => ({
+      g: encodeGenome(sp.genome),
+      seed: sp.seed,
+      line: sp.line,
+      name: sp.name,
+      parents: sp.parents && ([index.get(sp.parents[0])!, index.get(sp.parents[1])!] as [number, number]),
+      variantOf: sp.variantOf && index.get(sp.variantOf)!,
+    }));
+    return { time: this.time, temp: this.temp, species, cells, food, spores, zones: this.zones.map((z) => ({ ...z })) };
+  }
+
+  /** replace the dish with a saved one */
+  load(s: WorldSave): void {
+    const table = s.species.map((d) => Object.assign(express(decodeGenome(d.g), d.seed, d.line), { name: d.name }));
+    s.species.forEach((d, i) => {
+      const sp = table[i]!;
+      sp.parents = d.parents && [table[d.parents[0]]!, table[d.parents[1]]!];
+      sp.variantOf = d.variantOf === null ? null : table[d.variantOf]!;
+    });
+    this.time = s.time;
+    this.temp = s.temp;
+    this.cells = s.cells.map((c) => ({ ...c, sp: table[c.sp]! }));
+    this.food = s.food.map((f) => ({ ...f, sp: f.sp === null ? null : table[f.sp]! }));
+    this.spores = s.spores.map((p) => ({ ...p, sp: table[p.sp]! }));
+    this.zones = s.zones.map((z) => ({ ...z }));
+    this.counts = new Map();
+    for (const c of this.cells) this.counts.set(kindOf(c.sp), (this.counts.get(kindOf(c.sp)) ?? 0) + 1);
+    this.seen = new Set(table.map(kindOf));
+    this.nextId = Math.max(0, ...this.cells.map((c) => c.id), ...this.food.map((f) => f.id)) + 1;
+    this.contacts.clear();
+    this.ev = [];
   }
 
   /** a meal may pass genes on: the eater's genome changes (see SPECIATION), its daughters inherit it */

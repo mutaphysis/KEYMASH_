@@ -285,7 +285,7 @@ document.querySelector<HTMLElement>('header .logo')!.addEventListener('click', (
 applyMode(mode, await firstLoad);
 
 // a mode's own view (PETRI_'s lab): it covers the app until it closes; a running program stops first
-$('btn-view').addEventListener('click', () => {
+function openView(): void {
   const view = code.view;
   if (!view) return;
   const wasPlaying = state.playing;
@@ -301,7 +301,8 @@ $('btn-view').addEventListener('click', () => {
       layout();
     },
   });
-});
+}
+$('btn-view').addEventListener('click', openView);
 
 /** the mode's own animation: switching in, starting and stopping a program */
 function transition(): void {
@@ -553,6 +554,8 @@ if (linkCode !== null) {
   editor.value = linkCode; // it becomes this mode's draft, like a picked demo
   stageOnly(true);
 }
+// the view was open when the page was left (a reload): open it again. A link with code goes to the stage instead.
+if (linkCode === null && code.view?.reopen?.()) openView();
 // the link has done its job: a reload keeps the text as it is by then
 if (link.has('mode') || link.has('code')) {
   link.delete('mode');

@@ -1,13 +1,14 @@
-// PETRI_'s lab: the dish without a text feeding it. The running culture carries over (or a fresh dish
-// starts); by hand you add, carry, poke, inspect, kill, mutate and divide cells, feed and stream the water.
+// PETRI_'s lab: the dish without a text feeding it. The running culture carries over (or the last lab dish comes
+// back, or a fresh one starts); by hand you add, carry, poke, inspect, kill, mutate and divide cells, feed and
+// stream the water. The lab keeps itself in localStorage: a reload opens it again as it was.
 import { Petri } from '../culture';
 import type { CultureEvent } from '../culture';
 import type { MicroPlayer } from '../player';
 import { MicroRenderer } from '../render';
 import { Ambient } from '../ambient';
 import { DISH_R } from '../sim';
-import type { Cell, DishState, Food, World } from '../sim';
-import { mutateGenome, specimen } from '../genome';
+import type { Cell, DishState, Food, World, WorldSave } from '../sim';
+import { decodeGenome, encodeGenome, mutateGenome, specimen } from '../genome';
 import type { Genome, Species } from '../genome';
 import { t } from '../messages';
 import { ON_CELL, SPEEDS, TOOLS } from './tools';
@@ -25,6 +26,7 @@ import { $ } from '../../../ui/dom';
 import { iconCursor } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
 import { hash } from '../../../lang/rng';
+import { readJson, writeJson } from '../../../ui/storage';
 
 /** the tools' cursors: white with a black outline, readable over the dark water and the bright cells alike */
 const CURSOR = '#fff';
@@ -40,6 +42,24 @@ const FEED_BASE = 0.2;
 const FEED_PER_CELL = 0.15;
 /** it pauses while this much food lies about: a base and so many pieces per cell */
 const FOOD_ENOUGH = [8, 4] as const;
+/** seconds between saves while the lab is open: a tab that is killed loses at most this much */
+const SAVE_EVERY = 5;
+
+/** the lab across reloads: whether it was open, its settings, the bench and the dish */
+const SAVE_KEY = 'keymash.lab.petri.state.v1';
+interface LabSave {
+  open: boolean;
+  tool: ToolId;
+  pace: number;
+  autoFeed: boolean;
+  bench: { seq: string; name: string } | null;
+  dish: WorldSave | null;
+}
+
+/** the lab was open when the page was left: the shell opens it again */
+export function labWasOpen(): boolean {
+  return readJson<Partial<LabSave> | null>(SAVE_KEY, null)?.open === true;
+}
 
 /** a press of the hand on a cell: a poke when it ends soon and close by, else the cell is carried */
 interface Press {
@@ -84,6 +104,8 @@ export class Lab {
   /** on by default: algae drift in by themselves, more the more cells there are */
   private autoFeed = true;
   private feedAcc = 0;
+  /** seconds until the next save */
+  private saveIn = SAVE_EVERY;
 
   constructor(audio: AudioEngine) {
     this.audio = audio;
@@ -149,6 +171,10 @@ export class Lab {
     this.canvas.addEventListener('pointerleave', (e) => {
       if (e.pointerType === 'mouse' && !e.buttons) this.pointer = null;
     });
+    // leaving the page (reload, tab closed or sent to the background): keep the dish as it is right now
+    const leave = () => this.petri && this.persist(true);
+    window.addEventListener('pagehide', leave);
+    document.addEventListener('visibilitychange', () => document.hidden && leave());
   }
 
   private button(parent: HTMLElement, variant: 'header' | 'tool', icon: IconName, text: string, onClick: () => void): KmButton {
@@ -161,18 +187,23 @@ export class Lab {
     return b;
   }
 
-  /** `from`: the player whose culture was running, or null for a fresh dish */
+  /** `from`: the player whose culture was running, or null for the last lab dish (or a fresh one) */
   open(ctx: ViewContext, from: MicroPlayer | null): void {
     if (!this.root.isConnected) this.build(ctx.root);
     this.ctx = ctx;
+    const saved = readJson<Partial<LabSave> | null>(SAVE_KEY, null);
     // the culture goes on without its text: no feeder, no reading
-    this.petri = from?.petri ?? new Petri('', (Math.random() * 2 ** 31) | 0 || 1);
+    this.petri = from?.petri ?? this.savedDish(saved?.dish) ?? new Petri('', (Math.random() * 2 ** 31) | 0 || 1);
     this.petri.swap('');
     this.r.reset();
-    this.pick('hand');
-    this.setPace(0);
-    this.setAutoFeed(true);
+    this.pick(TOOLS.some((d) => d.id === saved?.tool) ? saved!.tool! : 'hand');
+    this.setPace(saved?.pace !== undefined && SPEEDS[saved.pace] ? saved.pace : 0);
+    this.setAutoFeed(saved?.autoFeed ?? true);
+    if (!this.shelf.bench && saved?.bench)
+      this.shelf.bench = Object.assign(specimen(decodeGenome(saved.bench.seq)), { name: saved.bench.name });
     this.armUndo(null);
+    this.saveIn = SAVE_EVERY;
+    this.persist(true);
     this.amb.configure(hash(from?.src ?? 'lab'));
     this.audio.init();
     this.amb.start();
@@ -189,6 +220,7 @@ export class Lab {
     this.feeding = null;
     this.pointer = null;
     this.armUndo(null);
+    this.persist(false);
     cancelAnimationFrame(this.raf);
     this.amb.stop();
     this.audio.stop();
@@ -197,6 +229,32 @@ export class Lab {
     const ctx = this.ctx;
     this.ctx = null;
     ctx?.close();
+  }
+
+  /** a Petri dish holding the saved dish; null when there is none or it doesn't load (an older format) */
+  private savedDish(dish: WorldSave | null | undefined): Petri | null {
+    if (!dish) return null;
+    try {
+      const p = new Petri('', (Math.random() * 2 ** 31) | 0 || 1);
+      p.world.load(dish);
+      return p;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** best effort: the lab as it is, and whether it stays open across a reload */
+  private persist(open: boolean): void {
+    const bench = this.shelf.bench;
+    const s: LabSave = {
+      open,
+      tool: this.tool,
+      pace: this.pace,
+      autoFeed: this.autoFeed,
+      bench: bench && { seq: encodeGenome(bench.genome), name: bench.name },
+      dish: this.petri?.world.save() ?? null,
+    };
+    writeJson(SAVE_KEY, s);
   }
 
   private fit(): void {
@@ -541,6 +599,10 @@ export class Lab {
     this.r.frame(dt, p.world, this.amb.activity);
     this.shelf.frame(dt);
     this.viewer.frame(dt);
+    if ((this.saveIn -= dt) <= 0) {
+      this.saveIn = SAVE_EVERY;
+      this.persist(true);
+    }
   }
 
   /** off: the icon is struck through (the button keeps no selection look: it is not a cursor tool) */

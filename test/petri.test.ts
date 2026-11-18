@@ -231,3 +231,27 @@ test('lab: a held cell stays where it is held', () => {
   for (let i = 0; i < 30; i++) W.step(1 / 30);
   expect([c.x, c.y, c.age]).toEqual([x, y, age]);
 });
+
+test('lab: a dish saved as JSON loads back with its cells, species, hybrids and census, and lives on', () => {
+  const p = new Petri('jfkdlsöä asdfghjkl JJJJJJJJJ\nkkkkk ddddd h h hhhh 🌿 5\nWOOF!!! ölkjhg qqqqqqq');
+  for (let t = 0; t < 3000 && !p.world.cells.some((c) => c.sp.parents); t++) p.tick(0.1);
+  const W = p.world;
+  expect(W.cells.some((c) => c.sp.parents)).toBe(true);
+  const L = new World(3);
+  L.load(JSON.parse(JSON.stringify(W.save())));
+  const live = W.cells.filter((c) => c.state !== 'eaten');
+  expect(L.cells.map((c) => [c.id, c.x, c.y, c.state, c.sp.name])).toEqual(live.map((c) => [c.id, c.x, c.y, c.state, c.sp.name]));
+  // one species object per species, as in the dish it came from
+  const kinds = (w: World) => new Set(w.cells.map((c) => c.sp)).size;
+  expect(kinds(L)).toBe(new Set(live.map((c) => c.sp)).size);
+  const h = L.cells.find((c) => c.sp.parents)!.sp;
+  const orig = live.find((c) => c.sp.name === h.name)!.sp;
+  expect(h.parents!.map((s) => s.name)).toEqual(orig.parents!.map((s) => s.name));
+  expect(h.genome).toEqual(orig.genome);
+  expect(L.food.length).toBe(W.food.filter((f) => !f.gone).length);
+  for (const c of L.cells) expect(L.population(c.sp)).toBe(live.filter((d) => kindOf(d.sp).name === kindOf(c.sp).name).length);
+  // new cells get ids of their own
+  const n = L.spawnCell(h, 0, 0);
+  if (n) expect(L.cells.filter((c) => c.id === n.id).length).toBe(1);
+  for (let i = 0; i < 300; i++) L.step(1 / 30);
+});

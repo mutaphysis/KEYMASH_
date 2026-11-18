@@ -127,6 +127,8 @@ export interface ModeView {
   /** title and aria-label of the header button */
   title: string;
   open(ctx: ViewContext): void;
+  /** true when the view was open as the page was left: the shell opens it again at start (a reload keeps it) */
+  reopen?(): boolean;
 }
 export interface ViewContext {
   /** #app: the view adds its own element */
