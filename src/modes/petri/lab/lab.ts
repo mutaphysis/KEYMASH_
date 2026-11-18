@@ -117,6 +117,7 @@ export class Lab {
       taken: (name) => this.taken(name),
       pick: (p) => this.inspect(p),
       split: () => !!this.ctx?.root.classList.contains('split'),
+      crossed: (sp, from, donor, genes) => this.amb.event({ type: 'hybrid', x: 0, y: 0, sp, from, donor, genes }),
     });
     this.viewer = new Viewer({
       r: this.r,
