@@ -162,7 +162,7 @@ export class Shelf {
         d.started = true;
         el.setPointerCapture(e.pointerId);
       }
-      this.hover(d.sp, e.clientX, e.clientY);
+      this.hover(d.sp, d.from, e.clientX, e.clientY);
     });
     el.addEventListener('pointerup', (e) => {
       const d = this.drag;
@@ -172,10 +172,10 @@ export class Shelf {
         this.host.pick(pick);
         return;
       }
-      const target = this.targetAt(e.clientX, e.clientY);
+      const target = this.targetAt(e.clientX, e.clientY, d.from);
       this.endHover();
       if (target?.kind === 'dish') this.host.toDish(d.sp, target.cx, target.cy);
-      else if (target) this.land(d.sp, target, d.from);
+      else if (target) this.land(d.sp, target);
     });
     el.addEventListener('pointercancel', () => {
       this.drag = null;
@@ -185,15 +185,17 @@ export class Shelf {
 
   // ---------- dragging ----------
 
-  /** where a drop at a client point would land; the dish says itself whether the point is inside it */
-  targetAt(cx: number, cy: number): Target | null {
+  /** where a drop at a client point would land; the dish says itself whether the point is inside it. Where the
+   * specimen came from is no target (the bench onto itself, a tile back onto the drawer): nothing shows, nothing happens */
+  targetAt(cx: number, cy: number, from: Source): Target | null {
     const el = document.elementFromPoint(cx, cy)?.closest<HTMLElement>('[data-drop]');
     switch (el?.dataset.drop) {
       case 'dish':
         return { kind: 'dish', cx, cy };
       case 'drawer':
-        return { kind: 'drawer' };
+        return from === 'entry' ? null : { kind: 'drawer' };
       case 'bench': {
+        if (from === 'bench') return null;
         const b = el.getBoundingClientRect();
         return { kind: 'bench', cross: !!this.bench && cx > b.left + b.width / 2 };
       }
@@ -203,7 +205,7 @@ export class Shelf {
   }
 
   /** the ghost follows the pointer; the place it would land is marked (the bench shows replace | cross) */
-  hover(sp: Species, cx: number, cy: number, target = this.targetAt(cx, cy)): void {
+  hover(sp: Species, from: Source, cx: number, cy: number, target = this.targetAt(cx, cy, from)): void {
     this.dragged = sp;
     this.ghost.classList.add('on');
     this.ghost.style.left = cx + 'px';
@@ -227,15 +229,15 @@ export class Shelf {
     this.benchBox.classList.remove('target');
   }
 
-  /** a specimen dropped on the drawer or the bench; true when it left where it came from (a cell leaves the dish) */
-  land(sp: Species, target: Target, from: Source): boolean {
+  /** a specimen dropped on the drawer or the bench (never where it came from: targetAt); true when it left where it
+   * came from (a cell leaves the dish) */
+  land(sp: Species, target: Target): boolean {
     if (target.kind === 'drawer') {
-      if (from === 'entry') return false;
       this.toast(t(this.specimens.add(sp) ? 'labSaved' : 'labHave'));
       this.render();
       return true;
     }
-    if (target.kind !== 'bench' || from === 'bench') return false;
+    if (target.kind !== 'bench') return false;
     if (!target.cross || !this.bench) {
       this.bench = sp;
       return true;

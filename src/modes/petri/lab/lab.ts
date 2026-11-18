@@ -468,7 +468,7 @@ export class Lab {
     if (!p || !W) return;
     this.r.heldOut = Math.hypot(x, y) > DISH_R;
     if (this.r.heldOut) {
-      this.shelf.hover(p.cell.sp, e.clientX, e.clientY);
+      this.shelf.hover(p.cell.sp, 'cell', e.clientX, e.clientY);
       return;
     }
     this.shelf.endHover();
@@ -482,8 +482,8 @@ export class Lab {
       W = this.petri?.world;
     if (!p || !W) return;
     if (this.r.heldOut) {
-      const target = this.shelf.targetAt(e.clientX, e.clientY);
-      if (target && target.kind !== 'dish' && this.shelf.land(p.cell.sp, target, 'cell')) W.remove(p.cell);
+      const target = this.shelf.targetAt(e.clientX, e.clientY, 'cell');
+      if (target && target.kind !== 'dish' && this.shelf.land(p.cell.sp, target)) W.remove(p.cell);
       else [p.cell.x, p.cell.y] = p.last;
     }
     this.drop();
