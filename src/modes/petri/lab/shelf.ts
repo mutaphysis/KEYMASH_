@@ -22,6 +22,8 @@ export interface ShelfHost {
   r: MicroRenderer;
   /** a specimen from the shelf dropped on the dish at a client point */
   toDish(sp: Species, cx: number, cy: number): void;
+  /** is a client point inside the dish's circle (where a drop lands)? */
+  inDish(cx: number, cy: number): boolean;
   /** is a species name in use (in the dish or the drawer)? */
   taken(name: string): boolean;
   /** a tile or the bench tapped without dragging */
@@ -210,13 +212,13 @@ export class Shelf {
 
   // ---------- dragging ----------
 
-  /** where a drop at a client point would land; the dish says itself whether the point is inside it. Where the
+  /** where a drop at a client point would land (the dish only inside its circle). Where the
    * specimen came from is no target (the bench onto itself, a tile back onto the drawer): nothing shows, nothing happens */
   targetAt(cx: number, cy: number, from: Source): Target | null {
     const el = document.elementFromPoint(cx, cy)?.closest<HTMLElement>('[data-drop]');
     switch (el?.dataset.drop) {
       case 'dish':
-        return { kind: 'dish', cx, cy };
+        return this.host.inDish(cx, cy) ? { kind: 'dish', cx, cy } : null;
       case 'drawer':
         return from === 'entry' ? null : { kind: 'drawer' };
       case 'bench': {
@@ -242,6 +244,7 @@ export class Shelf {
       this.overEl = el;
     }
     this.benchBox.classList.toggle('target', target?.kind === 'bench' && !!this.bench);
+    this.host.r.dropping = target?.kind === 'dish';
     this.halves[0].classList.toggle('hot', target?.kind === 'bench' && !target.cross);
     this.halves[1].classList.toggle('hot', target?.kind === 'bench' && target.cross);
   }
@@ -252,6 +255,7 @@ export class Shelf {
     this.overEl?.classList.remove(css.over);
     this.overEl = null;
     this.benchBox.classList.remove('target');
+    this.host.r.dropping = false;
   }
 
   /** a specimen dropped on the drawer or the bench (never where it came from: targetAt); true when it left where it

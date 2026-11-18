@@ -174,7 +174,8 @@ Under the toolbar (on the left in split view) is the specimen drawer: the eight 
 always there, and the specimens you keep (up to 40, stored in the browser as their gene
 sequences). Drag a tile into the dish for a new cell of it. Carry a cell out of the dish with
 the hand onto the drawer to keep it (it leaves the dish); dropped anywhere else it goes back.
-A kept specimen goes by its genus and can be taken out again with its ×.
+A kept specimen goes by its genus and can be taken out again with its ×. Wherever a dragged
+specimen would land is outlined, dashed: the drawer, the bench, or a ring inside the dish's rim.
 
 In split view there is a bench above the drawer: a round dish for one specimen, which sways
 gently in it, its name and diameter (in µm) under it. Drop a tile or a carried cell on it; a bench that already holds one splits in two

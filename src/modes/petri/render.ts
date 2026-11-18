@@ -225,6 +225,8 @@ export class MicroRenderer {
   heldOut = false;
   /** a stream being aimed: an arrow from where the drag started (a circle while it is short: a swirl) */
   aim: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  /** a specimen from the shelf is dragged over the dish: a dashed ring inside the rim marks it as the drop target */
+  dropping = false;
   /** cells poked by hand, seconds since */
   private jiggles = new Map<Cell, number>();
   private hoverOf: Cell | Food | null = null;
@@ -617,7 +619,21 @@ export class MicroRenderer {
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.drawImage(this.drawOver(), this.overX, this.overY);
     this.drawScale(c);
+    if (this.dropping) this.drawDrop(c);
     this.drawCaption(c, dt);
+  }
+
+  /** as the drawer's and the bench's dashed outline when a drop would land there */
+  private drawDrop(c: Ctx): void {
+    const d = this.dpr;
+    c.save();
+    c.setLineDash([6 * d, 5 * d]);
+    c.lineWidth = 2 * d;
+    c.strokeStyle = 'rgba(143,245,220,0.45)';
+    c.beginPath();
+    c.arc(this.cx, this.cy, this.R - 6 * d, 0, TAU);
+    c.stroke();
+    c.restore();
   }
 
   private drawZone(c: Ctx, z: Zone, now: number): void {

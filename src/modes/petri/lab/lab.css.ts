@@ -29,16 +29,10 @@ export const root = style({
   },
 });
 
-/** everything in the left column of the split view gets a border on its right */
-const column = { [split]: { borderRight: `1px solid ${vars.color.line}` } };
-
-/** the lab's header is a shell <header> (the shell's styles lay it out), so it lines up with the editor's: the same
- * mode icon, logo, version, status and buttons in the same places */
 export const top = style({
   gridArea: 'top',
   // the shell pads its panes by the safe areas they touch (--pl, --pr); the lab's root already keeps off them
   vars: { '--pl': '0px', '--pr': '0px' },
-  selectors: column,
 });
 
 export const dish = style({
@@ -69,6 +63,8 @@ export const tools = style({
       overflowY: 'auto',
       WebkitMaskImage: 'none',
       maskImage: 'none',
+      // the line between the left column and the tools (on the tools: the drawer keeps no border, its drop outline is rounded)
+      borderLeft: `1px solid ${vars.color.line}`,
       borderRight: `1px solid ${vars.color.line}`,
     },
   },
@@ -88,7 +84,9 @@ export const drawer = style({
   display: 'flex',
   gap: 8,
   minHeight: 0,
-  padding: `4px 12px calc(10px + ${layout.safeBottom})`,
+  // room around the tiles for the dashed outline of a drop
+  padding: `10px 12px calc(10px + ${layout.safeBottom})`,
+  borderRadius: vars.radius.frame,
   overflowX: 'auto',
   overflowY: 'hidden',
   scrollbarWidth: 'none',
@@ -101,7 +99,6 @@ export const drawer = style({
       overflowX: 'hidden',
       overflowY: 'auto',
       touchAction: 'pan-y',
-      borderRight: `1px solid ${vars.color.line}`,
     },
   },
 });
@@ -160,7 +157,7 @@ export const bench = style({
   display: 'none',
   justifyContent: 'center',
   padding: '16px 12px 18px',
-  selectors: { [split]: { display: 'flex', borderRight: `1px solid ${vars.color.line}` } },
+  selectors: { [split]: { display: 'flex' } },
 });
 /** the round frame and, at its corner, the x that empties it */
 export const benchWrap = style({ position: 'relative', width: 'min(100%, 34vh)' });
@@ -235,7 +232,8 @@ export const fed = style({});
 globalStyle(`${fed} > button`, { animation: `${fedPulse} .8s ease-out` });
 
 // ---------- dragging a specimen ----------
-export const over = style({ outline: `2px dashed ${rgba(fg, 0.45)}`, outlineOffset: -6 });
+/** a drop target under a dragged specimen; the dish draws its own (a dashed ring inside its rim) */
+export const over = style({ outline: `2px dashed ${rgba(fg, 0.45)}`, outlineOffset: -4 });
 const wiggle = keyframes({ from: { transform: 'rotate(-8deg)' }, to: { transform: 'rotate(8deg)' } });
 export const ghost = style({
   position: 'fixed',

@@ -118,6 +118,7 @@ export class Lab {
     this.shelf = new Shelf({
       r: this.r,
       toDish: (sp, cx, cy) => this.toDish(sp, cx, cy),
+      inDish: (cx, cy) => this.dishAt(cx, cy) !== null,
       taken: (name) => this.taken(name),
       pick: (p) => this.inspect(p),
       split: () => !!this.ctx?.root.classList.contains('split'),
@@ -538,14 +539,19 @@ export class Lab {
     c.think = 0;
   }
 
+  /** a client point in world units, or null when it lies outside the dish's circle */
+  private dishAt(cx: number, cy: number): [number, number] | null {
+    const b = this.canvas.getBoundingClientRect();
+    const p = this.r.toWorld(cx - b.left, cy - b.top);
+    return Math.hypot(p[0], p[1]) > DISH_R ? null : p;
+  }
+
   /** a specimen from the shelf let go over the dish: a new cell, if it lands inside and there is room */
   private toDish(sp: Species, cx: number, cy: number): void {
-    const W = this.petri?.world;
-    if (!W) return;
-    const b = this.canvas.getBoundingClientRect();
-    const [x, y] = this.r.toWorld(cx - b.left, cy - b.top);
-    if (Math.hypot(x, y) > DISH_R) return;
-    const c = W.spawnCell(sp, x, y);
+    const W = this.petri?.world,
+      p = this.dishAt(cx, cy);
+    if (!W || !p) return;
+    const c = W.spawnCell(sp, p[0], p[1]);
     if (!c) this.toast(t('labFull'));
     else this.route({ type: 'spawn', x: c.x, y: c.y, sp });
     this.flush();
