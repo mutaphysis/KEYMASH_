@@ -15,6 +15,26 @@ const smooth = (a: number, b: number, x: number): number => {
   return u * u * (3 - 2 * u);
 };
 const BACTERIA = new Set(['bacillus', 'coccus', 'spirillum']);
+/** how far a body's drawing reaches along its axis, behind and in front, in radii (flagella and mouth included):
+ * a portrait fits all of it into its frame */
+function reach(sp: Species): [number, number] {
+  switch (sp.body) {
+    case 'amoeba':
+      return [1.35, 1.35];
+    case 'bacillus':
+      return [sp.flagella ? 2.85 : 1.25, sp.diet === 'hunter' ? 1.45 : 1.25];
+    case 'spirillum':
+      return [2.45, 2.45];
+    case 'diatom':
+      return [1.5, 1.5];
+    case 'ciliate':
+      return [1.75, 1.75];
+    case 'flagellate':
+      return [1.35, sp.flagella ? 3.5 : 1.45];
+    default:
+      return [1, 1];
+  }
+}
 const SERIF = 'Georgia, "Iowan Old Style", "Times New Roman", serif';
 const MONO = '"Share Tech Mono", ui-monospace, monospace';
 /** the water and its caustics are soft, so they are drawn this small (pixels per side) and stretched over the dish */
@@ -978,7 +998,8 @@ export class MicroRenderer {
     c.stroke();
   }
 
-  private flagellum(c: Ctx, x0: number, len: number, amp: number, t: number, hue: number, px: number, dir = -1): void {
+  /** from x0, y0 (on the body's edge) along the axis, away from the body in `dir` */
+  private flagellum(c: Ctx, x0: number, len: number, amp: number, t: number, hue: number, px: number, dir = -1, y0 = 0): void {
     c.strokeStyle = `hsla(${hue},60%,80%,${0.6 * (1 - this.dis)})`;
     c.lineWidth = 1 * px;
     c.lineCap = 'round';
@@ -986,7 +1007,7 @@ export class MicroRenderer {
     for (let i = 0; i <= 16; i++) {
       const s = i / 16;
       const x = x0 + dir * s * len,
-        y = Math.sin(t * 12 * (1 - this.dis) - s * 9) * amp * s;
+        y = y0 + Math.sin(t * 12 * (1 - this.dis) - s * 9) * amp * s;
       i ? c.lineTo(x, y) : c.moveTo(x, y);
     }
     c.stroke();
@@ -1051,7 +1072,9 @@ export class MicroRenderer {
         break;
       }
       case 'spirillum': {
-        const L = R * 1.6;
+        const L = R * 1.6,
+          // where the wave leaves the body at either end: the flagella start there
+          end = Math.sin(t * 7) * R * 0.38;
         c.lineCap = 'round';
         const path = () => {
           c.beginPath();
@@ -1070,8 +1093,8 @@ export class MicroRenderer {
         c.strokeStyle = `hsla(${hue},${sat}%,82%,0.75)`;
         c.lineWidth = 1 * px;
         c.stroke();
-        this.flagellum(c, -L, R * 0.8, R * 0.2, t * 1.5, hue, px);
-        this.flagellum(c, L, R * 0.8, R * 0.2, t * 1.5, hue, px, 1);
+        this.flagellum(c, -L, R * 0.8, R * 0.2, t * 1.5, hue, px, -1, end);
+        this.flagellum(c, L, R * 0.8, R * 0.2, t * 1.5, hue, px, 1, -end);
         break;
       }
       case 'diatom': {
@@ -1217,12 +1240,17 @@ export class MicroRenderer {
     }
   }
 
-  /** a specimen on its own (the lab's drawer, bench, viewer): radius R canvas pixels around x, y */
-  portrait(c: Ctx, sp: Species, x: number, y: number, R: number, t: number, dpr: number): void {
-    const s = R / sp.size;
+  /** a specimen on its own (the lab's drawer, bench, viewer) around x, y: radius R canvas pixels, smaller where the
+   * drawing (flagella and all) would reach further than `fit` pixels from x, y */
+  portrait(c: Ctx, sp: Species, x: number, y: number, R: number, fit: number, t: number, dpr: number): void {
+    const [back, front] = reach(sp);
+    const s = Math.min(R, fit / ((back + front) / 2)) / sp.size;
     c.save();
     c.translate(x, y);
     c.scale(s, s);
+    c.rotate(-Math.PI / 5);
+    // the middle of the drawing at x, y, not the body's centre (a flagellate's whip reaches far ahead)
+    c.translate(((back - front) / 2) * sp.size, 0);
     if (sp.glow > 0.12) {
       const g = sp.size * (1.6 + sp.glow);
       c.globalCompositeOperation = 'lighter';
@@ -1231,7 +1259,6 @@ export class MicroRenderer {
       c.globalCompositeOperation = 'source-over';
       c.globalAlpha = 1;
     }
-    c.rotate(-Math.PI / 5);
     this.body(c, { seed: sp.seed, vx: 0, vy: 0 }, sp, sp.size, sp.hue, sp.sat, dpr / s, t + (sp.seed % 1000));
     c.restore();
   }

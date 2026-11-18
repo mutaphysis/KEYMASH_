@@ -254,7 +254,7 @@ export class Shelf {
     if (cv.width !== n || cv.height !== n) cv.width = cv.height = n;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, n, n);
-    if (sp) this.host.r.portrait(g, sp, n / 2, n / 2, n * 0.26, this.time, d);
+    if (sp) this.host.r.portrait(g, sp, n / 2, n / 2, n * 0.26, n * 0.42, this.time, d);
   }
 
   /** the names the drawer holds */

@@ -298,7 +298,7 @@ export class Viewer {
     if (this.previewCv.width !== n || this.previewCv.height !== n) this.previewCv.width = this.previewCv.height = n;
     this.previewCtx.setTransform(1, 0, 0, 1, 0, 0);
     this.previewCtx.clearRect(0, 0, n, n);
-    this.host.r.portrait(this.previewCtx, this.shown, n / 2, n / 2, n * 0.26, this.time, d);
+    this.host.r.portrait(this.previewCtx, this.shown, n / 2, n / 2, n * 0.26, n * 0.42, this.time, d);
     if ((this.statT -= dt) <= 0) {
       this.statT = 0.3;
       for (const s of this.stats) s.fill.style.width = `${Math.round(Math.max(0, Math.min(1, s.value())) * 100)}%`;
