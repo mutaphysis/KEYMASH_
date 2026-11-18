@@ -126,6 +126,7 @@ toolbar under the dish (in a column beside it in split view) picks what a touch 
 | Tool | What it does |
 |---|---|
 | hand | tap a cell: it jiggles and swims off; hold it (or drag): it wriggles in your hand and goes where you put it |
+| look | open the cell's genes (or a piece of debris that still carries a genome) |
 | kill | the cell dissolves, leaving debris |
 | mutate | one to three of its genes change: a new species, named and introduced |
 | divide | it divides at once (unless the dish or the species is full) |
@@ -148,6 +149,14 @@ a carried cell on it; a bench that already holds one splits in two while you dra
 the left half replaces it, the right half crosses the two (the bench's specimen takes up genes
 from the new one, as a meal would pass them on). Drag the bench's specimen into the dish or
 onto the drawer.
+
+The genome viewer (look, or a tap on a tile or the bench) shows the genes as a turning double
+helix: one base pair per base, a band per gene coloured by its group (form, motion, food,
+defence, social, colour). Point at a band to read the gene and its value; double-tap it to step
+the gene to its next state. The name, the picture, the abilities and the bars (a cell's age,
+hunger and speed; a specimen's speed and life span) follow. **Keep** gives a cell the new genes
+(a new species), puts them into the drawer (from a built-in: as a new specimen), or onto the
+bench; **discard**, Esc or a tap outside closes it.
 
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over

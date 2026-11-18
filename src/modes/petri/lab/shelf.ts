@@ -16,12 +16,16 @@ import { iconEl } from '../../../ui/icon';
 export type Target = { kind: 'dish'; cx: number; cy: number } | { kind: 'drawer' } | { kind: 'bench'; cross: boolean };
 /** where a dragged specimen came from */
 export type Source = 'cell' | 'entry' | 'bench';
+/** what a tap on the shelf opens (the genome viewer) */
+export type ShelfPick = { kind: 'entry'; entry: Entry } | { kind: 'bench' };
 export interface ShelfHost {
   r: MicroRenderer;
   /** a specimen from the shelf dropped on the dish at a client point */
   toDish(sp: Species, cx: number, cy: number): void;
   /** is a species name in use (in the dish or the drawer)? */
   taken(name: string): boolean;
+  /** a tile or the bench tapped without dragging */
+  pick(p: ShelfPick): void;
   split(): boolean;
 }
 
@@ -82,7 +86,7 @@ export class Shelf {
     this.benchBox.append(this.benchCanvas, halves);
     this.benchEl.append(this.benchBox);
     this.ghost.className = css.ghost;
-    this.listen(this.benchBox, () => (this.bench ? { from: 'bench', sp: this.bench } : null));
+    this.listen(this.benchBox, () => (this.bench ? { from: 'bench', sp: this.bench } : null), { kind: 'bench' });
     this.render();
   }
 
@@ -114,14 +118,14 @@ export class Shelf {
         });
         el.append(del);
       }
-      this.listen(el, () => ({ from: 'entry', sp: entry.sp }));
+      this.listen(el, () => ({ from: 'entry', sp: entry.sp }), { kind: 'entry', entry });
       this.drawer.append(el);
       return { entry, canvas, ctx: ctx2d(canvas) };
     });
   }
 
-  /** press, then drag far enough to take the specimen along */
-  private listen(el: HTMLElement, what: () => { from: Drag['from']; sp: Species } | null): void {
+  /** press, then drag far enough to take the specimen along; a tap without moving opens it */
+  private listen(el: HTMLElement, what: () => { from: Drag['from']; sp: Species } | null, pick: ShelfPick): void {
     el.addEventListener('pointerdown', (e) => {
       const w = what();
       if (!w || this.drag || e.button > 0) return;
@@ -148,7 +152,10 @@ export class Shelf {
       const d = this.drag;
       if (!d || d.el !== el || e.pointerId !== d.id) return;
       this.drag = null;
-      if (!d.started) return;
+      if (!d.started) {
+        this.host.pick(pick);
+        return;
+      }
       const target = this.targetAt(e.clientX, e.clientY);
       this.endHover();
       if (target?.kind === 'dish') this.host.toDish(d.sp, target.cx, target.cy);

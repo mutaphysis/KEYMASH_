@@ -8,11 +8,14 @@ import { Ambient } from '../ambient';
 import { DISH_R } from '../sim';
 import type { Cell, DishState, Food } from '../sim';
 import { mutateGenome, specimen } from '../genome';
-import type { Species } from '../genome';
+import type { Genome, Species } from '../genome';
 import { t } from '../messages';
 import { ON_CELL, TOOLS } from './tools';
 import type { ToolId } from './tools';
 import { Shelf } from './shelf';
+import type { ShelfPick } from './shelf';
+import { Viewer } from './viewer';
+import type { ViewTarget } from './viewer';
 import * as css from './lab.css';
 import type { ViewContext } from '../../types';
 import type { AudioEngine } from '../../../engine/audio';
@@ -52,6 +55,7 @@ export class Lab {
   private canvas = document.createElement('canvas');
   private toolsEl = document.createElement('div');
   private shelf: Shelf;
+  private viewer: Viewer;
   private r: MicroRenderer;
   private petri: Petri | null = null;
   private ctx: ViewContext | null = null;
@@ -81,7 +85,13 @@ export class Lab {
       r: this.r,
       toDish: (sp, cx, cy) => this.toDish(sp, cx, cy),
       taken: (name) => this.taken(name),
+      pick: (p) => this.inspect(p),
       split: () => !!this.ctx?.root.classList.contains('split'),
+    });
+    this.viewer = new Viewer({
+      r: this.r,
+      world: () => this.petri?.world ?? null,
+      keep: (target, g) => this.keep(target, g),
     });
     this.loop = this.loop.bind(this);
   }
@@ -102,7 +112,7 @@ export class Lab {
     this.dishEl.append(this.canvas);
     this.toolsEl.className = css.tools;
     this.toolsEl.setAttribute('role', 'toolbar');
-    this.root.append(top, this.shelf.benchEl, this.dishEl, this.toolsEl, this.shelf.drawer, this.shelf.ghost);
+    this.root.append(top, this.shelf.benchEl, this.dishEl, this.toolsEl, this.shelf.drawer, this.viewer.el, this.shelf.ghost);
     parent.append(this.root);
     // km-buttons build their <button> once connected: texts and titles go on after that
     const back = this.button(top, 'header', 'left', '', () => this.close());
@@ -120,6 +130,7 @@ export class Lab {
     this.sweepBtn = this.button(this.toolsEl, 'tool', 'sweep', t('toolClear'), () => this.sweep());
     this.pauseBtn = this.button(this.toolsEl, 'tool', 'pause', t('toolPause'), () => this.setPaused(!this.paused));
     this.fastBtn = this.button(this.toolsEl, 'tool', 'fast', t('toolFast'), () => this.setSpeed(this.speed === 1 ? 3 : 1));
+    this.viewer.mount();
 
     new ResizeObserver(() => this.fit()).observe(this.dishEl);
     this.canvas.addEventListener('pointerdown', (e) => this.down(e));
@@ -164,6 +175,7 @@ export class Lab {
   }
 
   close(): void {
+    this.viewer.close();
     this.letGo();
     this.feeding = null;
     this.pointer = null;
@@ -318,8 +330,13 @@ export class Lab {
         W.addZone('toxin', x, y, { r: 95, dur: 12 });
         this.amb.touch(x);
         break;
-      case 'look':
+      case 'look': {
+        // a cell, or a piece of debris that still carries a genome: open its genes
+        const f = c ? null : W.foodAt(x, y, this.slack());
+        if (c) this.viewer.show({ kind: 'cell', cell: c }, c.sp);
+        else if (f?.sp) this.viewer.show({ kind: 'debris', sp: f.sp }, f.sp);
         break;
+      }
     }
     this.flush();
   }
@@ -431,6 +448,35 @@ export class Lab {
     this.flush();
   }
 
+  /** a tile or the bench tapped: its genes */
+  private inspect(p: ShelfPick): void {
+    const sp = p.kind === 'entry' ? p.entry.sp : this.shelf.bench;
+    if (sp) this.viewer.show(p, sp);
+  }
+
+  /** edited genes kept: the cell becomes them, the drawer keeps them (a built-in stays as it is), the bench holds them */
+  private keep(target: ViewTarget, g: Genome): void {
+    const sp = specimen(g);
+    switch (target.kind) {
+      case 'cell': {
+        const c = target.cell;
+        if (!c.gone && (c.state === 'live' || c.state === 'dividing')) this.petri?.world.retype(c, sp);
+        this.flush();
+        break;
+      }
+      case 'entry':
+        if (target.entry.builtIn) this.toast(t(this.shelf.specimens.add(sp) ? 'labSaved' : 'labHave'));
+        else this.shelf.specimens.replace(target.entry, sp);
+        this.shelf.render();
+        break;
+      case 'bench':
+        this.shelf.bench = sp;
+        break;
+      case 'debris':
+        break;
+    }
+  }
+
   private taken(name: string): boolean {
     const W = this.petri?.world;
     return (!!W && [...W.seen].some((s) => s.name === name)) || this.shelf.names().includes(name);
@@ -488,5 +534,6 @@ export class Lab {
     // real time even while paused: the water, wobbles and ripples keep moving
     this.r.frame(dt, p.world, this.amb.activity);
     this.shelf.frame(dt);
+    this.viewer.frame(dt);
   }
 }

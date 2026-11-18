@@ -128,6 +128,7 @@ globalStyle(`${host}[primary] > ${variant.control} span`, { fontSize: 15, fontWe
 globalStyle(`${variant.row} i`, { fontSize: 16 });
 globalStyle(`${variant.tool} i`, { fontSize: 22 });
 globalStyle(`${variant.tool} span`, { fontSize: 9.5, letterSpacing: 0.5 });
+globalStyle(`${host} > button:disabled`, { opacity: 0.4, cursor: 'default', boxShadow: 'none' });
 globalStyle(`${host}[active] > button`, {
   background: rgba(vars.rgb.fg, 0.2),
   borderColor: rgba(vars.rgb.fg, 0.9),
