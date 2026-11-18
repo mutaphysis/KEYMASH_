@@ -125,10 +125,17 @@ toolbar under the dish (on the left in split view) picks what a touch does:
 
 | Tool | What it does |
 |---|---|
+| hand | tap a cell: it jiggles and swims off; hold it (or drag): it wriggles in your hand and goes where you put it |
+| kill | the cell dissolves, leaving debris |
+| mutate | one to three of its genes change: a new species, named and introduced |
+| divide | it divides at once (unless the dish or the species is full) |
 | food | drop algae where you touch, more while you hold |
+| stream | drag: a current along the arrow, stronger the longer; tap: a swirl |
+| toxin | a cloud of poison: cells that aren't toxic themselves starve in it |
 
-After the tools: **pause** stops time (the water still moves), **3×** runs it three
-times as fast. The arrow at the top goes back to the code.
+The cell the tool would act on is marked with a reticle and a glow. After the tools: **clear**
+empties the dish (for six seconds the button undoes it), **pause** stops time (the water still
+moves), **3×** runs it three times as fast. The arrow at the top goes back to the code.
 
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over

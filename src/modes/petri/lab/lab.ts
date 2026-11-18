@@ -6,13 +6,17 @@ import type { MicroPlayer } from '../player';
 import { MicroRenderer } from '../render';
 import { Ambient } from '../ambient';
 import { DISH_R } from '../sim';
+import type { Cell, DishState, Food } from '../sim';
+import { mutateGenome, specimen } from '../genome';
 import { t } from '../messages';
-import { TOOLS } from './tools';
+import { ON_CELL, TOOLS } from './tools';
 import type { ToolId } from './tools';
 import * as css from './lab.css';
 import type { ViewContext } from '../../types';
 import type { AudioEngine } from '../../../engine/audio';
 import type { KmButton } from '../../../ui/components/button';
+import type { KmToast } from '../../../ui/components/toast';
+import { $ } from '../../../ui/dom';
 import { iconCursor } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
 import { hash } from '../../../lang/rng';
@@ -21,6 +25,22 @@ import { hash } from '../../../lang/rng';
 const CURSOR = '#8ff5dc';
 /** seconds between two food drops while the food tool is held down */
 const FEED_EVERY = 0.12;
+/** the hand: held this long (ms) or moved this far (CSS px), a press carries the cell instead of poking it */
+const HOLD_MS = 250;
+const HOLD_PX = 8;
+/** how long clear can be undone (ms) */
+const UNDO_MS = 6000;
+
+/** a press of the hand on a cell: a poke when it ends soon and close by, else the cell is carried */
+interface Press {
+  cell: Cell;
+  cx: number;
+  cy: number;
+  t0: number;
+  carrying: boolean;
+  /** the last point in the dish the carried cell was at */
+  last: [number, number];
+}
 
 export class Lab {
   private audio: AudioEngine;
@@ -35,6 +55,7 @@ export class Lab {
   private ctx: ViewContext | null = null;
   private tool: ToolId = 'hand';
   private toolBtns = new Map<ToolId, KmButton>();
+  private sweepBtn!: KmButton;
   private pauseBtn!: KmButton;
   private fastBtn!: KmButton;
   private paused = false;
@@ -42,8 +63,13 @@ export class Lab {
   private raf = 0;
   private last = 0;
   private cursors = new Map<ToolId, string>();
+  /** where a mouse hovers over the dish (world units); null when it is elsewhere or the pointer is a finger */
+  private pointer: [number, number] | null = null;
+  private press: Press | null = null;
   /** the pointer held down on the dish with the food tool: where, and how long until the next drop */
   private feeding: { x: number; y: number; next: number } | null = null;
+  /** what clear took out of the dish, while it can be put back */
+  private undo: DishState | null = null;
 
   constructor(audio: AudioEngine) {
     this.audio = audio;
@@ -85,6 +111,7 @@ export class Lab {
     const div = document.createElement('div');
     div.className = css.divider;
     this.toolsEl.append(div);
+    this.sweepBtn = this.button(this.toolsEl, 'tool', 'sweep', t('toolClear'), () => this.sweep());
     this.pauseBtn = this.button(this.toolsEl, 'tool', 'pause', t('toolPause'), () => this.setPaused(!this.paused));
     this.fastBtn = this.button(this.toolsEl, 'tool', 'fast', t('toolFast'), () => this.setSpeed(this.speed === 1 ? 3 : 1));
 
@@ -92,7 +119,10 @@ export class Lab {
     this.canvas.addEventListener('pointerdown', (e) => this.down(e));
     this.canvas.addEventListener('pointermove', (e) => this.move(e));
     this.canvas.addEventListener('pointerup', (e) => this.up(e));
-    this.canvas.addEventListener('pointercancel', (e) => this.up(e));
+    this.canvas.addEventListener('pointercancel', (e) => this.up(e, true));
+    this.canvas.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse' && !e.buttons) this.pointer = null;
+    });
   }
 
   private button(parent: HTMLElement, variant: 'header' | 'tool', icon: IconName, text: string, onClick: () => void): KmButton {
@@ -116,6 +146,7 @@ export class Lab {
     this.pick('hand');
     this.setPaused(false);
     this.setSpeed(1);
+    this.armUndo(null);
     this.amb.configure(hash(from?.src ?? 'lab'));
     this.audio.init();
     this.amb.start();
@@ -127,7 +158,10 @@ export class Lab {
   }
 
   close(): void {
+    this.letGo();
     this.feeding = null;
+    this.pointer = null;
+    this.armUndo(null);
     cancelAnimationFrame(this.raf);
     this.amb.stop();
     this.audio.stop();
@@ -144,13 +178,19 @@ export class Lab {
     if (w > 1 && h > 1) this.r.resize(w, h);
   }
 
+  private toast(text: string): void {
+    $<KmToast>('toast').show(text);
+  }
+
+  // ---------- the toolbar ----------
+
   private pick(tool: ToolId): void {
     this.tool = tool;
     for (const [id, b] of this.toolBtns) b.toggleAttribute('active', id === tool);
     void this.cursorFor(tool);
   }
 
-  /** the dish canvas shows the tool as its cursor; the hand uses the system's own */
+  /** the dish canvas shows the tool as its cursor; the hand uses the system's own (see hovering()) */
   private async cursorFor(tool: ToolId): Promise<void> {
     if (tool === 'hand') {
       this.canvas.style.cursor = 'default';
@@ -176,34 +216,189 @@ export class Lab {
     this.fastBtn.toggleAttribute('active', s !== 1);
   }
 
+  /** clear empties the dish; for a few seconds the button undoes it */
+  private sweep(): void {
+    const W = this.petri?.world;
+    if (!W) return;
+    if (this.undo) {
+      W.restore(this.undo);
+      this.armUndo(null);
+      return;
+    }
+    this.letGo();
+    this.r.hover = null;
+    this.armUndo(W.clear());
+    this.r.ripple(0, 0, 20, DISH_R, 1.2, 190, 0.35);
+  }
+
+  private armUndo(state: DishState | null): void {
+    this.undo = state;
+    this.sweepBtn.icon = state ? 'undo' : 'sweep';
+    this.sweepBtn.text = t(state ? 'toolUndo' : 'toolClear');
+    this.sweepBtn.countdown(state ? UNDO_MS : 0, () => this.armUndo(null));
+  }
+
+  // ---------- hands in the dish ----------
+
   /** a pointer position on the dish canvas in world units */
   private world(e: PointerEvent): [number, number] {
     const b = this.canvas.getBoundingClientRect();
     return this.r.toWorld(e.clientX - b.left, e.clientY - b.top);
   }
 
+  /** how near (world units) a touch has to come to hit a cell: 10 CSS pixels */
+  private slack(): number {
+    return (10 * this.r.dpr) / this.r.k;
+  }
+
+  /** the reticle follows what the tool would act on; the hand's cursor says whether there is something to grab */
+  private hovering(): void {
+    const W = this.petri?.world;
+    const p = this.pointer;
+    let h: Cell | Food | null = null,
+      dna = false;
+    if (W && p && !this.press?.carrying && ON_CELL[this.tool]) {
+      h = W.cellAt(p[0], p[1], this.slack());
+      dna = this.tool === 'look' && !!h;
+      if (!h && this.tool === 'look') {
+        const f = W.foodAt(p[0], p[1], this.slack());
+        if (f) {
+          h = f;
+          dna = !!f.sp;
+        }
+      }
+    }
+    this.r.hover = h;
+    this.r.hoverDna = dna;
+    if (this.tool === 'hand') this.canvas.style.cursor = this.press?.carrying ? 'grabbing' : h ? 'grab' : 'default';
+  }
+
   private down(e: PointerEvent): void {
-    if (!this.petri) return;
+    const W = this.petri?.world;
+    if (!W || this.press) return;
     const [x, y] = this.world(e);
     if (Math.hypot(x, y) > DISH_R) return;
     this.canvas.setPointerCapture(e.pointerId);
     this.audio.init();
-    if (this.tool === 'food') {
-      this.feeding = { x, y, next: 0 };
-      this.feed();
+    this.pointer = [x, y];
+    this.hovering();
+    const c = ON_CELL[this.tool] ? W.cellAt(x, y, this.slack()) : null;
+    const live = c && (c.state === 'live' || c.state === 'dividing');
+    switch (this.tool) {
+      case 'hand':
+        if (c?.state === 'live')
+          this.press = { cell: c, cx: e.clientX, cy: e.clientY, t0: performance.now(), carrying: false, last: [c.x, c.y] };
+        break;
+      case 'kill':
+        if (live) W.kill(c);
+        break;
+      case 'mutate':
+        if (live) W.retype(c, specimen(mutateGenome(c.sp.genome, Math.random, 1 + Math.floor(Math.random() * 3))));
+        break;
+      case 'divide':
+        if (c?.state === 'live') {
+          if (W.forceDivide(c)) this.r.ripple(c.x, c.y, c.r, c.r * 2.4, 0.8, c.sp.hue, 0.4);
+          else this.toast(t('labFull'));
+        }
+        break;
+      case 'food':
+        this.feeding = { x, y, next: 0 };
+        this.feed();
+        break;
+      case 'stream':
+        this.r.aim = { x0: x, y0: y, x1: x, y1: y };
+        break;
+      case 'toxin':
+        W.addZone('toxin', x, y, { r: 95, dur: 12 });
+        this.amb.touch(x);
+        break;
+      case 'look':
+        break;
     }
+    this.flush();
   }
 
   private move(e: PointerEvent): void {
-    if (!this.feeding) return;
     const [x, y] = this.world(e);
-    if (Math.hypot(x, y) > DISH_R) return;
-    this.feeding.x = x;
-    this.feeding.y = y;
+    if (e.pointerType === 'mouse' || e.buttons) this.pointer = [x, y];
+    const p = this.press;
+    if (p && !p.carrying && Math.hypot(e.clientX - p.cx, e.clientY - p.cy) >= HOLD_PX) this.carry();
+    if (p?.carrying) this.carryTo(x, y);
+    const a = this.r.aim;
+    if (a) [a.x1, a.y1] = this.inDish(x, y);
+    if (this.feeding && Math.hypot(x, y) <= DISH_R) [this.feeding.x, this.feeding.y] = [x, y];
   }
 
-  private up(_e: PointerEvent): void {
+  private up(e: PointerEvent, cancelled = false): void {
+    const W = this.petri?.world;
+    const p = this.press;
+    if (W && p && !cancelled) {
+      if (p.carrying) this.drop();
+      else {
+        W.poke(p.cell);
+        this.r.jiggle(p.cell);
+        this.amb.touch(p.cell.x);
+      }
+    }
+    this.letGo();
+    const a = this.r.aim;
+    if (W && a && !cancelled) {
+      const len = Math.hypot(a.x1 - a.x0, a.y1 - a.y0);
+      if (len < 12) W.addZone('current', a.x0, a.y0, { r: 150, dur: 8, swirl: 1 });
+      else
+        W.addZone('current', (a.x0 + a.x1) / 2, (a.y0 + a.y1) / 2, {
+          r: Math.max(90, Math.min(260, len * 0.9)),
+          dur: 8,
+          angle: Math.atan2(a.y1 - a.y0, a.x1 - a.x0),
+          strength: Math.max(0.4, Math.min(1.6, len / 150)),
+        });
+      this.amb.touch(a.x0);
+    }
+    this.r.aim = null;
     this.feeding = null;
+    if (e.pointerType !== 'mouse') this.pointer = null;
+    this.flush();
+  }
+
+  private inDish(x: number, y: number): [number, number] {
+    const d = Math.hypot(x, y);
+    return d > DISH_R ? [(x / d) * DISH_R, (y / d) * DISH_R] : [x, y];
+  }
+
+  /** the press becomes carrying: the cell stands still in the hand */
+  private carry(): void {
+    const p = this.press;
+    if (!p) return;
+    p.carrying = true;
+    p.cell.held = true;
+    this.r.held = p.cell;
+    this.hovering();
+  }
+
+  private carryTo(x: number, y: number): void {
+    const p = this.press,
+      W = this.petri?.world;
+    if (!p || !W) return;
+    [p.cell.x, p.cell.y] = W.inside(x, y, p.cell.r);
+    p.last = [p.cell.x, p.cell.y];
+  }
+
+  /** set the carried cell down where it is: it starts afresh from standstill */
+  private drop(): void {
+    const c = this.press?.cell;
+    if (!c) return;
+    c.held = false;
+    c.vx = c.vy = 0;
+    c.think = 0;
+  }
+
+  /** end any press; a carried cell is let go where it is */
+  private letGo(): void {
+    if (this.press?.carrying) this.drop();
+    this.press = null;
+    this.r.held = null;
+    this.r.heldOut = false;
+    this.hovering();
   }
 
   /** drop food where the pointer is, as the play mode's tap does */
@@ -234,9 +429,13 @@ export class Lab {
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
+    const pr = this.press;
+    if (pr && (pr.cell.gone || pr.cell.state !== 'live')) this.letGo();
+    else if (pr && !pr.carrying && now - pr.t0 >= HOLD_MS) this.carry();
     if (this.feeding && (this.feeding.next -= dt) <= 0) this.feed();
     this.flush();
     if (!this.paused) for (const ev of p.tick(dt * this.speed)) this.route(ev);
+    this.hovering();
     this.amb.update(dt, p.world.crowd);
     this.audio.readLevel();
     // real time even while paused: the water, wobbles and ripples keep moving

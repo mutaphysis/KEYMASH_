@@ -100,6 +100,20 @@ export class MicroRenderer {
   floats: Floating[] = [];
   captions: Caption[] = [];
   specks: Speck[] = [];
+  // ---- the lab's hands ----
+  /** what the pointer is over: a reticle and a glow mark it */
+  hover: Cell | Food | null = null;
+  /** the hover target has genes to look at: a small helix bubble on the reticle */
+  hoverDna = false;
+  /** the cell carried by hand: it wiggles; while carried outside the dish (`heldOut`) it is not drawn here */
+  held: Cell | null = null;
+  heldOut = false;
+  /** a stream being aimed: an arrow from where the drag started (a circle while it is short: a swirl) */
+  aim: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  /** cells poked by hand, seconds since */
+  private jiggles = new Map<Cell, number>();
+  private hoverOf: Cell | Food | null = null;
+  private hoverT = 0;
   private glows = new Map<number, HTMLCanvasElement>();
   private soft: HTMLCanvasElement;
   /** a fast device keeps the full resolution; a slow one steps down to fewer pixels */
@@ -131,6 +145,9 @@ export class MicroRenderer {
     this.floats = [];
     this.captions = [];
     this.specks = [];
+    this.hover = this.held = this.aim = null;
+    this.heldOut = false;
+    this.jiggles.clear();
     for (let i = 0; i < 70; i++)
       this.specks.push(this.speck(Math.random() < 0.82 ? 0.35 + Math.random() * 0.4 : 1.4 + Math.random() * 0.8));
   }
@@ -425,6 +442,7 @@ export class MicroRenderer {
     // organisms: prey being digested first, so they appear inside their predator
     for (const cell of world.cells) if (cell.state === 'eaten') this.drawCell(c, cell);
     for (const cell of world.cells) if (cell.state !== 'eaten') this.drawCell(c, cell);
+    this.drawHands(c, dt);
     // ripples and fragments
     for (const r of this.ripples) {
       r.t += dt;
@@ -617,6 +635,7 @@ export class MicroRenderer {
 
   // ---------- organisms ----------
   private drawCell(c: Ctx, cell: Cell): void {
+    if (cell === this.held && this.heldOut) return;
     const sp = cell.sp,
       T = this.time;
     let alpha = Math.min(1, cell.age * 2 + (cell.gen > 1 ? 1 : 0));
@@ -645,6 +664,17 @@ export class MicroRenderer {
 
     c.save();
     c.translate(cell.x + (sick ? Math.sin(T * 40 + cell.seed) * 0.6 : 0), cell.y);
+    if (cell === this.held) {
+      // in the hand: it wriggles
+      c.rotate((this.gentle ? 0.06 : 0.18) * Math.sin(T * 10));
+      c.scale(1.12, 1.12);
+    }
+    const jt = this.jiggles.get(cell);
+    if (jt !== undefined) {
+      // poked: a wobble that dies away
+      const a = 0.14 * Math.exp(-4 * jt) * (this.gentle ? 0.4 : 1) * Math.sin(28 * jt);
+      c.scale(1 + a, 1 - a);
+    }
     c.globalAlpha = alpha;
     if (cell.state === 'dividing') {
       // crossfade in and out of the division drawing, so neither the start (the cell rounds up)
@@ -680,7 +710,7 @@ export class MicroRenderer {
           c.translate(Math.cos(cell.axis) * end * sgn, Math.sin(cell.axis) * end * sgn);
           c.rotate(head);
           c.globalAlpha = base * fout;
-          this.body(c, { ...cell, seed, heading: head, r, vx: 0, vy: 0, state: 'live' }, sp, r, hue, sat, px, T + (seed % 1000));
+          this.body(c, { seed, vx: 0, vy: 0 }, sp, r, hue, sat, px, T + (seed % 1000));
           c.restore();
         }
       }
@@ -962,7 +992,16 @@ export class MicroRenderer {
     c.stroke();
   }
 
-  private body(c: Ctx, cell: Cell, sp: Species, R: number, hue: number, sat: number, px: number, t: number): void {
+  private body(
+    c: Ctx,
+    cell: Pick<Cell, 'seed' | 'vx' | 'vy'>,
+    sp: Species,
+    R: number,
+    hue: number,
+    sat: number,
+    px: number,
+    t: number,
+  ): void {
     const seed = (cell.seed % 97) / 10;
     switch (sp.body) {
       case 'amoeba': {
@@ -1174,6 +1213,107 @@ export class MicroRenderer {
           c.fill();
         }
         break;
+      }
+    }
+  }
+
+  // ---------- the lab's hands ----------
+  /** a cell was poked: it wobbles for a moment */
+  jiggle(cell: Cell): void {
+    this.jiggles.set(cell, 0);
+  }
+
+  /** what the hand points at (reticle and glow) and the stream being aimed; world coordinates */
+  private drawHands(c: Ctx, dt: number): void {
+    for (const [cell, jt] of this.jiggles) {
+      if (jt + dt > 0.9 || cell.gone) this.jiggles.delete(cell);
+      else this.jiggles.set(cell, jt + dt);
+    }
+    const k = this.k,
+      px = this.dpr / k,
+      T = this.time;
+    const h = this.hover;
+    if (h !== this.hoverOf) {
+      this.hoverOf = h;
+      this.hoverT = 0;
+    }
+    this.hoverT += dt;
+    if (h && !(h === this.held && this.heldOut)) {
+      const isCell = 'heading' in h;
+      const R = isCell ? h.r : 6,
+        hue = isCell ? h.shownHue : 95;
+      c.globalCompositeOperation = 'lighter';
+      c.globalAlpha = 0.35;
+      const g = R * 3.2;
+      c.drawImage(this.glow(hue), h.x - g, h.y - g, g * 2, g * 2);
+      c.globalCompositeOperation = 'source-over';
+      c.globalAlpha = 1;
+      // four corner brackets that breathe, and snap in when the target changes
+      let d = R * 1.35 + 6 * px;
+      if (!this.gentle) {
+        d *= 1 + 0.06 * Math.sin(T * 4);
+        const s = Math.min(1, this.hoverT / 0.18);
+        d *= 1.6 - 0.6 * (1 - (1 - s) * (1 - s));
+      }
+      const L = d * 0.35;
+      c.strokeStyle = `hsla(${hue},80%,80%,.85)`;
+      c.lineWidth = 1.5 * px;
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      c.beginPath();
+      for (const sx of [-1, 1])
+        for (const sy of [-1, 1]) {
+          c.moveTo(h.x + sx * d, h.y + sy * (d - L));
+          c.lineTo(h.x + sx * d, h.y + sy * d);
+          c.lineTo(h.x + sx * (d - L), h.y + sy * d);
+        }
+      c.stroke();
+      if (this.hoverDna) {
+        // a little bubble with a helix in it: there are genes to look at
+        const r = 9 * px,
+          bx = h.x + d + r * 0.6,
+          by = h.y - d - r * 0.6;
+        c.fillStyle = 'rgba(1,10,13,.75)';
+        c.beginPath();
+        c.arc(bx, by, r, 0, TAU);
+        c.fill();
+        c.stroke();
+        c.lineWidth = 1.2 * px;
+        c.beginPath();
+        for (const sgn of [1, -1])
+          for (let i = 0; i <= 12; i++) {
+            const u = i / 12 - 0.5,
+              x = bx + u * r * 1.3,
+              y = by + sgn * Math.sin(u * TAU + (this.gentle ? 0 : T * 3)) * r * 0.4;
+            i ? c.lineTo(x, y) : c.moveTo(x, y);
+          }
+        c.stroke();
+      }
+    }
+    const a = this.aim;
+    if (a) {
+      c.strokeStyle = 'hsla(190,70%,75%,.5)';
+      c.fillStyle = 'hsla(190,70%,75%,.5)';
+      c.lineWidth = 2 * px;
+      c.lineCap = 'round';
+      const len = Math.hypot(a.x1 - a.x0, a.y1 - a.y0);
+      c.beginPath();
+      if (len < 12) {
+        // too short to point anywhere: a swirl
+        c.arc(a.x0, a.y0, 40, 0, TAU * 0.85);
+        c.stroke();
+      } else {
+        const ang = Math.atan2(a.y1 - a.y0, a.x1 - a.x0),
+          head = Math.min(24, len * 0.4);
+        c.moveTo(a.x0, a.y0);
+        c.lineTo(a.x1, a.y1);
+        c.stroke();
+        c.beginPath();
+        c.moveTo(a.x1, a.y1);
+        c.lineTo(a.x1 - Math.cos(ang - 0.45) * head, a.y1 - Math.sin(ang - 0.45) * head);
+        c.lineTo(a.x1 - Math.cos(ang + 0.45) * head, a.y1 - Math.sin(ang + 0.45) * head);
+        c.closePath();
+        c.fill();
       }
     }
   }
