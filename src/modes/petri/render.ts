@@ -1217,6 +1217,25 @@ export class MicroRenderer {
     }
   }
 
+  /** a specimen on its own (the lab's drawer, bench, viewer): radius R canvas pixels around x, y */
+  portrait(c: Ctx, sp: Species, x: number, y: number, R: number, t: number, dpr: number): void {
+    const s = R / sp.size;
+    c.save();
+    c.translate(x, y);
+    c.scale(s, s);
+    if (sp.glow > 0.12) {
+      const g = sp.size * (1.6 + sp.glow);
+      c.globalCompositeOperation = 'lighter';
+      c.globalAlpha = Math.min(0.6, sp.glow * 0.55) * (0.65 + 0.35 * Math.sin(t * 1.8 + sp.seed));
+      c.drawImage(this.glow(sp.hue), -g, -g, g * 2, g * 2);
+      c.globalCompositeOperation = 'source-over';
+      c.globalAlpha = 1;
+    }
+    c.rotate(-Math.PI / 5);
+    this.body(c, { seed: sp.seed, vx: 0, vy: 0 }, sp, sp.size, sp.hue, sp.sat, dpr / s, t + (sp.seed % 1000));
+    c.restore();
+  }
+
   // ---------- the lab's hands ----------
   /** a cell was poked: it wobbles for a moment */
   jiggle(cell: Cell): void {

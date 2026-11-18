@@ -1,6 +1,6 @@
 // PETRI_'s lab: a full-app view. Phone: the dish on top, tools and the specimen drawer under it.
-// Split view: a column on the left (bar, bench, tools, drawer), the dish on the right.
-import { globalStyle, style } from '@vanilla-extract/css';
+// Split view: a column on the left (bar, bench, drawer), the tools in a column beside the dish, the dish on the right.
+import { globalStyle, keyframes, style } from '@vanilla-extract/css';
 import { vars, layout, rgba } from '../../../styles/theme.css';
 
 const fg = vars.rgb.fg;
@@ -22,9 +22,9 @@ export const root = style({
   selectors: {
     '&.on': { display: 'grid' },
     [split]: {
-      gridTemplateColumns: 'minmax(300px, min(42%, 640px)) minmax(0, 1fr)',
-      gridTemplateRows: 'auto auto auto minmax(0, 1fr)',
-      gridTemplateAreas: '"top dish" "bench dish" "tools dish" "drawer dish"',
+      gridTemplateColumns: 'minmax(300px, min(42%, 640px)) auto minmax(0, 1fr)',
+      gridTemplateRows: 'auto auto minmax(0, 1fr)',
+      gridTemplateAreas: '"top tools dish" "bench tools dish" "drawer tools dish"',
     },
   },
 });
@@ -70,9 +70,12 @@ export const tools = style({
   WebkitMaskImage: fade,
   maskImage: fade,
   selectors: {
+    // split view: one column of tools along the dish's side, scrolling when the window is short
     [split]: {
-      flexWrap: 'wrap',
-      overflowX: 'visible',
+      flexDirection: 'column',
+      padding: `calc(8px + ${layout.safeTop}) 8px calc(8px + ${layout.safeBottom})`,
+      overflowX: 'hidden',
+      overflowY: 'auto',
       WebkitMaskImage: 'none',
       maskImage: 'none',
       borderRight: `1px solid ${vars.color.line}`,
@@ -80,7 +83,13 @@ export const tools = style({
   },
 });
 
-export const divider = style({ flex: '0 0 1px', alignSelf: 'stretch', margin: '6px 2px', background: vars.color.line });
+export const divider = style({
+  flex: '0 0 1px',
+  alignSelf: 'stretch',
+  margin: '6px 2px',
+  background: vars.color.line,
+  selectors: { [split]: { margin: '2px 6px' } },
+});
 
 export const drawer = style({
   gridArea: 'drawer',
@@ -106,3 +115,110 @@ export const drawer = style({
 });
 globalStyle(`${drawer}::-webkit-scrollbar`, { display: 'none' });
 globalStyle(`${tools}::-webkit-scrollbar`, { display: 'none' });
+
+// ---------- the specimen drawer ----------
+export const tile = style({
+  flex: '0 0 auto',
+  position: 'relative',
+  width: 84,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 2,
+  padding: '6px 4px 5px',
+  borderRadius: vars.radius.row,
+  border: `1px solid ${vars.color.line}`,
+  background: vars.color.surface,
+  cursor: 'grab',
+  touchAction: 'pan-x',
+  selectors: { [split]: { width: 'auto', touchAction: 'pan-y' }, '&:active': { background: rgba(fg, 0.12) } },
+});
+export const tileCanvas = style({ width: 64, height: 64, pointerEvents: 'none' });
+export const tileLabel = style({
+  maxWidth: '100%',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  fontSize: 11,
+  letterSpacing: 0.5,
+  color: vars.color.dim,
+  pointerEvents: 'none',
+});
+/** a kept specimen goes by its genus, as the living things do: italic serif */
+export const tileName = style({ fontFamily: layout.serif, fontStyle: 'italic', fontSize: 13, letterSpacing: 0, color: vars.color.text });
+export const tileDel = style({
+  position: 'absolute',
+  top: 2,
+  right: 2,
+  width: 22,
+  height: 22,
+  padding: 0,
+  border: 0,
+  borderRadius: 11,
+  background: 'transparent',
+  color: vars.color.dim,
+  fontSize: 12,
+  cursor: 'pointer',
+  selectors: { '&:hover': { color: vars.color.text, background: rgba(fg, 0.12) } },
+});
+
+// ---------- the bench (split view only): one specimen, the place to cross two ----------
+export const bench = style({
+  gridArea: 'bench',
+  display: 'none',
+  justifyContent: 'center',
+  padding: '4px 12px 8px',
+  selectors: { [split]: { display: 'flex', borderRight: `1px solid ${vars.color.line}` } },
+});
+export const benchFrame = style({
+  position: 'relative',
+  width: 'min(100%, 34vh)',
+  aspectRatio: '1',
+  borderRadius: '50%',
+  overflow: 'hidden',
+  border: `1px solid ${vars.color.line}`,
+  background: 'radial-gradient(circle at 50% 40%, #0d3036, #03121a 75%)',
+  boxShadow: `0 0 24px ${rgba(fg, 0.08)} inset`,
+  cursor: 'grab',
+});
+export const benchCanvas = style({ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' });
+/** while a specimen is dragged over a full bench: replace it (left) or cross the two (right) */
+export const halves = style({
+  position: 'absolute',
+  inset: 0,
+  display: 'none',
+  pointerEvents: 'none',
+  selectors: { '.target &': { display: 'flex' } },
+});
+export const half = style({
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 4,
+  fontSize: 11,
+  letterSpacing: 1,
+  color: vars.color.text,
+  background: 'rgba(0,0,0,.45)',
+  selectors: { '&.hot': { background: rgba(fg, 0.28), color: '#fff' }, '& + &': { borderLeft: `1px dashed ${rgba(fg, 0.5)}` } },
+});
+globalStyle(`${half} i`, { fontSize: 26 });
+
+// ---------- dragging a specimen ----------
+export const over = style({ outline: `2px dashed ${rgba(fg, 0.45)}`, outlineOffset: -6 });
+const wiggle = keyframes({ from: { transform: 'rotate(-8deg)' }, to: { transform: 'rotate(8deg)' } });
+export const ghost = style({
+  position: 'fixed',
+  left: 0,
+  top: 0,
+  width: 72,
+  height: 72,
+  margin: '-36px 0 0 -36px',
+  zIndex: 80,
+  pointerEvents: 'none',
+  display: 'none',
+  animation: `${wiggle} .35s ease-in-out infinite alternate`,
+  selectors: { '&.on': { display: 'block' } },
+  '@media': { '(prefers-reduced-motion: reduce)': { animation: 'none' } },
+});

@@ -121,7 +121,7 @@ the further it has drifted (`SPLIT_DRIFT`).
 ## The lab
 The flask in the header opens the lab: the dish without a text feeding it. When a culture is
 running it carries over, cells and all (the feeder stops); otherwise a fresh dish starts. The
-toolbar under the dish (on the left in split view) picks what a touch does:
+toolbar under the dish (in a column beside it in split view) picks what a touch does:
 
 | Tool | What it does |
 |---|---|
@@ -136,6 +136,18 @@ toolbar under the dish (on the left in split view) picks what a touch does:
 The cell the tool would act on is marked with a reticle and a glow. After the tools: **clear**
 empties the dish (for six seconds the button undoes it), **pause** stops time (the water still
 moves), **3×** runs it three times as fast. The arrow at the top goes back to the code.
+
+Under the toolbar (on the left in split view) is the specimen drawer: the eight body types,
+always there, and the specimens you keep (up to 40, stored in the browser as their gene
+sequences). Drag a tile into the dish for a new cell of it. Carry a cell out of the dish with
+the hand onto the drawer to keep it (it leaves the dish); dropped anywhere else it goes back.
+A kept specimen goes by its genus and can be taken out again with its ×.
+
+In split view there is a bench above the drawer: a round dish for one specimen. Drop a tile or
+a carried cell on it; a bench that already holds one splits in two while you drag over it:
+the left half replaces it, the right half crosses the two (the bench's specimen takes up genes
+from the new one, as a meal would pass them on). Drag the bench's specimen into the dish or
+onto the drawer.
 
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over

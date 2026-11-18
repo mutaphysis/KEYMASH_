@@ -8,9 +8,11 @@ import { Ambient } from '../ambient';
 import { DISH_R } from '../sim';
 import type { Cell, DishState, Food } from '../sim';
 import { mutateGenome, specimen } from '../genome';
+import type { Species } from '../genome';
 import { t } from '../messages';
 import { ON_CELL, TOOLS } from './tools';
 import type { ToolId } from './tools';
+import { Shelf } from './shelf';
 import * as css from './lab.css';
 import type { ViewContext } from '../../types';
 import type { AudioEngine } from '../../../engine/audio';
@@ -49,7 +51,7 @@ export class Lab {
   private dishEl = document.createElement('div');
   private canvas = document.createElement('canvas');
   private toolsEl = document.createElement('div');
-  private drawerEl = document.createElement('div');
+  private shelf: Shelf;
   private r: MicroRenderer;
   private petri: Petri | null = null;
   private ctx: ViewContext | null = null;
@@ -75,6 +77,12 @@ export class Lab {
     this.audio = audio;
     this.amb = new Ambient(audio);
     this.r = new MicroRenderer(this.canvas);
+    this.shelf = new Shelf({
+      r: this.r,
+      toDish: (sp, cx, cy) => this.toDish(sp, cx, cy),
+      taken: (name) => this.taken(name),
+      split: () => !!this.ctx?.root.classList.contains('split'),
+    });
     this.loop = this.loop.bind(this);
   }
 
@@ -94,9 +102,7 @@ export class Lab {
     this.dishEl.append(this.canvas);
     this.toolsEl.className = css.tools;
     this.toolsEl.setAttribute('role', 'toolbar');
-    this.drawerEl.className = css.drawer;
-    this.drawerEl.dataset.drop = 'drawer';
-    this.root.append(top, this.dishEl, this.toolsEl, this.drawerEl);
+    this.root.append(top, this.shelf.benchEl, this.dishEl, this.toolsEl, this.shelf.drawer, this.shelf.ghost);
     parent.append(this.root);
     // km-buttons build their <button> once connected: texts and titles go on after that
     const back = this.button(top, 'header', 'left', '', () => this.close());
@@ -323,7 +329,7 @@ export class Lab {
     if (e.pointerType === 'mouse' || e.buttons) this.pointer = [x, y];
     const p = this.press;
     if (p && !p.carrying && Math.hypot(e.clientX - p.cx, e.clientY - p.cy) >= HOLD_PX) this.carry();
-    if (p?.carrying) this.carryTo(x, y);
+    if (p?.carrying) this.carryTo(x, y, e);
     const a = this.r.aim;
     if (a) [a.x1, a.y1] = this.inDish(x, y);
     if (this.feeding && Math.hypot(x, y) <= DISH_R) [this.feeding.x, this.feeding.y] = [x, y];
@@ -333,7 +339,7 @@ export class Lab {
     const W = this.petri?.world;
     const p = this.press;
     if (W && p && !cancelled) {
-      if (p.carrying) this.drop();
+      if (p.carrying) this.dropCell(e);
       else {
         W.poke(p.cell);
         this.r.jiggle(p.cell);
@@ -375,12 +381,32 @@ export class Lab {
     this.hovering();
   }
 
-  private carryTo(x: number, y: number): void {
+  /** in the dish the cell goes along; past its rim the cell stays behind and its ghost goes on (to the drawer, the bench) */
+  private carryTo(x: number, y: number, e: PointerEvent): void {
     const p = this.press,
       W = this.petri?.world;
     if (!p || !W) return;
+    this.r.heldOut = Math.hypot(x, y) > DISH_R;
+    if (this.r.heldOut) {
+      this.shelf.hover(p.cell.sp, e.clientX, e.clientY);
+      return;
+    }
+    this.shelf.endHover();
     [p.cell.x, p.cell.y] = W.inside(x, y, p.cell.r);
     p.last = [p.cell.x, p.cell.y];
+  }
+
+  /** the carried cell let go: in the dish where it is; on the drawer or the bench it leaves the dish; anywhere else it goes back */
+  private dropCell(e: PointerEvent): void {
+    const p = this.press,
+      W = this.petri?.world;
+    if (!p || !W) return;
+    if (this.r.heldOut) {
+      const target = this.shelf.targetAt(e.clientX, e.clientY);
+      if (target && target.kind !== 'dish' && this.shelf.land(p.cell.sp, target, 'cell')) W.remove(p.cell);
+      else [p.cell.x, p.cell.y] = p.last;
+    }
+    this.drop();
   }
 
   /** set the carried cell down where it is: it starts afresh from standstill */
@@ -392,9 +418,30 @@ export class Lab {
     c.think = 0;
   }
 
+  /** a specimen from the shelf let go over the dish: a new cell, if it lands inside and there is room */
+  private toDish(sp: Species, cx: number, cy: number): void {
+    const W = this.petri?.world;
+    if (!W) return;
+    const b = this.canvas.getBoundingClientRect();
+    const [x, y] = this.r.toWorld(cx - b.left, cy - b.top);
+    if (Math.hypot(x, y) > DISH_R) return;
+    const c = W.spawnCell(sp, x, y);
+    if (!c) this.toast(t('labFull'));
+    else this.route({ type: 'spawn', x: c.x, y: c.y, sp });
+    this.flush();
+  }
+
+  private taken(name: string): boolean {
+    const W = this.petri?.world;
+    return (!!W && [...W.seen].some((s) => s.name === name)) || this.shelf.names().includes(name);
+  }
+
   /** end any press; a carried cell is let go where it is */
   private letGo(): void {
-    if (this.press?.carrying) this.drop();
+    if (this.press?.carrying) {
+      this.drop();
+      this.shelf.endHover();
+    }
     this.press = null;
     this.r.held = null;
     this.r.heldOut = false;
@@ -440,5 +487,6 @@ export class Lab {
     this.audio.readLevel();
     // real time even while paused: the water, wobbles and ripples keep moving
     this.r.frame(dt, p.world, this.amb.activity);
+    this.shelf.frame(dt);
   }
 }
