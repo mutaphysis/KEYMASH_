@@ -104,6 +104,8 @@ export interface Cell {
   /** colour as drawn: eases toward hue, so a mutation doesn't pop */ shownHue: number;
   /** seconds until this cell may make another bump or flee sound */ touchCool: number;
   fleeCool: number;
+  /** carried by hand in the lab: it stands still and the others leave it alone */
+  held: boolean;
 }
 export interface Spore {
   x: number;
@@ -135,7 +137,7 @@ export type SimEvent =
   | { type: 'divide'; x: number; y: number; sp: Species; gen: number; size: number; axis: number }
   | { type: 'touch'; x: number; y: number; a: Species; b: Species; speed: number; size: number }
   | { type: 'flee'; x: number; y: number; sp: Species; size: number }
-  | { type: 'die'; x: number; y: number; sp: Species; size: number; cause: 'starved' | 'old' | 'toxin' | 'eaten' }
+  | { type: 'die'; x: number; y: number; sp: Species; size: number; cause: 'starved' | 'old' | 'toxin' | 'eaten' | 'killed' }
   | { type: 'hatch'; x: number; y: number; sp: Species }
   | { type: 'bond'; ax: number; ay: number; bx: number; by: number; a: Species; b: Species }
   | { type: 'toxic'; x: number; y: number; sp: Species }
@@ -144,7 +146,18 @@ export type SimEvent =
   | { type: 'extinct'; sp: Species }
   | { type: 'first'; sp: Species }
   /** a cell took up genes from `donor` and became the new species `sp` (it was `from`) */
-  | { type: 'hybrid'; x: number; y: number; sp: Species; from: Species; donor: Species; genes: GeneId[] };
+  | { type: 'hybrid'; x: number; y: number; sp: Species; from: Species; donor: Species; genes: GeneId[] }
+  /** the lab changed a cell's genes by hand: it was `from`, now it is `sp` */
+  | { type: 'mutant'; x: number; y: number; sp: Species; from: Species };
+
+/** everything that lives or lies in the dish: what clear() hands out and restore() puts back */
+export interface DishState {
+  cells: Cell[];
+  food: Food[];
+  spores: Spore[];
+  zones: Zone[];
+  counts: Map<Species, number>;
+}
 
 const TAU = Math.PI * 2;
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -174,6 +187,12 @@ export class World {
   }
   private emit(e: SimEvent): void {
     this.ev.push(e);
+  }
+  /** what happened outside a step (the lab's hands); step() starts afresh and drops whatever was not taken */
+  events(): SimEvent[] {
+    const ev = this.ev;
+    this.ev = [];
+    return ev;
   }
 
   /** clamp a point into the dish */
@@ -206,10 +225,10 @@ export class World {
     for (const c of C) c.touching = 0;
     for (let i = 0; i < C.length; i++) {
       const a = C[i]!;
-      if (a.gone || a.state === 'eaten') continue;
+      if (a.gone || a.state === 'eaten' || a.held) continue;
       for (let j = i + 1; j < C.length; j++) {
         const b = C[j]!;
-        if (b.gone || b.state === 'eaten') continue;
+        if (b.gone || b.state === 'eaten' || b.held) continue;
         const dx = b.x - a.x,
           dy = b.y - a.y;
         const min =
@@ -291,6 +310,7 @@ export class World {
       shownHue: o.hue ?? sp.hue,
       touchCool: 0,
       fleeCool: 0,
+      held: false,
     };
     this.cells.push(c);
     const kind = kindOf(sp);
@@ -446,6 +466,7 @@ export class World {
     this.crowd = this.cells.length / CAPACITY;
     for (const c of this.cells) {
       if (c.gone) continue;
+      if (c.held) continue; // in the lab's hand: time stands still for it
       c.phase += dt * (1 + c.speed / 30);
       if (c.state === 'eaten') {
         this.digest(c, dt);
@@ -472,7 +493,7 @@ export class World {
     this.counts.clear();
     for (const c of this.cells) this.counts.set(kindOf(c.sp), (this.counts.get(kindOf(c.sp)) ?? 0) + 1);
     for (const [sp, n] of before) if (n > 0 && !this.counts.get(sp)) this.emit({ type: 'extinct', sp });
-    return this.ev;
+    return this.events();
   }
 
   private live(c: Cell, dt: number, T: number): void {
@@ -511,7 +532,7 @@ export class World {
         bt = sense2 * 0.6,
         bs = sense2 * 1.4;
       for (const o of this.cells) {
-        if (o === c || o.gone || o.state === 'eaten') continue;
+        if (o === c || o.gone || o.state === 'eaten' || o.held) continue;
         const d = (o.x - c.x) ** 2 + (o.y - c.y) ** 2;
         if (kindOf(o.sp) !== kindOf(sp)) {
           if (
@@ -540,7 +561,7 @@ export class World {
       this.emit({ type: 'flee', x: c.x, y: c.y, sp, size: c.size });
     }
     if (c.food?.gone) c.food = null;
-    if (c.prey && (c.prey.gone || c.prey.state === 'eaten')) c.prey = null;
+    if (c.prey && (c.prey.gone || c.prey.state === 'eaten' || c.prey.held)) c.prey = null;
     if (c.threat?.gone) c.threat = null;
     if (c.partner?.gone) c.partner = null;
 
@@ -746,16 +767,123 @@ export class World {
       this.cells.length < MAX_CELLS &&
       (this.counts.get(kindOf(sp)) ?? 0) < MAX_PER_SPECIES
     ) {
-      c.state = 'dividing';
-      c.t = 0;
-      c.axis = c.heading + (TRANSVERSE.has(sp.body) ? 0 : Math.PI / 2);
-      c.childSeed = (this.r() * 1e9) | 0;
-      this.emit({ type: 'divideStart', x: c.x, y: c.y, sp, size: c.size, axis: c.axis });
+      this.startDivide(c);
     } else if (c.energy <= 0 || c.age > c.life) {
       c.state = 'dying';
       c.t = 0;
       this.emit({ type: 'die', x: c.x, y: c.y, sp, size: c.size, cause: c.energy <= 0 ? (fl.toxin > 0 ? 'toxin' : 'starved') : 'old' });
     }
+  }
+
+  private startDivide(c: Cell): void {
+    c.state = 'dividing';
+    c.t = 0;
+    c.axis = c.heading + (TRANSVERSE.has(c.sp.body) ? 0 : Math.PI / 2);
+    c.childSeed = (this.r() * 1e9) | 0;
+    this.emit({ type: 'divideStart', x: c.x, y: c.y, sp: c.sp, size: c.size, axis: c.axis });
+  }
+
+  /** the cell follows new genes: its own size and speed (they drift from the species' at every division) scale along */
+  private become(c: Cell, sp: Species): void {
+    const from = c.sp;
+    c.size = Math.max(5, Math.min(40, c.size * (sp.size / from.size)));
+    c.speed = Math.max(3, c.speed * (sp.speed / from.speed));
+    c.hue = sp.hue; // shownHue eases toward it
+    c.sp = sp;
+    c.food = c.prey = c.threat = c.partner = null; // a new diet looks around afresh
+  }
+
+  // --- the lab's hands: none of these run inside a step
+
+  /** the nearest cell (alive, dividing or dying) whose body is within `slack` of a point */
+  cellAt(x: number, y: number, slack: number): Cell | null {
+    let best: Cell | null = null,
+      bd = Infinity;
+    for (const c of this.cells) {
+      if (c.gone || (c.state !== 'live' && c.state !== 'dividing' && c.state !== 'dying')) continue;
+      const d = Math.hypot(c.x - x, c.y - y);
+      if (d < c.r * (EXTENT[c.sp.body] ?? 1) + slack && d < bd) {
+        bd = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  /** the nearest piece of food within `slack` of a point */
+  foodAt(x: number, y: number, slack: number): Food | null {
+    let best: Food | null = null,
+      bd = Infinity;
+    for (const f of this.food) {
+      const d = Math.hypot(f.x - x, f.y - y);
+      if (!f.gone && d < 6 + slack && d < bd) {
+        bd = d;
+        best = f;
+      }
+    }
+    return best;
+  }
+
+  /** a nudge: the cell is pushed off somewhere and looks around afresh */
+  poke(c: Cell): void {
+    const a = this.r() * TAU;
+    c.vx += Math.cos(a) * 30;
+    c.vy += Math.sin(a) * 30;
+    c.think = 0;
+  }
+
+  kill(c: Cell): void {
+    if (c.state !== 'live' && c.state !== 'dividing') return;
+    c.state = 'dying';
+    c.t = 0;
+    this.emit({ type: 'die', x: c.x, y: c.y, sp: c.sp, size: c.size, cause: 'killed' });
+  }
+
+  /** taken out of the dish at once (into the drawer): no debris, no extinction; others let go of it via `gone` */
+  remove(c: Cell): void {
+    const i = this.cells.indexOf(c);
+    if (i < 0) return;
+    this.cells.splice(i, 1);
+    const kind = kindOf(c.sp);
+    this.counts.set(kind, Math.max(0, (this.counts.get(kind) ?? 1) - 1));
+    c.gone = true;
+  }
+
+  /** divide now, fed or not; false when the dish or the species is full */
+  forceDivide(c: Cell): boolean {
+    if (c.state !== 'live' || this.cells.length >= MAX_CELLS || (this.counts.get(kindOf(c.sp)) ?? 0) >= MAX_PER_SPECIES) return false;
+    c.energy = Math.max(c.energy, this.divideNeed(c.sp));
+    this.startDivide(c);
+    return true;
+  }
+
+  /** give a cell other genes: it becomes a species of its own */
+  retype(c: Cell, sp: Species): void {
+    const from = c.sp,
+      kind = kindOf(from);
+    this.become(c, sp);
+    this.counts.set(kind, Math.max(0, (this.counts.get(kind) ?? 1) - 1));
+    this.counts.set(sp, (this.counts.get(sp) ?? 0) + 1);
+    this.seen.add(sp);
+    this.emit({ type: 'mutant', x: c.x, y: c.y, sp, from: kind });
+  }
+
+  /** empty the dish, handing out what was in it (for undo) */
+  clear(): DishState {
+    const s: DishState = { cells: this.cells, food: this.food, spores: this.spores, zones: this.zones, counts: this.counts };
+    this.cells = [];
+    this.food = [];
+    this.spores = [];
+    this.zones = [];
+    this.counts = new Map();
+    this.contacts.clear();
+    return s;
+  }
+
+  /** put a cleared dish back, replacing whatever is in it now */
+  restore(s: DishState): void {
+    ({ cells: this.cells, food: this.food, spores: this.spores, zones: this.zones, counts: this.counts } = s);
+    this.contacts.clear();
   }
 
   /** a meal may pass genes on: the eater's genome changes (see SPECIATION), its daughters inherit it */
@@ -782,12 +910,7 @@ export class World {
       sp.name = kind.name;
       sp.seed = kind.seed;
     }
-    // the cell's own size and speed (they drift from the species' at every division) follow the genes
-    c.size = Math.max(5, Math.min(40, c.size * (sp.size / from.size)));
-    c.speed = Math.max(3, c.speed * (sp.speed / from.speed));
-    c.hue = sp.hue; // shownHue eases toward it
-    c.sp = sp;
-    c.food = c.prey = c.threat = c.partner = null; // a new diet looks around afresh
+    this.become(c, sp);
     if (!split) return;
     this.counts.set(kind, (this.counts.get(kind) ?? 1) - 1);
     this.counts.set(sp, 1);

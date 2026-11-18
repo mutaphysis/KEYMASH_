@@ -311,6 +311,11 @@ export class MicroRenderer {
         this.ripple(ev.x, ev.y, 4, 90, 2.4, ev.sp.hue, 0.45);
         this.introduce(ev.sp);
         break;
+      case 'mutant':
+        this.ripple(ev.x, ev.y, 4, 60, 1.8, ev.from.hue, 0.5);
+        this.ripple(ev.x, ev.y, 4, 90, 2.4, ev.sp.hue, 0.45);
+        this.introduce(ev.sp);
+        break;
       case 'extinct':
         this.captions.push({ title: '† ' + ev.sp.name, sub: t('extinctSub'), hue: ev.sp.hue, t: 0, life: 4.5 });
         break;

@@ -1,9 +1,21 @@
 import { test, expect } from 'bun:test';
-import { readCulture, kindOf, encodeGenome, decodeGenome, typeGenome, nameOf, GENES, GENE_INDEX, BODIES } from '../src/modes/petri/genome';
+import {
+  readCulture,
+  kindOf,
+  encodeGenome,
+  decodeGenome,
+  typeGenome,
+  nameOf,
+  specimen,
+  mutateGenome,
+  GENES,
+  GENE_INDEX,
+  BODIES,
+} from '../src/modes/petri/genome';
 import type { Species } from '../src/modes/petri/genome';
 import { Petri } from '../src/modes/petri/culture';
 import { hybridise } from '../src/modes/petri/hybrid';
-import { DISH_R, MAX_CELLS, MAX_FOOD, MAX_HYBRIDS } from '../src/modes/petri/sim';
+import { World, DISH_R, MAX_CELLS, MAX_FOOD, MAX_HYBRIDS } from '../src/modes/petri/sim';
 import { mulberry32 } from '../src/lang/rng';
 
 const POOL = [
@@ -161,4 +173,61 @@ test("speciation 'drift': a meal changes the genome but not the species, until i
   for (const [kind, n] of p.world.counts) expect(p.world.cells.filter((c) => kindOf(c.sp) === kind).length).toBe(n);
   expect(variants).toBeGreaterThan(0);
   expect(splits).toBeGreaterThan(0);
+});
+
+/** a dish with a few cells of two built-in specimens, nothing else */
+function labDish() {
+  const W = new World(9);
+  const a = specimen(typeGenome('amoeba')),
+    b = specimen(typeGenome('coccus'));
+  const cells = [W.spawnCell(a, -100, 0)!, W.spawnCell(a, 100, 0)!, W.spawnCell(b, 0, 100)!];
+  W.step(1 / 30);
+  return { W, a, b, cells };
+}
+
+test('lab: kill dissolves a cell, remove takes it out at once without an extinction', () => {
+  const { W, a, b, cells } = labDish();
+  W.kill(cells[0]!);
+  expect(W.events().some((e) => e.type === 'die' && e.cause === 'killed')).toBe(true);
+  W.step(1 / 30);
+  expect(cells[0]!.state).toBe('dying');
+  W.remove(cells[2]!);
+  expect(W.cells.includes(cells[2]!)).toBe(false);
+  expect(W.population(b)).toBe(0);
+  expect(W.population(a)).toBe(2);
+  for (let i = 0; i < 30; i++) expect(W.step(1 / 30).some((e) => e.type === 'extinct' && e.sp === b)).toBe(false);
+});
+
+test('lab: forceDivide starts a division, retype moves the cell to a new species', () => {
+  const { W, a, cells } = labDish();
+  expect(W.forceDivide(cells[0]!)).toBe(true);
+  expect(W.events().some((e) => e.type === 'divideStart')).toBe(true);
+  expect(cells[0]!.state).toBe('dividing');
+  const m = specimen(mutateGenome(a.genome, mulberry32(2), 3));
+  W.retype(cells[1]!, m);
+  expect(W.events().some((e) => e.type === 'mutant' && e.sp === m && e.from === a)).toBe(true);
+  W.step(1 / 30);
+  expect(W.population(m)).toBe(1);
+  expect(W.population(a)).toBe(1);
+  expect(cells[1]!.sp).toBe(m);
+});
+
+test('lab: clear empties the dish and restore brings it back', () => {
+  const { W, a } = labDish();
+  const before = W.cells;
+  const s = W.clear();
+  expect(W.cells.length + W.food.length).toBe(0);
+  expect(W.step(1 / 30).some((e) => e.type === 'extinct')).toBe(false);
+  W.restore(s);
+  expect(W.cells).toBe(before);
+  expect(W.population(a)).toBe(2);
+});
+
+test('lab: a held cell stays where it is held', () => {
+  const { W, cells } = labDish();
+  const c = cells[0]!;
+  c.held = true;
+  const [x, y, age] = [c.x, c.y, c.age];
+  for (let i = 0; i < 30; i++) W.step(1 / 30);
+  expect([c.x, c.y, c.age]).toEqual([x, y, age]);
 });

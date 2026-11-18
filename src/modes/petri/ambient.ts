@@ -903,6 +903,13 @@ export class Ambient {
           this.play(ev.sp, this.tone(ev.x, ev.sp.size, 4), t + this.grid * 2, 0.5, pan);
         });
         break;
+      case 'mutant':
+        // what it was, then what it became
+        play('hybrid', (t) => {
+          this.play(ev.from, this.tone(ev.x, ev.sp.size, 0), t, 0.4, pan);
+          this.play(ev.sp, this.tone(ev.x, ev.sp.size, 4), t + this.grid, 0.5, pan);
+        });
+        break;
       case 'toxic':
         play('toxic', (t) => this.sour(this.tone(ev.x, 8), t, 0.7, pan));
         break;
