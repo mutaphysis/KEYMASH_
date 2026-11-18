@@ -11,7 +11,9 @@ import type { Entry } from './specimens';
 import { GENE_OF_BASE, drawHelix, pairAt } from './helix';
 import type { HelixLook } from './helix';
 import * as css from './viewer.css';
-import { ctx2d } from '../../../ui/dom';
+import { $, ctx2d } from '../../../ui/dom';
+import type { KmToast } from '../../../ui/components/toast';
+import { t as tShared } from '../../../i18n';
 import { iconEl } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
 
@@ -96,6 +98,14 @@ export class Viewer {
     this.el.hidden = true;
     this.panel.className = css.panel;
     this.nameEl.className = css.name;
+    // the name copies the genome (as edited) to the clipboard, to share or keep elsewhere
+    this.nameEl.setAttribute('role', 'button');
+    this.nameEl.tabIndex = 0;
+    this.nameEl.title = t('labCopyGenome');
+    this.nameEl.addEventListener('click', () => void this.copy());
+    this.nameEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') void this.copy();
+    });
     this.helixCv.className = css.helix;
     this.captionEl.className = css.caption;
     this.stage.className = css.stage;
@@ -165,6 +175,17 @@ export class Viewer {
     this.changed();
     this.el.hidden = false;
     this.statT = 0;
+  }
+
+  /** the genome as shown (edits included) as its ACGT sequence */
+  private async copy(): Promise<void> {
+    const toast = $<KmToast>('toast');
+    try {
+      await navigator.clipboard.writeText(encodeGenome(this.g));
+      toast.show(t('labCopied'), 'copy');
+    } catch (e) {
+      toast.show(tShared('copyBlocked'));
+    }
   }
 
   close(): void {

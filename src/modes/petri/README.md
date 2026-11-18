@@ -162,6 +162,7 @@ helix: one base pair per base, a band per gene coloured by its group (form, moti
 defence, social, colour). Point at a band to read the gene and its value; double-tap it to step
 the gene to its next state. The name, the picture, the abilities (in the picture's top left
 corner) and the bars (a cell's age, hunger and speed; a specimen's speed and life span) follow.
+A tap on the name copies the genome, as shown, to the clipboard as its ACGT sequence.
 Once a gene has changed, **keep** gives a cell the new genes (a new species), puts them into the
 drawer (from a built-in: as a new specimen), or onto the bench, and **discard** drops them; Esc
 or a tap outside closes the viewer.

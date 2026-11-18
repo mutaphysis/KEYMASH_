@@ -31,7 +31,16 @@ export const panel = style({
   boxShadow: `0 0 40px ${rgba(fg, 0.12)}`,
 });
 
-export const name = style({ fontFamily: layout.serif, fontStyle: 'italic', fontSize: 22, textAlign: 'center' });
+export const name = style({
+  fontFamily: layout.serif,
+  fontStyle: 'italic',
+  fontSize: 22,
+  textAlign: 'center',
+  cursor: 'copy',
+  borderRadius: 6,
+  padding: '0 6px',
+  selectors: { '&:hover, &:focus-visible': { background: rgba(fg, 0.08), outline: 'none' } },
+});
 
 export const helix = style({ width: '100%', height: 120, touchAction: 'manipulation', cursor: 'pointer' });
 
