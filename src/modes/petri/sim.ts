@@ -48,8 +48,12 @@ export const DIVIDE_GAP = 0.82;
 /** ciliates and bacteria split across the body (front/back daughters), the rest side by side */
 export const TRANSVERSE = new Set(['ciliate', 'bacillus', 'spirillum']);
 const SWIM_TURN: Partial<Record<string, number>> = { flagellate: 3.2, ciliate: 2.4, spirillum: 3.6, bacillus: 0, diatom: 1.1 };
-/** a bacillus checks whether food got closer every RUN_CHECK units of swimming, so a fast one does not overshoot between checks */
-const RUN_CHECK = 25;
+/** a bacillus checks whether food got closer every RUN_CHECK units of swimming, and turns at most TUMBLE_TURN
+ * (radians) at a check: a fast rod checks more often, so every rod curves alike instead of jumping about */
+const RUN_CHECK = 10;
+const TUMBLE_TURN = 0.5;
+/** what a piece of food holds */
+export const FOOD_ENERGY: Record<FoodKind, number> = { sugar: 34, algae: 12, debris: 8, crumb: 6 };
 /** a cell that wants food slows down near it, to the speed it may have at its distance (a floor plus a share per unit),
  * so fast swimmers turn in instead of circling and stay on the food long enough to eat it */
 const APPROACH_MIN = 8;
@@ -238,6 +242,8 @@ export class World {
   }
   /** cells / CAPACITY, updated every step */
   crowd = 0;
+  /** energy per second the living cells burn, summed over the last step: what the dish needs to be fed */
+  burn = 0;
   private stress(): number {
     return Math.max(0, this.crowd - 0.6);
   }
@@ -359,7 +365,7 @@ export class World {
       const a = this.r() * TAU,
         d = Math.sqrt(this.r()) * spread;
       const [fx, fy] = this.inside(x + Math.cos(a) * d, y + Math.sin(a) * d, 6);
-      const e = kind === 'sugar' ? 34 : kind === 'algae' ? 12 : kind === 'debris' ? 8 : 6;
+      const e = FOOD_ENERGY[kind];
       this.food.push({
         id: this.nextId++,
         x: fx,
@@ -495,6 +501,7 @@ export class World {
 
     const born: Cell[] = [];
     this.crowd = this.cells.length / CAPACITY;
+    this.burn = 0;
     for (const c of this.cells) {
       if (c.gone) continue;
       if (c.held) continue; // in the lab's hand: time stands still for it
@@ -646,15 +653,14 @@ export class World {
     let speed = c.speed * (0.55 + 0.45 * Math.min(1, c.energy / (sp.divideAt * 0.6))) * (c.sick ? 0.3 : 1);
     switch (sp.body) {
       case 'bacillus': {
-        // run and tumble: keep running while food gets closer, tumble when it doesn't (chemotaxis)
+        // run and tumble: keep running while food gets closer, turn when it doesn't (chemotaxis)
         c.tumble -= dt;
         const dist = c.food ? Math.hypot(c.food.x - c.x, c.food.y - c.y) : 1e9;
         if (c.tumble <= 0) {
-          const pace = RUN_CHECK / Math.max(1, c.speed);
-          if (dist > c.lastFood - 1 || !c.food) {
-            c.heading += (this.r() - 0.5) * 3.5;
-            c.tumble = pace * (0.7 + this.r() * 2);
-          } else c.tumble = pace;
+          c.tumble = RUN_CHECK / Math.max(1, c.speed);
+          // no food in sight: meander; losing it: keep turning one way (the slow wander picks which) until it gets closer
+          if (!c.food) c.heading += (this.r() - 0.5) * 2 * TUMBLE_TURN;
+          else if (dist > c.lastFood - 1) c.heading += Math.sign(Math.sin(c.wander)) * TUMBLE_TURN * (0.6 + this.r() * 0.4);
           c.lastFood = dist;
         }
         break;
@@ -791,8 +797,10 @@ export class World {
     if (fl.toxin > 0 && sp.toxic < 0.5) c.energy -= dt * 14 * fl.toxin;
     const moving = Math.hypot(c.vx, c.vy) / 50;
     const stress = this.stress();
-    c.energy -=
-      dt * (0.5 + moving * moving * 1.1) * (c.size / 14) * T * (c.sick ? 1.6 : 1) * (1 + stress * 1.8 + Math.min(4, c.touching) * 0.12);
+    const burn =
+      (0.5 + moving * moving * 1.1) * (c.size / 14) * T * (c.sick ? 1.6 : 1) * (1 + stress * 1.8 + Math.min(4, c.touching) * 0.12);
+    c.energy -= dt * burn;
+    this.burn += burn;
     const target = c.size * (0.8 + 0.35 * Math.min(1.1, c.energy / sp.divideAt));
     c.r += (target - c.r) * Math.min(1, dt * 1.5);
 

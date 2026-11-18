@@ -99,7 +99,7 @@ Tap the dish to drop food.
 
 ## Life in the dish
 Cells sense food, prey and threats. Rod bacteria run and tumble (keep running while
-food gets closer — real chemotaxis; a fast one checks more often, so it does not shoot past),
+food gets closer — real chemotaxis; they check every few body lengths and turn a little each time, a fast one checks more often, so every rod curves alike),
 flagellates dart, amoebae crawl, cocci jiggle and cluster, volvox rolls. A cell going for
 food slows down as it gets close, so fast swimmers turn in and stay on it long enough to eat.
 Grazers eat algae, photosynthetic cells feed on light,
@@ -164,8 +164,8 @@ toolbar under the dish (in a column beside it in split view) picks what a touch 
 
 The cell the tool would act on is marked with a reticle and a glow. At the toolbar's end (the
 bottom in split view) sit the buttons that act at once: **auto feed** (on when the lab opens;
-struck through when off) lets single algae drift in by themselves, a few for the bare dish and
-more for every cell in it, and holds back while plenty lies about (its button pulses green as they
+struck through when off) drops clumps of algae at random spots by itself, a trickle for the bare
+dish and faster the more energy its cells burn, and holds back while plenty lies about (its button pulses green as they
 drop in); **clear** empties the dish (for
 six seconds the button undoes it); the **time** button shows the speed running and steps through
 **1×**, **3×** and **pause** (time stops: the cells freeze, flagella and cilia too, while the

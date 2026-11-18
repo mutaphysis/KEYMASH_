@@ -6,7 +6,7 @@ import type { CultureEvent } from '../culture';
 import type { MicroPlayer } from '../player';
 import { MicroRenderer } from '../render';
 import { Ambient } from '../ambient';
-import { DISH_R } from '../sim';
+import { DISH_R, FOOD_ENERGY } from '../sim';
 import type { Cell, DishState, Food, World, WorldSave } from '../sim';
 import { decodeGenome, encodeGenome, mutateGenome, specimen } from '../genome';
 import type { Genome, Species } from '../genome';
@@ -40,11 +40,15 @@ const HOLD_MS = 250;
 const HOLD_PX = 8;
 /** how long clear can be undone (ms) */
 const UNDO_MS = 6000;
-/** auto feed: algae per second of dish time, for the dish and for each cell in it */
+/** auto feed: algae per second of dish time, a trickle for an empty dish plus FEED_SHARE times the energy the cells
+ * burn (a hungrier dish is fed faster; most algae rot or lie out of reach before they are found) */
 const FEED_BASE = 0.2;
-const FEED_PER_CELL = 0.15;
+const FEED_SHARE = 4;
+/** the algae drop in clumps of this many, this far apart: patches to find and graze, as the play mode's feeder makes */
+const FEED_CLUMP = 5;
+const FEED_SPREAD = 40;
 /** it pauses while this much food lies about: a base and so many pieces per cell */
-const FOOD_ENOUGH = [8, 4] as const;
+const FOOD_ENOUGH = [16, 12] as const;
 /** seconds between saves while the lab is open: a tab that is killed loses at most this much */
 const SAVE_EVERY = 5;
 /** how long the auto feed button's pulse plays (ms): `fedPulse` in lab.css.ts */
@@ -107,7 +111,7 @@ export class Lab {
   private feeding: { x: number; y: number; next: number } | null = null;
   /** what clear took out of the dish, while it can be put back */
   private undo: DishState | null = null;
-  /** on by default: algae drift in by themselves, more the more cells there are */
+  /** on by default: algae drop in by themselves, faster the hungrier the dish */
   private autoFeed = true;
   private feedAcc = 0;
   /** when the auto feed button's pulse last started (performance.now()) */
@@ -675,16 +679,15 @@ export class Lab {
     this.feedBtn.icon = on ? 'autoFeed' : 'autoFeedOff';
   }
 
-  /** auto feed: single algae at random spots, as many per second as the dish's cells need; true when some dropped */
+  /** auto feed: clumps of algae at random spots, faster the more energy the dish's cells burn; true when some dropped */
   private feedDish(W: World, dt: number): boolean {
-    const n = W.cells.length;
-    if (W.food.length >= FOOD_ENOUGH[0] + n * FOOD_ENOUGH[1]) return false;
-    this.feedAcc += dt * (FEED_BASE + n * FEED_PER_CELL);
+    if (W.food.length >= FOOD_ENOUGH[0] + W.cells.length * FOOD_ENOUGH[1]) return false;
+    this.feedAcc += dt * (FEED_BASE + (W.burn * FEED_SHARE) / FOOD_ENERGY.algae);
     let fed = false;
-    for (; this.feedAcc >= 1; this.feedAcc--) {
+    for (; this.feedAcc >= FEED_CLUMP; this.feedAcc -= FEED_CLUMP) {
       const a = Math.random() * Math.PI * 2,
-        d = Math.sqrt(Math.random()) * DISH_R * 0.85;
-      W.addFood(Math.cos(a) * d, Math.sin(a) * d, 1, 'algae', 0);
+        d = Math.sqrt(Math.random()) * DISH_R * 0.8;
+      W.addFood(Math.cos(a) * d, Math.sin(a) * d, FEED_CLUMP, 'algae', FEED_SPREAD);
       fed = true;
     }
     return fed;
