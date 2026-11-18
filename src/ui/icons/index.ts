@@ -2,6 +2,7 @@
 import age from './age.svg?url';
 import armor from './armor.svg?url';
 import autoFeed from './autoFeed.svg?url';
+import autoFeedOff from './autoFeedOff.svg?url';
 import bond from './bond.svg?url';
 import breed from './breed.svg?url';
 import check from './check.svg?url';
@@ -56,6 +57,7 @@ export const ICONS = {
   age,
   armor,
   autoFeed,
+  autoFeedOff,
   bond,
   breed,
   check,

@@ -1,4 +1,4 @@
-// The lab's tools: one cursor tool is active at a time; the instant buttons (clear, pause, 3×) sit after them.
+// The lab's tools: one cursor tool is active at a time; the buttons that act at once (auto feed, clear, time) sit at the end.
 import type { IconName } from '../../../ui/icon';
 import type { PetriMsg } from '../messages';
 
@@ -22,3 +22,10 @@ export const TOOLS: readonly ToolDef[] = [
 
 /** tools that work on one cell: they show the reticle on the cell under the pointer */
 export const ON_CELL: Partial<Record<ToolId, true>> = { hand: true, look: true, kill: true, mutate: true, divide: true };
+
+/** the time button steps through these, one per tap; it shows the one running. speed: dish seconds per second, 0 stops */
+export const SPEEDS: readonly { speed: number; icon: IconName; label: PetriMsg }[] = [
+  { speed: 1, icon: 'play', label: 'toolNormal' },
+  { speed: 3, icon: 'fast', label: 'toolFast' },
+  { speed: 0, icon: 'pause', label: 'toolPause' },
+];

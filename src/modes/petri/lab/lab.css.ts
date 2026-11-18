@@ -83,12 +83,13 @@ export const tools = style({
   },
 });
 
-export const divider = style({
-  flex: '0 0 1px',
-  alignSelf: 'stretch',
-  margin: '6px 2px',
-  background: vars.color.line,
-  selectors: { [split]: { margin: '2px 6px' } },
+/** the buttons that act at once (auto feed, clear, time): pushed to the toolbar's end, apart from the cursor tools */
+export const acts = style({
+  display: 'flex',
+  gap: 8,
+  marginLeft: 'auto',
+  paddingLeft: 16,
+  selectors: { [split]: { flexDirection: 'column', marginLeft: 0, paddingLeft: 0, marginTop: 'auto', paddingTop: 16 } },
 });
 
 export const drawer = style({

@@ -10,7 +10,7 @@ import type { Cell, DishState, Food, World } from '../sim';
 import { mutateGenome, specimen } from '../genome';
 import type { Genome, Species } from '../genome';
 import { t } from '../messages';
-import { ON_CELL, TOOLS } from './tools';
+import { ON_CELL, SPEEDS, TOOLS } from './tools';
 import type { ToolId } from './tools';
 import { Shelf } from './shelf';
 import type { ShelfPick } from './shelf';
@@ -68,10 +68,9 @@ export class Lab {
   private toolBtns = new Map<ToolId, KmButton>();
   private sweepBtn!: KmButton;
   private feedBtn!: KmButton;
-  private pauseBtn!: KmButton;
-  private fastBtn!: KmButton;
-  private paused = false;
-  private speed = 1;
+  private timeBtn!: KmButton;
+  /** which of SPEEDS runs */
+  private pace = 0;
   private raf = 0;
   private last = 0;
   private cursors = new Map<ToolId, string>();
@@ -133,13 +132,13 @@ export class Lab {
       const b = this.button(this.toolsEl, 'tool', tool.icon, t(tool.label), () => this.pick(tool.id));
       this.toolBtns.set(tool.id, b);
     }
-    const div = document.createElement('div');
-    div.className = css.divider;
-    this.toolsEl.append(div);
-    this.feedBtn = this.button(this.toolsEl, 'tool', 'autoFeed', t('toolAutoFeed'), () => this.setAutoFeed(!this.autoFeed));
-    this.sweepBtn = this.button(this.toolsEl, 'tool', 'sweep', t('toolClear'), () => this.sweep());
-    this.pauseBtn = this.button(this.toolsEl, 'tool', 'pause', t('toolPause'), () => this.setPaused(!this.paused));
-    this.fastBtn = this.button(this.toolsEl, 'tool', 'fast', t('toolFast'), () => this.setSpeed(this.speed === 1 ? 3 : 1));
+    // what acts at once (not a cursor) gathers at the toolbar's end
+    const acts = document.createElement('div');
+    acts.className = css.acts;
+    this.toolsEl.append(acts);
+    this.feedBtn = this.button(acts, 'tool', 'autoFeed', t('toolAutoFeed'), () => this.setAutoFeed(!this.autoFeed));
+    this.sweepBtn = this.button(acts, 'tool', 'sweep', t('toolClear'), () => this.sweep());
+    this.timeBtn = this.button(acts, 'tool', 'play', '', () => this.setPace((this.pace + 1) % SPEEDS.length));
     this.viewer.mount();
 
     new ResizeObserver(() => this.fit()).observe(this.dishEl);
@@ -171,8 +170,7 @@ export class Lab {
     this.petri.swap('');
     this.r.reset();
     this.pick('hand');
-    this.setPaused(false);
-    this.setSpeed(1);
+    this.setPace(0);
     this.setAutoFeed(true);
     this.armUndo(null);
     this.amb.configure(hash(from?.src ?? 'lab'));
@@ -233,16 +231,11 @@ export class Lab {
     if (this.tool === tool) this.canvas.style.cursor = c;
   }
 
-  private setPaused(on: boolean): void {
-    this.paused = on;
-    this.pauseBtn.icon = on ? 'play' : 'pause';
-    this.pauseBtn.text = t(on ? 'toolPlay' : 'toolPause');
-    this.pauseBtn.toggleAttribute('active', on);
-  }
-
-  private setSpeed(s: number): void {
-    this.speed = s;
-    this.fastBtn.toggleAttribute('active', s !== 1);
+  /** the time button shows the speed running, not the selection look of the cursor tools */
+  private setPace(i: number): void {
+    this.pace = i;
+    this.timeBtn.icon = SPEEDS[i].icon;
+    this.timeBtn.text = t(SPEEDS[i].label);
   }
 
   /** clear empties the dish; for a few seconds the button undoes it */
@@ -537,9 +530,10 @@ export class Lab {
     if (pr && (pr.cell.gone || pr.cell.state !== 'live')) this.letGo();
     else if (pr && !pr.carrying && now - pr.t0 >= HOLD_MS) this.carry();
     if (this.feeding && (this.feeding.next -= dt) <= 0) this.feed();
-    if (!this.paused && this.autoFeed) this.feedDish(p.world, dt * this.speed);
+    const speed = SPEEDS[this.pace].speed;
+    if (speed && this.autoFeed) this.feedDish(p.world, dt * speed);
     this.flush();
-    if (!this.paused) for (const ev of p.tick(dt * this.speed)) this.route(ev);
+    if (speed) for (const ev of p.tick(dt * speed)) this.route(ev);
     this.hovering();
     this.amb.update(dt, p.world.crowd);
     this.audio.readLevel();
@@ -549,9 +543,10 @@ export class Lab {
     this.viewer.frame(dt);
   }
 
+  /** off: the icon is struck through (the button keeps no selection look: it is not a cursor tool) */
   private setAutoFeed(on: boolean): void {
     this.autoFeed = on;
-    this.feedBtn.toggleAttribute('active', on);
+    this.feedBtn.icon = on ? 'autoFeed' : 'autoFeedOff';
   }
 
   /** auto feed: single algae at random spots, as many per second as the dish's cells need */

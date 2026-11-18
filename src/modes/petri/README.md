@@ -134,11 +134,13 @@ toolbar under the dish (in a column beside it in split view) picks what a touch 
 | stream | drag: a current along the arrow, stronger the longer; tap: a swirl |
 | toxin | a cloud of poison: cells that aren't toxic themselves starve in it |
 
-The cell the tool would act on is marked with a reticle and a glow. After the tools: **auto feed**
-(on when the lab opens) lets single algae drift in by themselves, a few for the bare dish and more
-for every cell in it, and holds back while plenty lies about; **clear** empties the dish (for six
-seconds the button undoes it), **pause** stops time (the water still moves), **3×** runs it three
-times as fast. The arrow at the top goes back to the code.
+The cell the tool would act on is marked with a reticle and a glow. At the toolbar's end (the
+bottom in split view) sit the buttons that act at once: **auto feed** (on when the lab opens;
+struck through when off) lets single algae drift in by themselves, a few for the bare dish and
+more for every cell in it, and holds back while plenty lies about; **clear** empties the dish (for
+six seconds the button undoes it); the **time** button shows the speed running and steps through
+**1×**, **3×** and **pause** (time stops, the water still moves). The arrow at the top goes back
+to the code.
 
 Under the toolbar (on the left in split view) is the specimen drawer: the eight body types,
 always there, and the specimens you keep (up to 40, stored in the browser as their gene
