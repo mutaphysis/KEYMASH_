@@ -1040,9 +1040,16 @@ export class MicroRenderer {
         c.beginPath();
         c.arc(0, 0, R, 0, TAU);
         this.skin(c, hue, sat, px);
+        // the cytoplasm drifts slowly about inside the wall
         c.fillStyle = `hsla(${hue},${sat}%,75%,0.18)`;
         c.beginPath();
-        c.arc(-R * 0.15, -R * 0.1, R * 0.45, 0, TAU);
+        c.arc(
+          R * (-0.12 + 0.13 * Math.sin(t * 0.7 + seed)),
+          R * (-0.08 + 0.11 * Math.sin(t * 0.53 + seed * 1.3)),
+          R * (0.45 + 0.04 * Math.sin(t * 1.1 + seed)),
+          0,
+          TAU,
+        );
         c.fill();
         break;
       }
@@ -1252,12 +1259,14 @@ export class MicroRenderer {
     // the middle of the drawing at x, y, not the body's centre (a flagellate's whip reaches far ahead)
     c.translate(((back - front) / 2) * sp.size, 0);
     if (sp.glow > 0.12) {
-      const g = sp.size * (1.6 + sp.glow);
+      // under the caller's alpha (the lab fades portraits in and out)
+      const g = sp.size * (1.6 + sp.glow),
+        a0 = c.globalAlpha;
       c.globalCompositeOperation = 'lighter';
-      c.globalAlpha = Math.min(0.6, sp.glow * 0.55) * (0.65 + 0.35 * Math.sin(t * 1.8 + sp.seed));
+      c.globalAlpha = a0 * Math.min(0.6, sp.glow * 0.55) * (0.65 + 0.35 * Math.sin(t * 1.8 + sp.seed));
       c.drawImage(this.glow(sp.hue), -g, -g, g * 2, g * 2);
       c.globalCompositeOperation = 'source-over';
-      c.globalAlpha = 1;
+      c.globalAlpha = a0;
     }
     this.body(c, { seed: sp.seed, vx: 0, vy: 0 }, sp, sp.size, sp.hue, sp.sat, dpr / s, t + (sp.seed % 1000));
     c.restore();
