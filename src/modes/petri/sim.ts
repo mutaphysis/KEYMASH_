@@ -54,6 +54,8 @@ const RUN_CHECK = 25;
  * so fast swimmers turn in instead of circling and stay on the food long enough to eat it */
 const APPROACH_MIN = 8;
 const APPROACH_PER = 1.5;
+/** how fast the cell shown in the lab's genome viewer ages, against the rest */
+const WATCHED_AGING = 0.2;
 
 export interface Food {
   id: number;
@@ -194,6 +196,8 @@ export class World {
   food: Food[] = [];
   spores: Spore[] = [];
   zones: Zone[] = [];
+  /** the cell the lab's genome viewer shows: it ages at WATCHED_AGING; not saved, the lab sets it every frame */
+  watched: Cell | null = null;
   time = 0;
   /** warmth: 1 normal, < 1 sluggish, > 1 lively; drifts back to 1 */
   temp = 1;
@@ -525,7 +529,8 @@ export class World {
 
   private live(c: Cell, dt: number, T: number): void {
     const sp = c.sp;
-    c.age += dt * (1 + Math.max(0, this.crowd - 0.8) * 2.5); // a crowded dish ages its cells faster
+    // a crowded dish ages its cells faster; the cell in the lab's genome viewer slower, so it outlasts a look
+    c.age += dt * (1 + Math.max(0, this.crowd - 0.8) * 2.5) * (c === this.watched ? WATCHED_AGING : 1);
     c.shownHue += ((wrapAngle(((c.hue - c.shownHue) * Math.PI) / 180) * 180) / Math.PI) * Math.min(1, dt * 0.8);
     c.sick = Math.max(0, c.sick - dt);
     c.bondT = Math.max(0, c.bondT - dt);

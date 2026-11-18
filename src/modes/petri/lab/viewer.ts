@@ -186,6 +186,10 @@ export class Viewer {
   get open(): boolean {
     return !this.el.hidden;
   }
+  /** the living cell shown, if it is one */
+  get cell(): Cell | null {
+    return this.target?.kind === 'cell' ? this.target.cell : null;
+  }
 
   show(target: ViewTarget, sp: Species): void {
     this.target = target;

@@ -198,6 +198,7 @@ preview a ring of DNA in the gene's colour wiggles around the specimen while it 
 new one. The name, the picture, the abilities (in the picture's top left
 corner) and the bars (a cell's age, hunger and speed; a specimen's speed and life span) follow.
 A tap on the name copies the genome, as shown, to the clipboard as its ACGT sequence.
+While the viewer shows a living cell, that cell ages at a fifth of the speed, so it outlasts the look.
 Once a gene has changed, **keep** gives a cell the new genes (a new species), puts them into the
 drawer (from a built-in: as a new specimen), or onto the bench, and **discard** drops them; Esc
 or a tap outside closes the viewer. Their room, and the gene line's, is kept while they are

@@ -47,6 +47,8 @@ const FEED_PER_CELL = 0.15;
 const FOOD_ENOUGH = [8, 4] as const;
 /** seconds between saves while the lab is open: a tab that is killed loses at most this much */
 const SAVE_EVERY = 5;
+/** how long the auto feed button's pulse plays (ms): `fedPulse` in lab.css.ts */
+const FED_PULSE_MS = 800;
 
 /** the lab across reloads: whether it was open, its settings, the bench and the dish */
 const SAVE_KEY = 'keymash.lab.petri.state.v1';
@@ -108,6 +110,8 @@ export class Lab {
   /** on by default: algae drift in by themselves, more the more cells there are */
   private autoFeed = true;
   private feedAcc = 0;
+  /** when the auto feed button's pulse last started (performance.now()) */
+  private fedAt = -Infinity;
   /** seconds until the next save */
   private saveIn = SAVE_EVERY;
 
@@ -179,7 +183,6 @@ export class Lab {
     acts.className = css.acts;
     this.toolsEl.append(acts);
     this.feedBtn = this.button(acts, 'tool', 'autoFeed', t('toolAutoFeed'), () => this.setAutoFeed(!this.autoFeed));
-    this.feedBtn.addEventListener('animationend', () => this.feedBtn.classList.remove(css.fed));
     this.sweepBtn = this.button(acts, 'tool', 'sweep', t('toolClear'), () => this.sweep());
     this.timeBtn = this.button(acts, 'tool', 'play', '', () => this.setPace((this.pace + 1) % SPEEDS.length));
     this.viewer.mount();
@@ -237,6 +240,7 @@ export class Lab {
 
   close(): void {
     this.viewer.close();
+    if (this.petri) this.petri.world.watched = null;
     this.letGo();
     this.feeding = null;
     this.pointer = null;
@@ -636,9 +640,11 @@ export class Lab {
     else if (pr && !pr.carrying && now - pr.t0 >= HOLD_MS) this.carry();
     if (this.feeding && (this.feeding.next -= dt) <= 0) this.feed();
     const speed = SPEEDS[this.pace].speed;
-    // the auto feed button lights up green as algae go in; a pulse plays out before the next one starts (animationend
-    // takes the class off), so a busy feeder blinks instead of staying lit
-    if (speed && this.autoFeed && this.feedDish(p.world, dt * speed)) this.feedBtn.classList.add(css.fed);
+    // the auto feed button lights up green as algae go in; a pulse plays out before the next one starts, so a busy
+    // feeder blinks instead of staying lit. Timed here rather than by animationend: a pulse cut off (the lab closed,
+    // the tab hidden) fires no animationend, and the class would stay on with no pulse ever again
+    if (speed && this.autoFeed && this.feedDish(p.world, dt * speed) && now - this.fedAt >= FED_PULSE_MS) this.pulseFed(now);
+    p.world.watched = this.viewer.cell;
     this.flush();
     if (speed) for (const ev of p.tick(dt * speed)) this.route(ev);
     this.hovering();
@@ -653,6 +659,14 @@ export class Lab {
       this.saveIn = SAVE_EVERY;
       this.persist(true);
     }
+  }
+
+  /** the auto feed button's pulse, from its start */
+  private pulseFed(now: number): void {
+    this.fedAt = now;
+    this.feedBtn.classList.remove(css.fed);
+    void this.feedBtn.button.offsetWidth; // restart the animation
+    this.feedBtn.classList.add(css.fed);
   }
 
   /** off: the icon is struck through (the button keeps no selection look: it is not a cursor tool) */
