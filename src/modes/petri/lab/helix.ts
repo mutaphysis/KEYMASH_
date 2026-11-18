@@ -1,5 +1,5 @@
-// The genome viewer's double helix: one base pair per base of the sequence, lying on its side and turning.
-// Behind the pairs, one band per gene in its group's colour. Pure drawing on a 2D context.
+// The genome viewer's double helix, drawn flat: one base pair per base of the sequence, lying on its side, its waves
+// sliding along as it turns. Behind the pairs, one band per gene in its group's colour. Pure drawing on a 2D context.
 import { GENES } from '../genome';
 import type { GeneGroup } from '../genome';
 
@@ -47,49 +47,38 @@ export function drawHelix(c: CanvasRenderingContext2D, w: number, h: number, seq
       c.strokeRect(x0 + 1.5 * dpr, 0.5 * dpr, bw - 3 * dpr, h - dpr);
     }
   });
-  const at = (i: number, strand: 1 | -1) => {
-    const phi = 0.55 * i + rot;
-    return { x: dx * (i + 1), y: cy + strand * Math.sin(phi) * amp, z: strand * Math.cos(phi) };
-  };
-  // the two strands, in short pieces: those behind first (dim), then the rungs, then those in front
-  const strands = (front: boolean) => {
-    for (const s of [1, -1] as const)
-      for (let k = 0; k < (n - 1) * 4; k++) {
-        const a = at(k / 4, s),
-          b = at((k + 1) / 4, s),
-          z = (a.z + b.z) / 2;
-        if (z >= 0 !== front) continue;
-        c.strokeStyle = `rgba(190,255,235,${0.25 + 0.5 * (z + 1) * 0.5})`;
-        c.lineWidth = (1.2 + (z + 1) * 0.9) * dpr;
-        c.beginPath();
-        c.moveTo(a.x, a.y);
-        c.lineTo(b.x, b.y);
-        c.stroke();
-      }
-  };
-  c.lineCap = 'round';
-  strands(false);
+  // flat, no depth: two even strands crossing, rungs between them; turning only slides the waves along
+  const strandY = (x: number, strand: 1 | -1) => cy + strand * Math.sin(0.55 * (x / dx - 1) + rot) * amp;
+  c.lineCap = 'butt';
+  c.lineWidth = 2.5 * dpr;
   for (let i = 0; i < n; i++) {
-    const a = at(i, 1),
-      b = at(i, -1),
-      mx = (a.x + b.x) / 2,
-      my = (a.y + b.y) / 2;
-    const base = seq[i]!;
-    for (const [p, col] of [
-      [a, BASE_COLOR[base]!],
-      [b, BASE_COLOR[PAIR[base]!]!],
+    const x = dx * (i + 1),
+      base = seq[i]!;
+    // each half of the rung in its base's colour, meeting its partner on the middle line
+    for (const [s, col] of [
+      [1, BASE_COLOR[base]!],
+      [-1, BASE_COLOR[PAIR[base]!]!],
     ] as const) {
-      c.globalAlpha = 0.35 + 0.6 * (p.z + 1) * 0.5;
       c.strokeStyle = col;
-      c.lineWidth = (1.5 + (p.z + 1)) * dpr;
       c.beginPath();
-      c.moveTo(p.x, p.y);
-      c.lineTo(mx, my);
+      c.moveTo(x, strandY(x, s));
+      c.lineTo(x, cy);
       c.stroke();
     }
   }
-  c.globalAlpha = 1;
-  strands(true);
+  // each strand one path, over the rungs' ends and half a pair past the first and last
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.lineWidth = 2 * dpr;
+  c.strokeStyle = 'rgba(190,255,235,.8)';
+  for (const s of [1, -1] as const) {
+    c.beginPath();
+    for (let k = 0; k <= n * 8; k++) {
+      const x = dx * (0.5 + k / 8);
+      k ? c.lineTo(x, strandY(x, s)) : c.moveTo(x, strandY(x, s));
+    }
+    c.stroke();
+  }
   // the letters, small, under the pairs
   c.font = `${9 * dpr}px "Share Tech Mono", ui-monospace, monospace`;
   c.textAlign = 'center';
