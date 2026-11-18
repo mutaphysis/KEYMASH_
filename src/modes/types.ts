@@ -117,4 +117,23 @@ export interface ModeCode {
   status(src: string): Status;
   player(audio: AudioEngine, host: PlayerHost): ModePlayer;
   drawer?(ctx: DrawerContext): DrawerSection[];
+  /** a second view the header opens (PETRI_'s lab) */
+  view?: ModeView;
+}
+
+/** a second view a mode opens from the header (PETRI_'s lab); it covers the whole app until it calls close() */
+export interface ModeView {
+  icon: IconName;
+  /** title and aria-label of the header button */
+  title: string;
+  open(ctx: ViewContext): void;
+}
+export interface ViewContext {
+  /** #app: the view adds its own element */
+  root: HTMLElement;
+  audio: AudioEngine;
+  /** a program was running; the shell has just stopped it */
+  wasPlaying: boolean;
+  /** back to the editor */
+  close(): void;
 }

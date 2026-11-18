@@ -19,3 +19,16 @@ export function setIcon(el: HTMLElement, name: IconName): void {
   el.style.setProperty('--icon', `url("${ICONS[name]}")`);
   el.setAttribute('aria-hidden', 'true');
 }
+
+/** a CSS cursor showing the icon in `color` with a dark outline, hotspot in the middle; `fallback` if it can't load */
+export async function iconCursor(name: IconName, color: string, fallback = 'crosshair'): Promise<string> {
+  try {
+    const svg = (await (await fetch(ICONS[name])).text())
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/fill="currentColor"/g, `fill="${color}" stroke="rgba(0,0,0,.85)" stroke-width="1.6" paint-order="stroke"`)
+      .replace(/1em/g, '24');
+    return `url("data:image/svg+xml,${encodeURIComponent(svg.trim())}") 12 12, ${fallback}`;
+  } catch (e) {
+    return fallback;
+  }
+}

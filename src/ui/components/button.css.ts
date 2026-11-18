@@ -88,6 +88,22 @@ export const variant = styleVariants({
       fontWeight: 'bold',
     },
   ],
+  /** a lab tool: small square, icon over a short label; `active` marks the one in use */
+  tool: [
+    base,
+    {
+      flex: '0 0 auto',
+      width: 58,
+      height: 58,
+      padding: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+      selectors: { '&:active': { transform: 'scale(.94)' } },
+    },
+  ],
 });
 export type Variant = keyof typeof variant;
 
@@ -110,6 +126,13 @@ globalStyle(`${variant.control} span`, { fontSize: 11, letterSpacing: 1, '@media
 globalStyle(`${host}[primary] > ${variant.control} i`, { fontSize: 30 });
 globalStyle(`${host}[primary] > ${variant.control} span`, { fontSize: 15, fontWeight: 'bold' });
 globalStyle(`${variant.row} i`, { fontSize: 16 });
+globalStyle(`${variant.tool} i`, { fontSize: 22 });
+globalStyle(`${variant.tool} span`, { fontSize: 9.5, letterSpacing: 0.5 });
+globalStyle(`${host}[active] > button`, {
+  background: rgba(vars.rgb.fg, 0.2),
+  borderColor: rgba(vars.rgb.fg, 0.9),
+  boxShadow: `0 0 12px ${rgba(vars.rgb.fg, 0.35)}`,
+});
 globalStyle(`${variant.play} i + span:not(:empty), ${variant.idle} i + span:not(:empty)`, { marginLeft: '0.4em' });
 
 // countdown(): a fill inside the button drains from right to left

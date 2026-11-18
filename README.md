@@ -139,7 +139,7 @@ src/engine/audio.ts      WebAudio synth, drums, sfx, reverb/delay, typing sounds
 src/ui/editor.ts         textarea, the mode's backdrop canvases, key bar
 src/ui/icon.ts           UI icons: SVGs in src/ui/icons/ (MingCute via Iconify, fetched by scripts/ui-icons.ts), drawn as a CSS mask
 src/ui/components/       light-DOM custom elements: km-button, km-mute, km-mode-icon, km-item, km-select, km-toast, km-drawer, km-card
-src/ui/storage.ts        per-mode draft and save slots in localStorage
+src/ui/storage.ts        per-mode draft and save slots in localStorage; readJson / writeJson for a mode's own data
 src/ui/budget.ts         pixel budget: a renderer on a slow device steps down to fewer pixels (every mode)
 src/ui/follow.ts         keeps the code view on what is being read, without chasing parallel lines back and forth
 src/ui/share.ts          a link to the current mode and text: system share sheet, else the clipboard
@@ -212,7 +212,10 @@ in every language.
 4. `sheet.ts`: the cheat-sheet cards (`SHEET`), and a capture function for the mode in
    `scripts/sheet/shoot.ts`; then `bun scripts/sheet.ts`. `README.md` documents the mode's
    language, with the `sheet:start` / `sheet:end` markers for the picture table.
-5. Optional: `drawer(ctx)` in `ModeCode` returns extra drawer sections (KEYMASH_ adds VOICE).
+5. Optional: `drawer(ctx)` in `ModeCode` returns extra drawer sections (KEYMASH_ adds VOICE);
+   `view` (`ModeView`: icon, title, `open(ctx)`) puts a button into the header that opens a second
+   view over the whole app (PETRI_'s lab). The shell stops a running program first and hides the
+   editor and stage (`#app.viewing`) until the view calls `ctx.close()`.
 6. Add it to `MODES` in `src/modes/index.ts`. The header icon, the mode select,
    storage (`keymash.slots.<id>.v1`, `keymash.draft.<id>.v1`) and the theme switch pick it up.
 

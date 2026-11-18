@@ -188,7 +188,7 @@ function layout(): void {
     $('edit').hidden = true;
     $('play').hidden = false;
   }
-  editor.active = !$('edit').hidden;
+  editor.active = !$('edit').hidden && !app.classList.contains('viewing');
   const rb = $<KmButton>('btn-run');
   rb.icon = split && state.playing ? 'stop' : 'play';
   rb.text = t(split && state.playing ? 'stop' : 'run');
@@ -245,6 +245,13 @@ function applyMode(m: ModeDef, c: ModeCode): void {
   $('idle-run').textContent = c.runHint;
   const draft = store.draft();
   editor.value = draft !== null ? draft : c.demos[0]!.src;
+  const view = $<KmButton>('btn-view');
+  view.button.hidden = !c.view;
+  if (c.view) {
+    view.icon = c.view.icon;
+    view.button.title = c.view.title;
+    view.button.setAttribute('aria-label', c.view.title);
+  }
 }
 let switching = 0;
 /** where the header icon goes next: the mode being loaded, else the current one */
@@ -276,6 +283,25 @@ async function switchMode(m: ModeDef): Promise<void> {
 $('mode-icon').addEventListener('next', () => void switchMode(nextMode(target)));
 document.querySelector<HTMLElement>('header .logo')!.addEventListener('click', () => void switchMode(nextMode(target)));
 applyMode(mode, await firstLoad);
+
+// a mode's own view (PETRI_'s lab): it covers the app until it closes; a running program stops first
+$('btn-view').addEventListener('click', () => {
+  const view = code.view;
+  if (!view) return;
+  const wasPlaying = state.playing;
+  if (wasPlaying) edit();
+  app.classList.add('viewing');
+  layout();
+  view.open({
+    root: app,
+    audio,
+    wasPlaying,
+    close: () => {
+      app.classList.remove('viewing');
+      layout();
+    },
+  });
+});
 
 /** the mode's own animation: switching in, starting and stopping a program */
 function transition(): void {

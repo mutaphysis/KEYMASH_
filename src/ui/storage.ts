@@ -18,7 +18,8 @@ function keys(mode: string): { slots: string; draft: string } {
     : { slots: `keymash.slots.${mode}.v1`, draft: `keymash.draft.${mode}.v1` };
 }
 
-function read<T>(k: string, def: T): T {
+/** a JSON value from localStorage, `def` when missing or unreadable */
+export function readJson<T>(k: string, def: T): T {
   try {
     const v = localStorage.getItem(k);
     return v === null ? def : JSON.parse(v);
@@ -26,7 +27,8 @@ function read<T>(k: string, def: T): T {
     return def;
   }
 }
-function write(k: string, v: unknown): boolean {
+/** best-effort: false when localStorage refuses (full, private mode) */
+export function writeJson(k: string, v: unknown): boolean {
   try {
     localStorage.setItem(k, JSON.stringify(v));
     return true;
@@ -37,30 +39,30 @@ function write(k: string, v: unknown): boolean {
 
 export const store = {
   /** id of the last used mode; the caller checks it against the registered modes */
-  mode: read<string>(MODE, ''),
+  mode: readJson<string>(MODE, ''),
   setMode(m: string): void {
     this.mode = m;
-    write(MODE, m);
+    writeJson(MODE, m);
   },
   slots(): Slot[] {
-    return read<Slot[]>(keys(this.mode).slots, []);
+    return readJson<Slot[]>(keys(this.mode).slots, []);
   },
   save(src: string): number {
     const slots = this.slots();
     const first = (src.split('\n').find((l) => l.trim()) || 'mash').trim().slice(0, 22);
     slots.unshift({ name: first, src, t: Date.now() });
-    const ok = write(keys(this.mode).slots, slots.slice(0, 40));
+    const ok = writeJson(keys(this.mode).slots, slots.slice(0, 40));
     return ok ? slots.length : 0;
   },
   remove(i: number): void {
     const s = this.slots();
     s.splice(i, 1);
-    write(keys(this.mode).slots, s);
+    writeJson(keys(this.mode).slots, s);
   },
   draft(): string | null {
-    return read<string | null>(keys(this.mode).draft, null);
+    return readJson<string | null>(keys(this.mode).draft, null);
   },
   setDraft(src: string): void {
-    write(keys(this.mode).draft, src);
+    writeJson(keys(this.mode).draft, src);
   },
 };
