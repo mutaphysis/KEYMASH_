@@ -26,8 +26,8 @@ import { iconCursor } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
 import { hash } from '../../../lang/rng';
 
-/** the cursor colour of the tools (the theme's fg) */
-const CURSOR = '#8ff5dc';
+/** the tools' cursors: white with a black outline, readable over the dark water and the bright cells alike */
+const CURSOR = '#fff';
 /** seconds between two food drops while the food tool is held down */
 const FEED_EVERY = 0.12;
 /** the hand: held this long (ms) or moved this far (CSS px), a press carries the cell instead of poking it */

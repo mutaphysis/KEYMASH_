@@ -23,9 +23,10 @@ export function setIcon(el: HTMLElement, name: IconName): void {
 /** a CSS cursor showing the icon in `color` with a dark outline, hotspot in the middle; `fallback` if it can't load */
 export async function iconCursor(name: IconName, color: string, fallback = 'crosshair'): Promise<string> {
   try {
+    // small SVGs may arrive inlined as data URLs with single quotes: match either
     const svg = (await (await fetch(ICONS[name])).text())
       .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/fill="currentColor"/g, `fill="${color}" stroke="rgba(0,0,0,.85)" stroke-width="1.6" paint-order="stroke"`)
+      .replace(/fill=(["'])currentColor\1/g, `fill="${color}" stroke="#000" stroke-width="2" stroke-linejoin="round" paint-order="stroke"`)
       .replace(/1em/g, '24');
     return `url("data:image/svg+xml,${encodeURIComponent(svg.trim())}") 12 12, ${fallback}`;
   } catch (e) {
