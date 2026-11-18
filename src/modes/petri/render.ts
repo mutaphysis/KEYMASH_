@@ -766,10 +766,12 @@ export class MicroRenderer {
       if (died === undefined) this.died.set(cell, (died = this.time));
       t = Math.max(t, Math.min(DEATH_START, this.time - died));
     }
-    this.dis = cell.state === 'dying' ? Math.min(1, t / 2.6) : 0;
-    if (this.dis) alpha *= 1 - smooth(0.55, 1, this.dis);
+    const dis = cell.state === 'dying' ? Math.min(1, t / 2.6) : 0;
+    if (dis) alpha *= 1 - smooth(0.55, 1, dis);
     if (cell.state === 'eaten') alpha *= Math.max(0, 1 - cell.t / 1.5) * 0.8;
+    // set only for a cell that is drawn: one left out must not leave the next drawing (a lab portrait) dissolved
     if (alpha <= 0.01) return;
+    this.dis = dis;
     const sick = cell.sick > 0;
     const hue = sick ? 72 : cell.shownHue,
       sat = (sick ? 30 : satOf(sp)) * (1 - 0.75 * smooth(0, 0.4, this.dis));
