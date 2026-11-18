@@ -1,10 +1,16 @@
 // UI icons: SVG files in src/ui/icons/ (fetched by `bun scripts/ui-icons.ts`), drawn as a CSS mask so
 // they take the colour and font size of the text around them. Buttons and messages use these, never emoji.
-import { ICONS } from './icons';
+import { ICONS, INK } from './icons';
 import type { IconName } from './icons';
 import { icon as iconCls } from './icon.css';
 
 export type { IconName };
+
+/** the CSS clip-path that shows the bottom `fill` (0–1) of an icon's drawing, not of its box: a gauge */
+export function iconFillClip(name: IconName, fill: number): string {
+  const [top, bottom] = INK[name];
+  return `inset(${((top + (1 - fill) * (bottom - top)) * 100).toFixed(1)}% 0 0 0)`;
+}
 
 /** a new <i> showing the icon */
 export function iconEl(name: IconName): HTMLElement {

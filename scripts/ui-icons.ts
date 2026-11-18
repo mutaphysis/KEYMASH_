@@ -1,10 +1,13 @@
 // Downloads the UI icons from the Iconify API (https://iconify.design/docs/api/) into src/ui/icons/<name>.svg
 // and writes src/ui/icons/index.ts, which imports each one via ?url. One set for everything: MingCute,
 // filled (soft, rounded shapes; Apache-2.0). The SVGs are committed, so the app needs no network for them.
-// A few icons are put together here from two of the set (COMPOSED).
+// A few icons are put together here from two of the set (COMPOSED). Each icon's ink (the rows its drawing
+// covers, measured in headless Chromium) goes into index.ts too: a gauge filling an icon fills those rows.
 // Usage: bun scripts/ui-icons.ts   — after adding or changing an entry in ICONS or COMPOSED
+// (first time: bunx playwright-core install chromium-headless-shell)
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { chromium } from 'playwright-core';
 
 const SET = 'mingcute';
 /** our name (a JS identifier, also the file name) → the icon's name in the set */
@@ -136,11 +139,30 @@ const svgs = await Promise.all(
 for (const f of readdirSync(DIR)) if (f.endsWith('.svg') && !names.includes(f.slice(0, -4))) rmSync(DIR + f);
 for (const [name, svg] of svgs) writeFileSync(DIR + name + '.svg', svg);
 
+// the rows each icon's drawing covers, top and bottom as fractions of its 1em box (the viewBox is 24 units)
+const browser = await chromium.launch();
+let ink: string[];
+try {
+  const page = await browser.newPage();
+  await page.setContent(`<html><body>${svgs.map(([, svg]) => svg).join('')}</body></html>`);
+  ink = await page.evaluate(() =>
+    [...document.querySelectorAll('body > svg')].map((svg) => {
+      const b = (svg as SVGSVGElement).getBBox();
+      const at = (y: number) => Math.round(Math.max(0, Math.min(1, y / 24)) * 1000) / 1000;
+      return `[${at(b.y)}, ${at(b.y + b.height)}]`;
+    }),
+  );
+} finally {
+  await browser.close();
+}
+
 writeFileSync(
   DIR + 'index.ts',
   `// Written by \`bun scripts/ui-icons.ts\` (the list lives there): ${SET} icons from Iconify, one URL each.\n` +
     names.map((n) => `import ${n} from './${n}.svg?url';`).join('\n') +
-    `\n\nexport const ICONS = { ${names.join(', ')} };\nexport type IconName = keyof typeof ICONS;\n`,
+    `\n\nexport const ICONS = { ${names.join(', ')} };\nexport type IconName = keyof typeof ICONS;\n` +
+    `\n/** the rows each icon's drawing covers: top and bottom, 0–1 of its box */\n` +
+    `export const INK: Record<IconName, readonly [number, number]> = { ${names.map((n, i) => `${n}: ${ink[i]}`).join(', ')} };\n`,
 );
 execSync(`bunx oxfmt ${DIR}index.ts`, { stdio: 'inherit' });
 console.log(`${names.length} icons written to src/ui/icons/`);

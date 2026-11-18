@@ -14,7 +14,7 @@ import * as css from './viewer.css';
 import { $, ctx2d } from '../../../ui/dom';
 import type { KmToast } from '../../../ui/components/toast';
 import { t as tShared } from '../../../i18n';
-import { iconEl } from '../../../ui/icon';
+import { iconEl, iconFillClip } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
 
 export type ViewTarget =
@@ -265,7 +265,7 @@ export class Viewer {
       const back = iconEl(icon);
       back.classList.add(css.gaugeBack);
       gauge.append(back);
-      lit.style.clipPath = `inset(${Math.round((1 - fill) * 100)}% 0 0 0)`;
+      lit.style.clipPath = iconFillClip(icon, fill);
     }
     gauge.append(lit);
     const label = document.createElement('b');

@@ -13,7 +13,8 @@ they are program text: demos, the key bar's emoji keys, what a running program s
 
 - `scripts/ui-icons.ts`: the `ICONS` list (our name → MingCute name). Running it downloads every icon
   from the Iconify API into `src/ui/icons/<name>.svg` and rewrites `src/ui/icons/index.ts`
-  (one `import x from './x.svg?url'` per icon, `ICONS`, `type IconName`). Never edit `index.ts` by hand.
+  (one `import x from './x.svg?url'` per icon, `ICONS`, `type IconName`, and `INK`: each icon's drawn rows,
+  measured in headless Chromium, for `iconFillClip()`). Never edit `index.ts` by hand.
 - `src/ui/icon.ts`: `iconEl(name)` (a new `<i>`) and `setIcon(el, name)`. The SVG URL goes into
   `--icon`; `icon.css.ts` draws it as `mask-image` over `currentColor`, 1em square. So an icon takes
   the colour and `font-size` of where it sits; size it with `font-size`, colour it with `color`.

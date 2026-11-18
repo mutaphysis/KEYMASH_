@@ -180,7 +180,9 @@ takes an icon name and message ids for `label` / `title-key`; rows and selects a
 `?url` and drawn as a CSS `mask-image` over `currentColor`, so it takes the text's colour and size
 (`iconEl('paw')`, `setIcon(el, 'paw')` from `src/ui/icon.ts`). To add one, put a line into `ICONS`
 in `scripts/ui-icons.ts` and run `bun scripts/ui-icons.ts`: it downloads every icon from the
-[Iconify API](https://iconify.design/docs/api/) and rewrites `src/ui/icons/index.ts` (the `IconName` type).
+[Iconify API](https://iconify.design/docs/api/) and rewrites `src/ui/icons/index.ts` (the `IconName` type, and
+`INK`: the rows each icon's drawing covers, measured in headless Chromium, so `iconFillClip()` fills a gauge
+icon over its drawing rather than its box).
 Emoji stay where they are program text: demos, the key bar's emoji keys, what a program shows.
 
 **Text**: every part defines its own messages with `defineMessages(en, de)` — the
