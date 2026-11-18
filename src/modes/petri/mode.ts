@@ -5,7 +5,12 @@ import { MicroPlayer } from './player';
 import { Plankton } from './backdrop';
 import { DEMOS } from './demos';
 import { SHEET } from './sheet';
+import { Lab } from './lab/lab';
 import { t, tn } from './messages';
+
+/** the play mode's player: the lab takes over its culture when it opens while one runs */
+let micro: MicroPlayer | null = null;
+let lab: Lab | null = null;
 
 const KEYS = [
   '🌿',
@@ -47,5 +52,10 @@ export const mode: ModeCode = {
     const n = readCulture(src).species.length;
     return { ok: t('alive'), count: n, unit: tn('species', n) };
   },
-  player: (audio) => new MicroPlayer(audio),
+  player: (audio) => (micro = new MicroPlayer(audio)),
+  view: {
+    icon: 'lab',
+    title: t('labOpen'),
+    open: (ctx) => (lab ??= new Lab(ctx.audio)).open(ctx, ctx.wasPlaying ? micro : null),
+  },
 };

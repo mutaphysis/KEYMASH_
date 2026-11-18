@@ -118,6 +118,18 @@ species (same name, census row and kin) until its genome has drifted far from th
 From then on each meal that passes genes on may split it off as a new hybrid, the more likely
 the further it has drifted (`SPLIT_DRIFT`).
 
+## The lab
+The flask in the header opens the lab: the dish without a text feeding it. When a culture is
+running it carries over, cells and all (the feeder stops); otherwise a fresh dish starts. The
+toolbar under the dish (on the left in split view) picks what a touch does:
+
+| Tool | What it does |
+|---|---|
+| food | drop algae where you touch, more while you hold |
+
+After the tools: **pause** stops time (the water still moves), **3×** runs it three
+times as fast. The arrow at the top goes back to the code.
+
 ## How it is drawn
 Canvas 2D. The water (gradient and caustics) is soft, so it is drawn small and stretched over
 the dish; the microscope in front (vignette, rim) is drawn once per dish size. Cilia, shell ribs
