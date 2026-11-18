@@ -339,6 +339,10 @@ const SIZE: Record<Body, number> = {
   flagellate: 0.9,
   volvox: 1.7,
 };
+/** Sizes above KNEE bend toward 36, the biggest a cell gets (a volvox hunter's raw 70.7 lands there), so every
+ * size gene state of every body still draws a different size instead of several stopping at the cap. */
+const KNEE = 24;
+const knee = (raw: number): number => (raw <= KNEE ? raw : KNEE * Math.pow(raw / KNEE, Math.log(36 / KNEE) / Math.log(70.72 / KNEE)));
 const SPEED: Record<Body, number> = {
   amoeba: 11,
   bacillus: 42,
@@ -434,7 +438,7 @@ export function express(g: Genome, seed: number, line: number): Species {
   const body = BODIES[g[GENE_INDEX.body]!]!;
   const diet = DIETS[g[GENE_INDEX.diet]!]!;
   const hunter = diet === 'hunter';
-  const size = Math.max(6, Math.min(36, lv('size') * SIZE[body] * (hunter ? 1.3 : 1)));
+  const size = Math.max(6, Math.min(36, knee(lv('size') * SIZE[body] * (hunter ? 1.3 : 1))));
   return {
     seed,
     line,
