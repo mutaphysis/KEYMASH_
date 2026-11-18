@@ -505,7 +505,7 @@ export class Lab {
     const b = this.canvas.getBoundingClientRect();
     const [x, y] = this.r.toWorld(cx - b.left, cy - b.top);
     if (Math.hypot(x, y) > DISH_R) return;
-    const c = W.spawnCell(sp, x, y, { grown: true });
+    const c = W.spawnCell(sp, x, y);
     if (!c) this.toast(t('labFull'));
     else this.route({ type: 'spawn', x: c.x, y: c.y, sp });
     this.flush();
