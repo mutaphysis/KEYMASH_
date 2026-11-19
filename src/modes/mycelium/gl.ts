@@ -1,5 +1,5 @@
-// The little WebGL2 that MYCELIUM_ needs: programs, an offscreen target, textures from decoded pictures. Everything is
-// 2D (a side view panned in x and y), so no matrices.
+// The little WebGL2 that MYCELIUM_ needs: programs, meshes, an offscreen target, textures from decoded pictures.
+// Everything is 2D (a side view panned in x and y), so no matrices.
 
 export type GL = WebGL2RenderingContext;
 
@@ -167,6 +167,36 @@ function setter(gl: GL, type: number, loc: WebGLUniformLocation, unit: number): 
       return (v) => gl.uniform4iv(loc, v as Int32List);
   }
   throw new Error(`uniform type 0x${type.toString(16)}: no setter`);
+}
+
+/** a float vertex buffer of `bytes`, refilled with bufferSubData as the meshes change */
+export function vertexBuffer(gl: GL, bytes: number): WebGLBuffer {
+  const vbo = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, bytes, gl.DYNAMIC_DRAW);
+  return vbo;
+}
+
+/**
+ * A vertex array over `vbo`, interleaved floats: attribute i (the shaders' `layout(location = i)`) takes `sizes[i]`
+ * of them, one after the other, so a vertex is their sum. `indices` become its element buffer. A wireframe is a second
+ * one over the same buffer with line indices (its shader reads location 0 only).
+ */
+export function vao(gl: GL, vbo: WebGLBuffer, sizes: readonly number[], indices: Uint16Array): WebGLVertexArrayObject {
+  const v = gl.createVertexArray()!;
+  gl.bindVertexArray(v);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  const stride = sizes.reduce((s, n) => s + n, 0) * 4;
+  let at = 0;
+  sizes.forEach((n, i) => {
+    gl.enableVertexAttribArray(i);
+    gl.vertexAttribPointer(i, n, gl.FLOAT, false, stride, at);
+    at += n * 4;
+  });
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return v;
 }
 
 export interface Target {

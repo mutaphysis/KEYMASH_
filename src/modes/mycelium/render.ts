@@ -26,7 +26,7 @@ import type { Tree } from './trees';
 import type { Buried } from './buried';
 import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
-import { freeTarget, target, texture, textureArray } from './gl';
+import { freeTarget, target, texture, textureArray, vao, vertexBuffer } from './gl';
 import type { GL, Program, Target } from './gl';
 import { programs } from './shaders';
 import type { Programs } from './shaders';
@@ -442,39 +442,10 @@ export class ForestRenderer {
     // a saved shader file (dev) relinks them in place; the baked shade comes from one of them
     this.p = programs(gl, () => this.bakeShade());
     this.empty = gl.createVertexArray();
-    this.mesh = gl.createVertexArray();
-    this.vbo = gl.createBuffer();
-    gl.bindVertexArray(this.mesh);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, this.verts.byteLength, gl.DYNAMIC_DRAW);
-    // pos xy, uv, depth, where the moss ends
-    const B = STRIDE * 4;
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, B, 0);
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, B, 8);
-    gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, B, 16);
-    gl.enableVertexAttribArray(3);
-    gl.vertexAttribPointer(3, 1, gl.FLOAT, false, B, 20);
-    // two quads per column pair: strip (rows 0–1) and soil below it (rows 1–2)
+    // the ground: pos xy, uv, depth, where the moss ends; two quads per column pair: strip (rows 0–1) and soil below
+    // it (rows 1–2). Its wireframe: row 1's horizontals count as strip
+    this.vbo = vertexBuffer(gl, this.verts.byteLength);
     const idx = new Uint16Array((this.cols - 1) * 12);
-    for (let i = 0, n = 0; i + 1 < this.cols; i++) {
-      const a = i * 3;
-      const b = a + 3;
-      for (const r of [0, 1]) idx.set([a + r, a + r + 1, b + r, b + r, a + r + 1, b + r + 1], n + r * 6);
-      n += 12;
-    }
-    this.count = idx.length;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
-    // debug wireframe: the same vertices, their edges as lines; row 1's horizontals count as strip
-    this.wireVao = gl.createVertexArray();
-    gl.bindVertexArray(this.wireVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, B, 0);
     const strip: number[] = [];
     const soil: number[] = [];
     for (let i = 0; i < this.cols; i++) {
@@ -483,25 +454,18 @@ export class ForestRenderer {
       strip.push(a, a + 1);
       soil.push(a + 1, a + 2);
       if (i + 1 < this.cols) {
+        for (const r of [0, 1]) idx.set([a + r, a + r + 1, b + r, b + r, a + r + 1, b + r + 1], i * 12 + r * 6);
         strip.push(a, b, a + 1, b + 1, a + 1, b);
         soil.push(a + 2, b + 2, a + 2, b + 1);
       }
     }
+    this.count = idx.length;
+    this.mesh = vao(gl, this.vbo, [2, 2, 1, 1], idx);
     this.wireStrip = strip.length;
     this.wireSoil = soil.length;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...strip, ...soil]), gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
-    // the hill: three rows per column (band, body), two quads per column pair; pos xy, uv
-    this.ridgeVao = gl.createVertexArray();
-    this.ridgeVbo = gl.createBuffer();
-    gl.bindVertexArray(this.ridgeVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, this.ridgeVerts.byteLength, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+    this.wireVao = vao(gl, this.vbo, [2, 2, 1, 1], new Uint16Array([...strip, ...soil]));
+    // the hill: pos xy, uv; three rows per column (band, body), two quads per column pair
+    this.ridgeVbo = vertexBuffer(gl, this.ridgeVerts.byteLength);
     const ridx = new Uint16Array((this.cols - 1) * 12);
     const band: number[] = [];
     const body: number[] = [];
@@ -517,39 +481,14 @@ export class ForestRenderer {
       }
     }
     this.ridgeCount = ridx.length;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ridx, gl.STATIC_DRAW);
-    this.wireRidgeVao = gl.createVertexArray();
-    gl.bindVertexArray(this.wireRidgeVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+    this.ridgeVao = vao(gl, this.ridgeVbo, [2, 2], ridx);
     this.wireBand = band.length;
     this.wireBody = body.length;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...band, ...body]), gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
+    this.wireRidgeVao = vao(gl, this.ridgeVbo, [2, 2], new Uint16Array([...band, ...body]));
     // what lies buried: a quad per thing (two triangles), then one per treasure's halo; pos xy, uv, depth, the
-    // picture's rect in its atlas, how far the halo reaches (texels), 1 for a gem (less stained; glints)
-    this.buriedVao = gl.createVertexArray();
-    this.buriedVbo = gl.createBuffer();
-    gl.bindVertexArray(this.buriedVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.buriedVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, this.buriedVerts.byteLength, gl.DYNAMIC_DRAW);
-    const BB = BURIED_STRIDE * 4;
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, BB, 0);
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, BB, 8);
-    gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, BB, 16);
-    gl.enableVertexAttribArray(3);
-    gl.vertexAttribPointer(3, 4, gl.FLOAT, false, BB, 20);
-    gl.enableVertexAttribArray(4);
-    gl.vertexAttribPointer(4, 1, gl.FLOAT, false, BB, 36);
-    gl.enableVertexAttribArray(5);
-    gl.vertexAttribPointer(5, 1, gl.FLOAT, false, BB, 40);
-    // corners: top left, top right, bottom left, bottom right
+    // picture's rect in its atlas, how far the halo reaches (texels), 1 for a gem (less stained; glints). Corners:
+    // top left, top right, bottom left, bottom right
+    this.buriedVbo = vertexBuffer(gl, this.buriedVerts.byteLength);
     const quads = BURIED_MAX + TREASURE_MAX;
     const bidx = new Uint16Array(quads * 6);
     const blines = new Uint16Array(quads * 10);
@@ -558,26 +497,11 @@ export class ForestRenderer {
       bidx.set([a, a + 2, a + 1, a + 1, a + 2, a + 3], i * 6);
       blines.set([a, a + 1, a + 1, a + 3, a + 3, a + 2, a + 2, a, a + 1, a + 2], i * 10);
     }
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, bidx, gl.STATIC_DRAW);
-    this.wireBuriedVao = gl.createVertexArray();
-    gl.bindVertexArray(this.wireBuriedVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.buriedVbo);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, BB, 0);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, blines, gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
-    // the trees: per tree TREE_ROWS per column, a quad per cell; tree t's vertices and indices follow tree t - 1's
-    this.treeVao = gl.createVertexArray();
-    this.treeVbo = gl.createBuffer();
-    gl.bindVertexArray(this.treeVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, this.treeVerts.byteLength, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, TREE_STRIDE * 4, 0);
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, TREE_STRIDE * 4, 8);
+    this.buriedVao = vao(gl, this.buriedVbo, [2, 2, 1, 4, 1, 1], bidx);
+    this.wireBuriedVao = vao(gl, this.buriedVbo, [2, 2, 1, 4, 1, 1], blines);
+    // the trees: pos xy, uv in the picture; per tree TREE_ROWS per column, a quad per cell; tree t's vertices and
+    // indices follow tree t - 1's
+    this.treeVbo = vertexBuffer(gl, this.treeVerts.byteLength);
     const tidx: number[] = [];
     const tlines: number[] = [];
     const R = TREE_ROWS.length;
@@ -596,32 +520,13 @@ export class ForestRenderer {
       }
     }
     this.treeIdx = tidx.length / TREES_MAX;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tidx), gl.STATIC_DRAW);
-    this.wireTreeVao = gl.createVertexArray();
-    gl.bindVertexArray(this.wireTreeVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.treeVbo);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, TREE_STRIDE * 4, 0);
+    this.treeVao = vao(gl, this.treeVbo, [2, 2], new Uint16Array(tidx));
     this.wireTreeIdx = tlines.length / TREES_MAX;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tlines), gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
-    // the canopy: per piece a ribbon (an inner, an opaque edge's and an outer vertex per column) and a fan from high
-    // above to the ribbon's inner edge; pos xy, uv, piece. The topology is fixed, build() moves the vertices; piece
+    this.wireTreeVao = vao(gl, this.treeVbo, [2, 2], new Uint16Array(tlines));
+    // the canopy: pos xy, uv, piece; per piece a ribbon (an inner, an opaque edge's and an outer vertex per column)
+    // and a fan from high above to the ribbon's inner edge. The topology is fixed, build() moves the vertices; piece
     // p's indices follow piece p - 1's, its body's (fan and inner band) before its fringe's (outer band)
-    this.crownVao = gl.createVertexArray();
-    this.crownVbo = gl.createBuffer();
-    gl.bindVertexArray(this.crownVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.crownVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, this.crownVerts.byteLength, gl.DYNAMIC_DRAW);
-    const CB = CROWN_STRIDE * 4;
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, CB, 0);
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, CB, 8);
-    gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 1, gl.FLOAT, false, CB, 16);
+    this.crownVbo = vertexBuffer(gl, this.crownVerts.byteLength);
     const cidx: number[] = [];
     const clines: number[] = [];
     for (let p = 0; p < CROWN_PIECES; p++) {
@@ -642,17 +547,9 @@ export class ForestRenderer {
       cidx.push(...body, ...fringe);
     }
     this.crownIdx = cidx.length / CROWN_PIECES;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(cidx), gl.STATIC_DRAW);
-    this.wireCrownVao = gl.createVertexArray();
-    gl.bindVertexArray(this.wireCrownVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.crownVbo);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, CB, 0);
+    this.crownVao = vao(gl, this.crownVbo, [2, 2, 1], new Uint16Array(cidx));
     this.wireCrownIdx = clines.length / CROWN_PIECES;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(clines), gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
+    this.wireCrownVao = vao(gl, this.crownVbo, [2, 2, 1], new Uint16Array(clines));
     // the floor at a point: a float texel per ground column, read exactly (texelFetch), filled by build()
     this.groundAtTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.groundAtTex);
