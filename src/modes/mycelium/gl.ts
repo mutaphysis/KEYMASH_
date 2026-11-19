@@ -1,46 +1,172 @@
-// The little WebGL2 that MYCELIUM_ needs: programs, uniform lookup, an offscreen target, textures from
-// decoded pictures. Everything is 2D (a side view panned in x and y), so no matrices.
+// The little WebGL2 that MYCELIUM_ needs: programs, an offscreen target, textures from decoded pictures. Everything is
+// 2D (a side view panned in x and y), so no matrices.
 
 export type GL = WebGL2RenderingContext;
 
-function compile(gl: GL, type: number, src: string): WebGLShader {
-  const sh = gl.createShader(type)!;
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS) && !gl.isContextLost()) {
-    const log = gl.getShaderInfoLog(sh) ?? '';
-    gl.deleteShader(sh);
-    throw new Error('shader: ' + log);
-  }
-  return sh;
+/** a stage's source put together from files (shaders/index.ts): `#line 1 n` starts file n, `files[n]` names it */
+export interface Source {
+  text: string;
+  files: readonly string[];
 }
 
-export type Uniforms = Record<string, WebGLUniformLocation | null>;
+/** a uniform's value: numbers for floats and ints (scalars, vectors, arrays alike), a texture for a sampler */
+export type Value = number | Float32List | Int32List | WebGLTexture | null;
+export type Values = Readonly<Record<string, Value>>;
 
-export interface Program {
-  prog: WebGLProgram;
-  u: Uniforms;
+/** where a compile error points, in the files rather than the assembled source */
+export interface ShaderAt {
+  file: string;
+  line: number;
+  text: string;
 }
 
-/** compile and link; throws with the info log. `u` holds every active uniform by name */
-export function program(gl: GL, vs: string, fs: string): Program {
-  const prog = gl.createProgram()!;
-  const a = compile(gl, gl.VERTEX_SHADER, vs);
-  const b = compile(gl, gl.FRAGMENT_SHADER, fs);
-  gl.attachShader(prog, a);
-  gl.attachShader(prog, b);
-  gl.linkProgram(prog);
-  gl.deleteShader(a);
-  gl.deleteShader(b);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS) && !gl.isContextLost())
-    throw new Error('program: ' + (gl.getProgramInfoLog(prog) ?? ''));
-  const u: Uniforms = {};
-  const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) as number;
-  for (let i = 0; i < n; i++) {
-    const info = gl.getActiveUniform(prog, i);
-    if (info) u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(prog, info.name);
+/** a program that didn't compile or link: its log, each line moved to the file it came from */
+export class ShaderError extends Error {
+  constructor(
+    readonly program: string,
+    readonly log: string,
+    readonly at: ShaderAt[],
+  ) {
+    super(program ? `${program}: ${log}` : log);
   }
-  return { prog, u };
+}
+
+const SAMPLERS: Record<number, number> = {
+  [WebGL2RenderingContext.SAMPLER_2D]: WebGL2RenderingContext.TEXTURE_2D,
+  [WebGL2RenderingContext.SAMPLER_2D_ARRAY]: WebGL2RenderingContext.TEXTURE_2D_ARRAY,
+  [WebGL2RenderingContext.SAMPLER_3D]: WebGL2RenderingContext.TEXTURE_3D,
+  [WebGL2RenderingContext.SAMPLER_CUBE]: WebGL2RenderingContext.TEXTURE_CUBE_MAP,
+};
+
+/**
+ * A linked program and a setter per active uniform, picked by its GLSL type: `set({ uTint: AIR.tint, uStrip: tex })`.
+ * Each sampler has a texture unit of its own, so setting one binds the texture there. A name the program's source
+ * doesn't declare throws (a typo); one it declares but the compiler dropped is skipped.
+ */
+export class Program {
+  prog!: WebGLProgram;
+  private setters = new Map<string, (v: Value) => void>();
+  private declared = new Set<string>();
+
+  constructor(
+    private gl: GL,
+    readonly name: string,
+    vs: Source,
+    fs: Source,
+  ) {
+    this.relink(vs, fs);
+  }
+
+  /** compile and link (again: a hot-reloaded shader); throws a ShaderError and keeps what it had if that fails */
+  relink(vs: Source, fs: Source): void {
+    const gl = this.gl;
+    const a = this.compile(gl.VERTEX_SHADER, vs);
+    let b: WebGLShader;
+    try {
+      b = this.compile(gl.FRAGMENT_SHADER, fs);
+    } catch (e) {
+      gl.deleteShader(a);
+      throw e;
+    }
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog, a);
+    gl.attachShader(prog, b);
+    gl.linkProgram(prog);
+    gl.deleteShader(a);
+    gl.deleteShader(b);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS) && !gl.isContextLost()) {
+      const log = gl.getProgramInfoLog(prog) ?? '';
+      gl.deleteProgram(prog);
+      throw new ShaderError(this.name, `link: ${log.replace(/\0/g, '').trim()}`, []);
+    }
+    if (this.prog) gl.deleteProgram(this.prog);
+    this.prog = prog;
+    this.setters.clear();
+    this.declared = declared(vs.text + '\n' + fs.text);
+    gl.useProgram(prog);
+    const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) as number;
+    for (let i = 0, unit = 0; i < n; i++) {
+      const info = gl.getActiveUniform(prog, i);
+      const loc = info && gl.getUniformLocation(prog, info.name);
+      if (info && loc) this.setters.set(info.name.replace(/\[0\]$/, ''), setter(gl, info.type, loc, SAMPLERS[info.type] ? unit++ : -1));
+    }
+  }
+
+  /** this program from now on, with the uniforms of `shared` it has (a frame's common values), then `own` */
+  use(shared: Values | null, own?: Values): void {
+    this.gl.useProgram(this.prog);
+    if (shared) for (const k in shared) this.setters.get(k)?.(shared[k]!);
+    if (own) this.set(own);
+  }
+
+  /** uniforms of the program in use */
+  set(own: Values): void {
+    for (const k in own) {
+      const f = this.setters.get(k);
+      if (f) f(own[k]!);
+      else if (!this.declared.has(k)) throw new Error(`${this.name}: no uniform ${k}`);
+    }
+  }
+
+  private compile(type: number, src: Source): WebGLShader {
+    const gl = this.gl;
+    const sh = gl.createShader(type)!;
+    gl.shaderSource(sh, src.text);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS) && !gl.isContextLost()) {
+      // ANGLE's log: "ERROR: <source string>:<line>: <what>", one per line, NUL at the end
+      const log = (gl.getShaderInfoLog(sh) ?? '').replace(/\0/g, '').trim();
+      gl.deleteShader(sh);
+      const at: ShaderAt[] = [];
+      const mapped = log.replace(/^(ERROR|WARNING): (\d+):(\d+): (.*)$/gm, (_, kind: string, n: string, line: string, text: string) => {
+        const file = src.files[+n] ?? '?';
+        at.push({ file, line: +line, text });
+        return `${kind}: ${file}:${line}: ${text}`;
+      });
+      throw new ShaderError(this.name, mapped, at);
+    }
+    return sh;
+  }
+}
+
+/** the uniform names a source declares, comments left out */
+function declared(src: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of src.replace(/\/\/.*$/gm, '').matchAll(/\buniform\s+(?:(?:highp|mediump|lowp)\s+)?\w+\s+([^;{]+);/g))
+    for (const name of m[1]!.split(',')) out.add(name.replace(/\[.*$/, '').trim());
+  return out;
+}
+
+/** how a uniform of this type is set; a sampler is given its unit here and binds its texture there when set */
+function setter(gl: GL, type: number, loc: WebGLUniformLocation, unit: number): (v: Value) => void {
+  const target = SAMPLERS[type];
+  if (target !== undefined) {
+    gl.uniform1i(loc, unit);
+    return (v) => {
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(target, v as WebGLTexture | null);
+    };
+  }
+  switch (type) {
+    case gl.FLOAT:
+      return (v) => (typeof v === 'number' ? gl.uniform1f(loc, v) : gl.uniform1fv(loc, v as Float32List));
+    case gl.FLOAT_VEC2:
+      return (v) => gl.uniform2fv(loc, v as Float32List);
+    case gl.FLOAT_VEC3:
+      return (v) => gl.uniform3fv(loc, v as Float32List);
+    case gl.FLOAT_VEC4:
+      return (v) => gl.uniform4fv(loc, v as Float32List);
+    case gl.INT:
+    case gl.BOOL:
+      return (v) => (typeof v === 'number' ? gl.uniform1i(loc, v) : gl.uniform1iv(loc, v as Int32List));
+    case gl.INT_VEC2:
+      return (v) => gl.uniform2iv(loc, v as Int32List);
+    case gl.INT_VEC3:
+      return (v) => gl.uniform3iv(loc, v as Int32List);
+    case gl.INT_VEC4:
+      return (v) => gl.uniform4iv(loc, v as Int32List);
+  }
+  throw new Error(`uniform type 0x${type.toString(16)}: no setter`);
 }
 
 export interface Target {

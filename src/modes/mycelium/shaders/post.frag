@@ -1,6 +1,8 @@
 // The picture, finished: a gentle contrast curve, a vignette, and fine film grain (it also hides banding in the
 // smooth air). The scene was drawn into a target sized by the pixel budget; this stretches it over the canvas.
 
+#include "noise.glsl"
+
 in vec2 vScreen;
 
 uniform sampler2D uScene;

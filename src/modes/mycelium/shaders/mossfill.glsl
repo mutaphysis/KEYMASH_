@@ -2,6 +2,9 @@
 // repeat shows. Which carpet a patch shows follows slow noise, so star moss, lichen, shade moss and clover come in
 // clusters of a few patches rather than a checkerboard. Offsets and left-right mirroring only: lit from above.
 
+#include "noise.glsl"
+#include "hex.glsl"
+
 uniform highp sampler2DArray uMossFill;
 uniform float uMossTile; // view units one texture repeat covers (the strip's texel scale)
 uniform vec3 uMossGain;  // matches the carpets' colour to the moss band of the hill's strip

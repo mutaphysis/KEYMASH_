@@ -9,6 +9,8 @@
 //            gem glows a little in its own colour meanwhile, both added over the picture (alpha 0: the premultiplied
 //            blend adds them). Drawn on the halo quads, which leave the star's rays room
 
+#include "noise.glsl"
+
 in vec2 vWorld;
 in vec2 vUV;
 in float vDepth;

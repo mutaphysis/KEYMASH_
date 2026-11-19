@@ -11,6 +11,14 @@
 // Everything is drawn opaque, front to back (render.ts): the body is opaque anyway; the fringe of hanging leaves
 // (built with CUTOUT) keeps a texel whole where it is at least CUTOUT_ALPHA covered and drops it otherwise.
 
+#include "noise.glsl"
+#include "blend.glsl"
+#include "air.glsl"
+#include "strip.glsl"
+#include "crown.glsl"
+#include "shademap.glsl"
+#include "leaves.glsl"
+
 in vec2 vWorld;
 in vec2 vUV;
 flat in int vPiece;

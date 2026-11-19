@@ -2,6 +2,8 @@
 // uCast.x … uCast.y - 1 but uCast.z (-1: none left out) at uCrownShadow's strength, and the occlusion by the pieces
 // from uFirst on (crown.glsl; uPieceCount: none).
 
+#include "crown.glsl"
+
 in vec2 vWorld;
 
 uniform ivec3 uCast;

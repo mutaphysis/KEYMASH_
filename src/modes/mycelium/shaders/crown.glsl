@@ -5,7 +5,7 @@
 // - crownOcclusion: what lies behind a piece is seen only through the gaps of its hanging leaves, deep in its shade,
 //   and just past its edge still darkened by the mass in front of it.
 // The pieces spread over the whole world, a few over any one point: each loop first skips, cheaply, the pieces that
-// can't reach p. Needs CROWN_PIECES, the arrays' length (shaders/index.ts writes it from crown.ts).
+// can't reach p. CROWN_PIECES, the arrays' length, is #defined by shaders/index.ts from crown.ts.
 
 uniform vec4 uPieces[CROWN_PIECES];     // per piece, back to front: its centre, its width left and right of it
 uniform vec2 uPieceShape[CROWN_PIECES]; // and its underside's height and roundness (a superellipse's exponent)

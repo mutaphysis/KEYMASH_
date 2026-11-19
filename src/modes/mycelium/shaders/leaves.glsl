@@ -6,6 +6,9 @@
 // size of a spray of leaves drift a little ahead of or behind it, more in autumn. Twigs (not green in the photograph)
 // stay their own colour, greyed.
 
+#include "noise.glsl"
+#include "hex.glsl"
+
 uniform sampler2D uLeafFill;
 uniform float uLeafTile; // view units one fill repeat covers
 uniform vec3 uLeafGain;  // matches the fill's colour to the canopy strip's dense top

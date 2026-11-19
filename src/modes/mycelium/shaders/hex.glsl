@@ -2,6 +2,8 @@
 // the texture at its own offset; a pixel blends the three vertices around it. Research: scripts/forest/README.md,
 // step 14. The caller picks what each vertex shows (offset, mirror, layer) and blends with hexBlend.
 
+#include "noise.glsl"
+
 const float HEX_K = 3.4641016; // 2 sqrt 3: a patch is about half a texture repeat across at size 1
 
 /** the grid vertices around st (equilateral triangles of edge 1) and their barycentric weights */

@@ -1,6 +1,9 @@
 // Behind everything: the air of the forest (air.glsl), a soft light from the upper left and slow mist. Placeholder
 // depth until the backdrop layers come.
 
+#include "noise.glsl"
+#include "air.glsl"
+
 in vec2 vScreen;
 in vec2 vWorld;
 

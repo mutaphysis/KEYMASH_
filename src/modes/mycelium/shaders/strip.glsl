@@ -3,6 +3,9 @@
 // depth, so a seam is never a straight cut); each cell shows its own stretch of the strip, mirrored half the time,
 // and neighbours meet in a height blend: where one has a taller tuft or a brighter leaf, that one stays whole.
 
+#include "noise.glsl"
+#include "blend.glsl"
+
 uniform sampler2D uStrip;  // premultiplied, clamped: no cell reads past its edges
 uniform float uCellSeed;  // each layer its own cells, so two layers of strips don't line up
 

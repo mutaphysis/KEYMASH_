@@ -13,7 +13,7 @@ import { DEMOS } from '../../src/modes/mycelium/demos';
 import { fetchAssets, fetchTrunks } from '../../src/modes/mycelium/assets';
 import { readGround } from '../../src/modes/mycelium/ground';
 import { ForestRenderer, PASS } from '../../src/modes/mycelium/render';
-import * as SHADERS from '../../src/modes/mycelium/shaders';
+import { sources } from '../../src/modes/mycelium/shaders';
 import { PixelBudget } from '../../src/ui/budget';
 import { traced } from './gltrace';
 import type { Draw, GLTrace } from './gltrace';
@@ -132,11 +132,8 @@ function look(r: ForestRenderer, zoom: number, y?: number): void {
   if (y !== undefined) r.cam.y = y;
 }
 
-const NAMES = new Map(
-  Object.entries(SHADERS)
-    .filter((e): e is [string, string] => e[0].endsWith('_FS') && typeof e[1] === 'string')
-    .map(([k, src]) => [src, k.slice(0, -3).toLowerCase()]),
-);
+// programs by their fragment stage, as the reports have always named them (crownFringe: crown_fringe)
+const NAMES = new Map(Object.entries(sources()).map(([k, { fs }]) => [fs.text, k.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())]));
 const PASS_NAMES = Object.fromEntries(Object.entries(PASS).map(([k, v]) => [v, k]));
 const group = (program: string, ints: Readonly<Record<string, number>>) =>
   program === 'buried' ? `buried.${PASS_NAMES[ints.uPass ?? 0]}` : program;

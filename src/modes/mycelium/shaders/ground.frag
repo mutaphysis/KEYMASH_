@@ -5,6 +5,12 @@
 // The moss varies in thickness: the mesh says where the moss ends in each column (vMoss), and v is mapped back
 // onto the picture piecewise, the moss stretched or squeezed to fit, the soil below it at its own scale.
 
+#include "noise.glsl"
+#include "blend.glsl"
+#include "soil.glsl"
+#include "strip.glsl"
+#include "shademap.glsl"
+
 in vec2 vWorld;
 in vec2 vUV;
 in float vDepth;

@@ -6,6 +6,13 @@
 // The same relief shades the hollows: the deeper, the darker. Each tree is graded on its own (its bark's colour, its
 // patches, its moss read at a place of its own), so the same picture twice doesn't look twice the same.
 
+#include "noise.glsl"
+#include "blend.glsl"
+#include "air.glsl"
+#include "mossfill.glsl"
+#include "groundat.glsl"
+#include "shademap.glsl"
+
 in vec2 vWorld;
 in vec2 vUV;
 

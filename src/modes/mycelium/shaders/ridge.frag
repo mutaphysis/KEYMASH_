@@ -2,6 +2,12 @@
 // over to a hex-tiled moss carpet for the hill's body, in a height blend along a wandering line like the floor's
 // strip into its soil. A little darker for being further back, and darker still toward its foot.
 
+#include "noise.glsl"
+#include "blend.glsl"
+#include "strip.glsl"
+#include "mossfill.glsl"
+#include "shademap.glsl"
+
 in vec2 vWorld;
 in vec2 vUV;
 

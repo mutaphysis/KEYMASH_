@@ -2,7 +2,8 @@
 // column the curve's y, u along the curve, the strip's height there, where its moss ends), read between columns.
 // groundAt gives the strip's texel at a point the way ground.frag shows it there (straight down from the strip's top,
 // where the mesh goes along the curve's normal: the same within a few units where the floor is gentle).
-// Needs strip.glsl.
+
+#include "strip.glsl"
 
 uniform highp sampler2D uGroundAt; // RGBA32F, one texel per mesh column
 uniform vec2 uGroundCols;          // the first column's x, the columns' spacing

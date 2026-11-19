@@ -2,6 +2,8 @@
 // soft shadow has room; a treasure's halo quad is padded by as far as the halo reaches. The shadow pass draws the
 // things' quads a little lower.
 
+#include "camera.glsl"
+
 layout(location = 0) in vec2 aPos;    // world
 layout(location = 1) in vec2 aUV;     // in its atlas
 layout(location = 2) in float aDepth; // view units below the forest floor

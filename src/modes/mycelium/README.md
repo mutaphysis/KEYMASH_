@@ -82,7 +82,7 @@ Each frame draws into a target sized by the pixel budget (`src/ui/budget.ts`), t
 order, back to front, is also each draw's depth (one slot per layer, trunk and canopy piece, set through the depth
 range; every vertex shader puts z at 0). The canopy goes first, all opaque, front to back, writing depth: each
 piece's mesh is cut where `crown.frag` would turn translucent (`CROWN_OPAQUE` of the strip's dense band,
-`shaders/index.ts`) into its body (the fan and the inner band of its ribbon), drawn first, and its fringe of hanging
+`crown.ts`) into its body (the fan and the inner band of its ribbon), drawn first, and its fringe of hanging
 leaves, cut out (a texel at least half covered whole, the rest dropped) rather than blended. So each pixel is shaded
 by the nearest leaves only; everything else follows back to front as listed, tested against that depth, the trunks
 blended between their crowns' pieces. The canopy's shade comes from the shade map, baked once per forest. Before,

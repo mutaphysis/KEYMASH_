@@ -1,76 +1,162 @@
-// MYCELIUM_'s shaders, put together from the pieces in this folder: shared libraries (noise, camera, height blend,
-// hex tiling, the air, soil, strip, the floor at a point, the crown's shapes and shade, the baked shade map, its
-// leaves) first, then the stage's own main().
-// Each .glsl file states what it needs above it.
-import { CROWN_PIECES } from '../crown';
-import noise from './noise.glsl?raw';
-import camera from './camera.glsl?raw';
-import blend from './blend.glsl?raw';
-import air from './air.glsl?raw';
-import hex from './hex.glsl?raw';
-import soil from './soil.glsl?raw';
-import strip from './strip.glsl?raw';
-import mossfill from './mossfill.glsl?raw';
-import groundat from './groundat.glsl?raw';
-import crownShade from './crown.glsl?raw';
-import leaves from './leaves.glsl?raw';
-import shademap from './shademap.glsl?raw';
-import shadeFrag from './shade.frag?raw';
-import groundVert from './ground.vert?raw';
-import groundFrag from './ground.frag?raw';
-import ridgeVert from './ridge.vert?raw';
-import ridgeFrag from './ridge.frag?raw';
-import buriedVert from './buried.vert?raw';
-import buriedFrag from './buried.frag?raw';
-import treeVert from './tree.vert?raw';
-import treeFrag from './tree.frag?raw';
-import crownVert from './crown.vert?raw';
-import crownFrag from './crown.frag?raw';
-import screenVert from './screen.vert?raw';
-import skyFrag from './sky.frag?raw';
-import postFrag from './post.frag?raw';
-import wireVert from './wire.vert?raw';
-import wireFrag from './wire.frag?raw';
+// MYCELIUM_'s shaders, one GLSL piece per file. A file pulls in the pieces it uses with `#include "x.glsl"`: each piece
+// once per stage, where it is first asked for, so a piece includes what it needs itself. PROGRAMS pairs the stages.
+// `#line` keeps every file's own numbering, so a compile error names the file and line it came from.
+// In dev, saving a shader file relinks the programs it changed in place, without reloading the page; one that doesn't
+// compile keeps its old program and shows its error in Vite's overlay.
+import { CROWN_OPAQUE, CROWN_PIECES } from '../crown';
+import { Program, ShaderError } from '../gl';
+import type { GL, ShaderAt, Source } from '../gl';
 
-const HEAD = '#version 300 es\nprecision highp float;\nprecision highp int;\n';
-const glsl = (...parts: string[]) => HEAD + parts.join('\n');
-/** the crown's shade, with the length of its arrays */
-const crown = `const int CROWN_PIECES = ${CROWN_PIECES};\n` + crownShade;
-/** the share of the canopy strip's dense band down to which a piece is opaque (crown.frag): render.ts cuts each
- * piece's mesh there into its body and its fringe */
-export const CROWN_OPAQUE = 0.85;
+const FILES = import.meta.glob<string>('./*.{glsl,vert,frag}', { eager: true, query: '?raw', import: 'default' });
 
-export const GROUND_VS = glsl(camera, groundVert);
-export const GROUND_FS = glsl(noise, blend, hex, soil, strip, shademap, groundFrag);
-export const RIDGE_VS = glsl(camera, ridgeVert);
-export const RIDGE_FS = glsl(noise, blend, hex, strip, mossfill, shademap, ridgeFrag);
-export const BURIED_VS = glsl(camera, buriedVert);
-export const BURIED_FS = glsl(noise, buriedFrag);
-export const TREE_VS = glsl(camera, treeVert);
-export const TREE_FS = glsl(noise, blend, hex, air, strip, mossfill, groundat, shademap, treeFrag);
-export const CROWN_VS = glsl(camera, crownVert);
-const crownFs = (...defines: string[]) =>
-  glsl(
-    ...defines,
-    noise,
-    blend,
-    hex,
-    air,
-    strip,
-    crown,
-    shademap,
-    leaves,
-    `const float CROWN_OPAQUE = ${CROWN_OPAQUE.toFixed(4)};`,
-    crownFrag,
-  );
-/** a canopy piece's body, and its fringe of hanging leaves cut out at their edges */
-export const CROWN_FS = crownFs();
-export const CROWN_FRINGE_FS = crownFs('#define CUTOUT');
-/** bakes a layer of the shade map (full screen over the world) */
-export const SHADE_FS = glsl(crown, shadeFrag);
-export const SCREEN_VS = glsl(camera, screenVert);
-export const SKY_FS = glsl(noise, air, skyFrag);
-export const POST_FS = glsl(noise, postFrag);
-// debug: mesh edges (WIRE_VS) and the full-screen triangle's edges (SCREEN_VS), flat colour
-export const WIRE_VS = glsl(camera, wireVert);
-export const WIRE_FS = glsl(wireFrag);
+/** ahead of every stage: crown.ts's array length, and the share render.ts cuts the canopy's meshes at */
+const HEAD = [
+  '#version 300 es',
+  'precision highp float;',
+  'precision highp int;',
+  `#define CROWN_PIECES ${CROWN_PIECES}`,
+  `#define CROWN_OPAQUE ${CROWN_OPAQUE.toFixed(4)}`,
+];
+
+/** each program: its vertex stage, its fragment stage, what else it #defines */
+const PROGRAMS = {
+  sky: ['screen.vert', 'sky.frag'],
+  ridge: ['ridge.vert', 'ridge.frag'],
+  ground: ['ground.vert', 'ground.frag'],
+  tree: ['tree.vert', 'tree.frag'],
+  // a canopy piece's body, and its fringe of hanging leaves cut out at their edges
+  crown: ['crown.vert', 'crown.frag'],
+  crownFringe: ['crown.vert', 'crown.frag', 'CUTOUT'],
+  buried: ['buried.vert', 'buried.frag'],
+  // bakes a layer of the shade map (full screen over the world)
+  shade: ['screen.vert', 'shade.frag'],
+  post: ['screen.vert', 'post.frag'],
+  // debug: mesh edges, and the full-screen triangle's edges, flat colour
+  wire: ['wire.vert', 'wire.frag'],
+  wireScreen: ['screen.vert', 'wire.frag'],
+} satisfies Record<string, readonly string[]>;
+
+export type ProgramName = keyof typeof PROGRAMS;
+export type Programs = Record<ProgramName, Program>;
+const NAMES = Object.keys(PROGRAMS) as ProgramName[];
+
+/** a stage: its file with every #include put in place */
+function stage(entry: string, defines: readonly string[]): Source {
+  const files = ['(head)'];
+  const out = [...HEAD, ...defines.map((d) => `#define ${d}`)];
+  const put = (name: string, from: ShaderAt | null) => {
+    if (files.includes(name)) return;
+    const text = FILES['./' + name];
+    if (text === undefined) throw new ShaderError('', `#include "${name}": no such file in shaders/`, from ? [from] : []);
+    const n = files.push(name) - 1;
+    out.push(`#line 1 ${n}`);
+    text.split('\n').forEach((line, i) => {
+      const inc = /^\s*#include\s+"(.+)"/.exec(line);
+      if (!inc) return void out.push(line);
+      put(inc[1]!, { file: name, line: i + 1, text: line });
+      out.push(`#line ${i + 2} ${n}`);
+    });
+  };
+  put(entry, null);
+  return { text: out.join('\n'), files };
+}
+
+/** every program's stages, put together (the perf harness names its draws by them) */
+export function sources(): Record<ProgramName, { vs: Source; fs: Source }> {
+  const out = {} as Record<ProgramName, { vs: Source; fs: Source }>;
+  for (const k of NAMES) {
+    const [vs, fs, ...defines] = PROGRAMS[k];
+    out[k] = { vs: stage(vs!, defines), fs: stage(fs!, defines) };
+  }
+  return out;
+}
+
+interface Live {
+  ps: Programs;
+  /** what each program was last linked from */
+  linked: Record<ProgramName, string>;
+  onSwap?: () => void;
+}
+
+const hot = import.meta.hot;
+/** dev: the programs made so far, per context; kept across this module's reloads */
+const live: Map<GL, Live> | undefined = hot ? (hot.data.live ??= new Map()) : undefined;
+
+/** every program, compiled for gl; in dev `onSwap` runs after a saved shader file relinked some */
+export function programs(gl: GL, onSwap?: () => void): Programs {
+  try {
+    const src = sources();
+    const ps = {} as Programs;
+    const linked = {} as Record<ProgramName, string>;
+    for (const k of NAMES) {
+      ps[k] = new Program(gl, k, src[k].vs, src[k].fs);
+      linked[k] = src[k].vs.text + src[k].fs.text;
+    }
+    live?.set(gl, { ps, linked, onSwap });
+    return ps;
+  } catch (e) {
+    if (hot) {
+      hot.data.failed = true;
+      report([e]);
+    }
+    throw e;
+  }
+}
+
+/** dev: this module again, with the files as saved now: relink every program whose stages changed */
+function swap(): void {
+  let src;
+  try {
+    src = sources();
+  } catch (e) {
+    return report([e]);
+  }
+  const errors: unknown[] = [];
+  for (const [gl, l] of live!) {
+    let changed = false;
+    for (const k of NAMES) {
+      const text = src[k].vs.text + src[k].fs.text;
+      if (text === l.linked[k]) continue;
+      try {
+        l.ps[k].relink(src[k].vs, src[k].fs);
+        l.linked[k] = text;
+        changed = true;
+      } catch (e) {
+        errors.push(e);
+      }
+    }
+    if (changed && !gl.isContextLost()) l.onSwap?.();
+  }
+  report(errors);
+}
+
+/** dev: errors in Vite's overlay, with the lines of the file the first points at. A mistake in a shared piece fails
+ * every program that includes it: each log shows once, with the programs it failed */
+function report(errors: unknown[]): void {
+  for (const e of errors) console.error(e);
+  const Overlay = customElements.get('vite-error-overlay');
+  if (!Overlay || !errors.length) return;
+  const by = new Map<string, string[]>();
+  for (const e of errors) {
+    const [log, name] = e instanceof ShaderError ? [e.log, e.program] : [e instanceof Error ? e.message : String(e), ''];
+    by.set(log, [...(by.get(log) ?? []), name]);
+  }
+  const message = [...by].map(([log, names]) => log + (names[0] ? `\n  in ${names.join(', ')}` : '')).join('\n\n');
+  const at = errors.find((e): e is ShaderError => e instanceof ShaderError && e.at.length > 0)?.at[0];
+  const lines = at ? (FILES['./' + at.file] ?? '').split('\n') : [];
+  const from = at ? Math.max(1, at.line - 3) : 0;
+  const frame = lines
+    .slice(from - 1, at ? at.line + 2 : 0)
+    .map((l, i) => `${from + i === at!.line ? '>' : ' '}${String(from + i).padStart(4)} | ${l}`)
+    .join('\n');
+  const loc = at && { file: new URL('./' + at.file, import.meta.url).pathname, line: at.line, column: 1 };
+  document.body.append(new Overlay({ message, stack: '', frame, loc, plugin: 'mycelium shaders' }, false));
+}
+
+// literally import.meta.hot.accept: that is how Vite tells a module takes its own updates
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  // the first build failed, so no forest runs to relink: start the page over with the files as saved now
+  if (import.meta.hot.data.failed) location.reload();
+  else if (live!.size) swap();
+}

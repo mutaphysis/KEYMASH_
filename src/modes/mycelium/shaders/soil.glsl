@@ -5,6 +5,9 @@
 // gravel in the humus, humus washed down into the gravel.
 // No rotation, offsets and left-right mirroring only: the soil is lit from above.
 
+#include "noise.glsl"
+#include "hex.glsl"
+
 uniform highp sampler2DArray uSoil;
 uniform float uSoilTile; // view units one texture repeat covers (the strip's texel scale)
 uniform vec3 uBands;     // depths where leafy turns dark, dark plain, plain stony

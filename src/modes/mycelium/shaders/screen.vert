@@ -1,5 +1,7 @@
 // One triangle over the whole screen, no buffers: vScreen 0 … 1, vWorld where the camera looks.
 
+#include "camera.glsl"
+
 out vec2 vScreen;
 out vec2 vWorld;
 

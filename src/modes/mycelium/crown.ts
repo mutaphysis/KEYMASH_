@@ -62,6 +62,9 @@ const LOBE_AT: [number, number] = [0.45, 0.55];
 /** at most this many pieces in a canopy (the shaders' arrays are this long); how many layers deep a crown is */
 export const CROWN_PIECES = (PLAN.length + 1) * TREES_MAX;
 export const LAYERS = 4;
+/** the share of the canopy strip's dense band down to which a piece is opaque (shaders/crown.frag): render.ts cuts
+ * each piece's mesh there into its body and its fringe */
+export const CROWN_OPAQUE = 0.85;
 /** the canopy strip's dense band reaches about 100 view units inside a piece's outline: its underside's sharpest bend
  * (at the sides, about ry² / width for an ellipse) must stay wider than that, or the strip's inner edge folds over */
 const MIN_BEND = 160;

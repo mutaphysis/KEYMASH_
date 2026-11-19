@@ -20,34 +20,16 @@ import { ATLASES, CANOPIES, CANOPY, LEAF_FILL, LEAF_FILLS, TREE_PAGES } from './
 import type { Assets, AtlasKey, Trunk } from './assets';
 import { atlases, frames } from './assets/manifest.json';
 import { BURIED_MAX, TREASURE_MAX, isGem, isTreasure } from './buried';
-import { CROWN_PIECES } from './crown';
+import { CROWN_OPAQUE, CROWN_PIECES } from './crown';
 import { TREE_SCALE, TREES_MAX, trunkFrame } from './trees';
 import type { Tree } from './trees';
 import type { Buried } from './buried';
 import { WORLD, heightAt, mixGround, mossAt, ridgeAt } from './ground';
 import type { Ground } from './ground';
-import { freeTarget, program, target, texture, textureArray } from './gl';
+import { freeTarget, target, texture, textureArray } from './gl';
 import type { GL, Program, Target } from './gl';
-import {
-  BURIED_FS,
-  BURIED_VS,
-  CROWN_FRINGE_FS,
-  CROWN_FS,
-  CROWN_VS,
-  GROUND_FS,
-  GROUND_VS,
-  POST_FS,
-  RIDGE_FS,
-  RIDGE_VS,
-  SCREEN_VS,
-  SHADE_FS,
-  SKY_FS,
-  TREE_FS,
-  TREE_VS,
-  WIRE_FS,
-  WIRE_VS,
-  CROWN_OPAQUE,
-} from './shaders';
+import { programs } from './shaders';
+import type { Programs } from './shaders';
 import { PixelBudget } from '../../ui/budget';
 
 type RGB = [number, number, number];
@@ -183,8 +165,10 @@ const SHADE_TRUNK = 1;
 const SHADE_PIECE = SHADE_TRUNK + TREES_MAX;
 const SHADE_COLS = 9;
 const SHADE_ROWS = Math.ceil((SHADE_PIECE + CROWN_PIECES) / SHADE_COLS);
-/** the texture unit the shade map stays bound to while a frame draws */
-const SHADE_UNIT = 5;
+/** the shade map's tiles: the world a tile covers (x0, y0, 1 / width, 1 / height); tiles across and down, half a texel
+ * of a tile across and down (shaders/shademap.glsl) */
+const SHADE_RECT = [WORLD.x0, WORLD.bottom, 1 / (SHADE_W * SHADE_TEXEL), 1 / (SHADE_H * SHADE_TEXEL)];
+const SHADE_GRID = [SHADE_COLS, SHADE_ROWS, 0.5 / SHADE_W, 0.5 / SHADE_H];
 
 /** The air. Neutral daylight for now; the assets carry no mood of their own, so this is where it will change. */
 const AIR = {
@@ -312,14 +296,24 @@ export class ForestRenderer {
   private budget: PixelBudget;
   private scene: Target | null = null;
 
-  private sky: Program | null = null;
-  private ground: Program | null = null;
-  private post: Program | null = null;
+  /** every program (shaders/index.ts) */
+  private p: Programs | null = null;
+  /** what the frame's programs share, each taking what it declares (frame() refreshes it) */
+  private common = {
+    uCam: new Float32Array(4),
+    uTint: AIR.tint,
+    uSkyHigh: AIR.skyHigh,
+    uSkyLow: AIR.skyLow,
+    uDeep: AIR.deep,
+    uDrift: [0, 0] as number[],
+    uShadeMap: null as WebGLTexture | null,
+    uShadeRect: SHADE_RECT,
+    uShadeGrid: SHADE_GRID,
+  };
   private empty: WebGLVertexArrayObject | null = null;
   private mesh: WebGLVertexArrayObject | null = null;
   private vbo: WebGLBuffer | null = null;
   private count = 0;
-  private ridge: Program | null = null;
   private ridgeVao: WebGLVertexArrayObject | null = null;
   private ridgeVbo: WebGLBuffer | null = null;
   private ridgeCount = 0;
@@ -327,8 +321,6 @@ export class ForestRenderer {
   /** line indices: the band rows' edges first, then the body rows' */
   private wireBand = 0;
   private wireBody = 0;
-  private wireP: Program | null = null;
-  private wireScreen: Program | null = null;
   private wireVao: WebGLVertexArrayObject | null = null;
   /** line indices: the strip rows' edges first, then the soil rows' */
   private wireStrip = 0;
@@ -347,7 +339,6 @@ export class ForestRenderer {
   private mossGain: RGB = [1, 1, 1];
   /** the atlases of what lies buried, in ATLASES order */
   private atlasTex: WebGLTexture[] = [];
-  private buried: Program | null = null;
   private buriedVao: WebGLVertexArrayObject | null = null;
   private buriedVbo: WebGLBuffer | null = null;
   private wireBuriedVao: WebGLVertexArrayObject | null = null;
@@ -360,7 +351,6 @@ export class ForestRenderer {
   /** the trees: the trunks fetched so far and their pictures and reliefs as textures (by TRUNKS index), their meshes
    * one after the other (TREE_COLS + 1 columns of TREE_ROWS each), indices per tree (triangles, and edges for the
    * wireframe) */
-  private tree: Program | null = null;
   private trunks = new Map<number, Trunk>();
   private treeTex: WebGLTexture[] = [];
   private reliefTex: WebGLTexture[] = [];
@@ -377,16 +367,12 @@ export class ForestRenderer {
   /** the ground mesh's columns for shaders that need the floor at a point (shaders/groundat.glsl) */
   private groundAtTex: WebGLTexture | null = null;
   private groundAt: Float32Array;
+  /** the canopy's shade, baked per forest (bakeShade): its layers, the framebuffer they are drawn into */
+  private shadeTex: WebGLTexture | null = null;
+  private shadeFbo: WebGLFramebuffer | null = null;
   /** the canopy, per kind of leaves (trees.ts: LEAVES): its canopy strip and leaf fill, where the strip stops being
    * solid, the fill's colour matched to the strip's dense top and that top's brightness (what the season's colours
    * map from) */
-  private crown: Program | null = null;
-  /** the same with its fringe of hanging leaves cut out (CUTOUT) */
-  private crownFringe: Program | null = null;
-  /** the canopy's shade, baked per forest (bakeShade): its program, its layers, the framebuffer they are drawn into */
-  private shade: Program | null = null;
-  private shadeTex: WebGLTexture | null = null;
-  private shadeFbo: WebGLFramebuffer | null = null;
   private canopyTex: WebGLTexture[] = [];
   private leafTex: WebGLTexture[] = [];
   private canopySolid = CANOPIES.map(() => 0.3);
@@ -453,9 +439,8 @@ export class ForestRenderer {
   private setup(): void {
     const gl = this.gl;
     if (!gl) return;
-    this.sky = program(gl, SCREEN_VS, SKY_FS);
-    this.ground = program(gl, GROUND_VS, GROUND_FS);
-    this.post = program(gl, SCREEN_VS, POST_FS);
+    // a saved shader file (dev) relinks them in place; the baked shade comes from one of them
+    this.p = programs(gl, () => this.bakeShade());
     this.empty = gl.createVertexArray();
     this.mesh = gl.createVertexArray();
     this.vbo = gl.createBuffer();
@@ -485,8 +470,6 @@ export class ForestRenderer {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
     // debug wireframe: the same vertices, their edges as lines; row 1's horizontals count as strip
-    this.wireP = program(gl, WIRE_VS, WIRE_FS);
-    this.wireScreen = program(gl, SCREEN_VS, WIRE_FS);
     this.wireVao = gl.createVertexArray();
     gl.bindVertexArray(this.wireVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
@@ -510,7 +493,6 @@ export class ForestRenderer {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([...strip, ...soil]), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
     // the hill: three rows per column (band, body), two quads per column pair; pos xy, uv
-    this.ridge = program(gl, RIDGE_VS, RIDGE_FS);
     this.ridgeVao = gl.createVertexArray();
     this.ridgeVbo = gl.createBuffer();
     gl.bindVertexArray(this.ridgeVao);
@@ -549,7 +531,6 @@ export class ForestRenderer {
     gl.bindVertexArray(null);
     // what lies buried: a quad per thing (two triangles), then one per treasure's halo; pos xy, uv, depth, the
     // picture's rect in its atlas, how far the halo reaches (texels), 1 for a gem (less stained; glints)
-    this.buried = program(gl, BURIED_VS, BURIED_FS);
     this.buriedVao = gl.createVertexArray();
     this.buriedVbo = gl.createBuffer();
     gl.bindVertexArray(this.buriedVao);
@@ -588,7 +569,6 @@ export class ForestRenderer {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, blines, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
     // the trees: per tree TREE_ROWS per column, a quad per cell; tree t's vertices and indices follow tree t - 1's
-    this.tree = program(gl, TREE_VS, TREE_FS);
     this.treeVao = gl.createVertexArray();
     this.treeVbo = gl.createBuffer();
     gl.bindVertexArray(this.treeVao);
@@ -630,7 +610,6 @@ export class ForestRenderer {
     // the canopy: per piece a ribbon (an inner, an opaque edge's and an outer vertex per column) and a fan from high
     // above to the ribbon's inner edge; pos xy, uv, piece. The topology is fixed, build() moves the vertices; piece
     // p's indices follow piece p - 1's, its body's (fan and inner band) before its fringe's (outer band)
-    this.crown = program(gl, CROWN_VS, CROWN_FS);
     this.crownVao = gl.createVertexArray();
     this.crownVbo = gl.createBuffer();
     gl.bindVertexArray(this.crownVao);
@@ -681,8 +660,6 @@ export class ForestRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     // the shade map: two channels per layer (shade, occlusion), filled by bakeShade()
-    this.crownFringe = program(gl, CROWN_VS, CROWN_FRINGE_FS);
-    this.shade = program(gl, SCREEN_VS, SHADE_FS);
     this.shadeTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.shadeTex);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RG8, SHADE_W * SHADE_COLS, SHADE_H * SHADE_ROWS);
@@ -1164,74 +1141,56 @@ export class ForestRenderer {
     const t = this.ensureTarget(gl);
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
     gl.viewport(0, 0, t.w, t.h);
+    const p = this.p!;
+    const c = this.common;
+    c.uCam[0] = this.cam.x;
+    c.uCam[1] = this.cam.y;
+    c.uCam[2] = hw;
+    c.uCam[3] = hh;
+    c.uDrift = g.drift;
+    c.uShadeMap = this.shadeTex;
     // painter's order as depth: first the canopy, opaque, front to back, writing it, unblended (a tiled GPU then
     // removes hidden pixels itself); then everything else back to front, tested against it but not writing it
-    gl.activeTexture(gl.TEXTURE0 + SHADE_UNIT);
-    gl.bindTexture(gl.TEXTURE_2D, this.shadeTex);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
     gl.depthMask(true);
     gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.disable(gl.BLEND);
-    this.forestSetup(hw, hh, g);
     this.drawCanopy(g);
     gl.depthMask(false);
 
     // sky
     this.at(SLOT.sky);
-    const sky = this.sky!;
-    gl.useProgram(sky.prog);
-    gl.uniform4f(sky.u.uCam!, this.cam.x, this.cam.y, hw, hh);
-    gl.uniform3f(sky.u.uSkyHigh!, ...AIR.skyHigh);
-    gl.uniform3f(sky.u.uSkyLow!, ...AIR.skyLow);
-    gl.uniform3f(sky.u.uLight!, ...AIR.light);
-    gl.uniform1f(sky.u.uTime!, this.gentle ? 0 : this.time);
-    gl.uniform2f(sky.u.uAspect!, aspect, 1);
+    p.sky.use(c, { uLight: AIR.light, uTime: this.gentle ? 0 : this.time, uAspect: [aspect, 1] });
     gl.bindVertexArray(this.empty);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // the hill behind, then the floor in front of it: premultiplied over the sky
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    const ri = this.ridge!;
-    gl.useProgram(ri.prog);
-    this.shadeUniforms(ri);
-    gl.uniform4f(ri.u.uCam!, this.cam.x, this.cam.y, hw, hh);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.ridgeTex);
-    gl.uniform1i(ri.u.uStrip!, 0);
-    gl.uniform1f(ri.u.uCellSeed!, RIDGE_SEED);
-    gl.uniform1f(ri.u.uMossEnd!, RIDGE_MOSS);
-    gl.uniform1f(ri.u.uShade!, RIDGE_SHADE);
-    gl.uniform3f(ri.u.uTint!, ...AIR.tint);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.mossFill);
-    gl.uniform1i(ri.u.uMossFill!, 1);
-    gl.uniform1f(ri.u.uMossTile!, this.mossTile);
-    gl.uniform3f(ri.u.uMossGain!, ...this.mossGain);
+    p.ridge.use(c, {
+      uStrip: this.ridgeTex,
+      uCellSeed: RIDGE_SEED,
+      uMossEnd: RIDGE_MOSS,
+      uShade: RIDGE_SHADE,
+      uMossFill: this.mossFill,
+      uMossTile: this.mossTile,
+      uMossGain: this.mossGain,
+    });
     gl.bindVertexArray(this.ridgeVao);
     this.at(SLOT.ridge);
     gl.drawElements(gl.TRIANGLES, this.ridgeCount, gl.UNSIGNED_SHORT, 0);
 
-    const gr = this.ground!;
-    gl.useProgram(gr.prog);
-    this.shadeUniforms(gr);
-    gl.uniform1f(gr.u.uCellSeed!, 0);
-    gl.uniform4f(gr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.strip);
-    gl.uniform1i(gr.u.uStrip!, 0);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.soils);
-    gl.uniform1i(gr.u.uSoil!, 1);
-    gl.uniform1f(gr.u.uSoilTile!, this.soilTile);
-    gl.uniform3f(gr.u.uBands!, ...g.bands);
-    gl.uniform2f(gr.u.uDrift!, ...g.drift);
-    gl.uniform3f(gr.u.uSoilGain!, ...this.soilGain);
-    gl.uniform3f(gr.u.uDeep!, ...AIR.deep);
-    gl.uniform3f(gr.u.uFade!, ...FADE);
-    gl.uniform1f(gr.u.uMoss!, MOSS);
-    gl.uniform3f(gr.u.uTint!, ...AIR.tint);
+    p.ground.use(c, {
+      uStrip: this.strip,
+      uCellSeed: 0,
+      uSoil: this.soils,
+      uSoilTile: this.soilTile,
+      uBands: g.bands,
+      uSoilGain: this.soilGain,
+      uFade: FADE,
+      uMoss: MOSS,
+    });
     gl.bindVertexArray(this.mesh);
     this.at(SLOT.ground);
     gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_SHORT, 0);
@@ -1241,19 +1200,8 @@ export class ForestRenderer {
 
     // what lies buried, over the soil: the treasures' halos, every shadow (dropped a little, blurred), then the
     // pictures; an atlas a draw
-    const bu = this.buried!;
-    gl.useProgram(bu.prog);
-    gl.uniform4f(bu.u.uCam!, this.cam.x, this.cam.y, hw, hh);
-    gl.uniform1f(bu.u.uDim!, BURIED_DIM);
-    gl.uniform3f(bu.u.uEarth!, ...this.earth);
-    gl.uniform2f(bu.u.uDrift!, ...g.drift);
-    gl.uniform3f(bu.u.uTint!, ...AIR.tint);
-    gl.uniform3f(bu.u.uDeep!, ...AIR.deep);
-    gl.uniform1f(bu.u.uGemStain!, GEM_STAIN);
-    gl.uniform1f(bu.u.uGemLight!, GEM_LIGHT);
-    gl.uniform1f(bu.u.uTime!, this.time);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.uniform1i(bu.u.uAtlas!, 0);
+    const bu = p.buried;
+    bu.use(c, { uDim: BURIED_DIM, uEarth: this.earth, uGemStain: GEM_STAIN, uGemLight: GEM_LIGHT, uTime: this.time });
     gl.bindVertexArray(this.buriedVao);
     this.at(this.slots - 1);
     // halos first, then every shadow, then the pictures, then the gems' glints (on the halo quads, room for their
@@ -1266,13 +1214,11 @@ export class ForestRenderer {
     ];
     if (!this.gentle) passes.push([PASS.glint, 0, this.haloCount, things]);
     for (const [pass, dark, counts, start] of passes) {
-      gl.uniform1i(bu.u.uPass!, pass);
-      gl.uniform1f(bu.u.uDark!, dark);
-      gl.uniform2f(bu.u.uOffset!, 0, pass === PASS.shadow ? -SHADOW_DROP : 0);
+      bu.set({ uPass: pass, uDark: dark, uOffset: [0, pass === PASS.shadow ? -SHADOW_DROP : 0] });
       let first = start;
       counts.forEach((n, a) => {
         if (!n) return;
-        gl.bindTexture(gl.TEXTURE_2D, this.atlasTex[a]!);
+        bu.set({ uAtlas: this.atlasTex[a]! });
         gl.drawElements(gl.TRIANGLES, n * 6, gl.UNSIGNED_SHORT, first * 12);
         first += n;
       });
@@ -1284,56 +1230,11 @@ export class ForestRenderer {
     gl.depthRange(0, 1);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.cv.width, this.cv.height);
-    const post = this.post!;
-    gl.useProgram(post.prog);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, t.tex);
-    gl.uniform1i(post.u.uScene!, 0);
-    gl.uniform2f(post.u.uAspect!, aspect, 1);
-    gl.uniform1f(post.u.uSeed!, this.gentle ? 0 : (this.time * 97.13) % 1000);
+    p.post.use(null, { uScene: t.tex, uAspect: [aspect, 1], uSeed: this.gentle ? 0 : (this.time * 97.13) % 1000 });
     gl.bindVertexArray(this.empty);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (this.wire) this.drawWire(hw, hh);
+    if (this.wire) this.drawWire();
     gl.bindVertexArray(null);
-  }
-
-  /** the trunks' and the crowns' uniforms for this frame (each program keeps its own), before either pass */
-  private forestSetup(hw: number, hh: number, g: Ground): void {
-    const gl = this.gl!;
-    const tr = this.tree!;
-    gl.useProgram(tr.prog);
-    this.shadeUniforms(tr);
-    gl.uniform4f(tr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
-    gl.uniform1f(tr.u.uSink!, SINK);
-    gl.uniform3f(tr.u.uTint!, ...AIR.tint);
-    gl.uniform3f(tr.u.uSkyHigh!, ...AIR.skyHigh);
-    gl.uniform3f(tr.u.uSkyLow!, ...AIR.skyLow);
-    gl.uniform2f(tr.u.uDrift!, ...g.drift);
-    gl.uniform1i(tr.u.uTree!, 0);
-    gl.uniform1i(tr.u.uRelief!, 1);
-    gl.uniform1i(tr.u.uStrip!, 2);
-    gl.uniform1f(tr.u.uCellSeed!, 0);
-    gl.uniform1i(tr.u.uMossFill!, 3);
-    gl.uniform1f(tr.u.uMossTile!, this.mossTile);
-    gl.uniform3f(tr.u.uMossGain!, ...this.floorMossGain);
-    gl.uniform1i(tr.u.uGroundAt!, 4);
-    gl.uniform2f(tr.u.uGroundCols!, WORLD.x0 - MARGIN, COL);
-    gl.uniform1f(tr.u.uLift!, LIFT * this.stripH);
-    gl.uniform1f(tr.u.uMossV!, MOSS);
-    for (const cr of [this.crown!, this.crownFringe!]) {
-      gl.useProgram(cr.prog);
-      gl.uniform4f(cr.u.uCam!, this.cam.x, this.cam.y, hw, hh);
-      this.crownUniforms(cr);
-      this.shadeUniforms(cr);
-      gl.uniform1f(cr.u.uPieceLayer!, SHADE_PIECE);
-      gl.uniform1fv(cr.u.uPieceShade!, this.pieceShade);
-      gl.uniform3f(cr.u.uTint!, ...AIR.tint);
-      gl.uniform3f(cr.u.uSkyHigh!, ...AIR.skyHigh);
-      gl.uniform3f(cr.u.uSkyLow!, ...AIR.skyLow);
-      gl.uniform1i(cr.u.uStrip!, 0);
-      gl.uniform1f(cr.u.uCellSeed!, CROWN_SEED);
-      gl.uniform1i(cr.u.uLeafFill!, 1);
-    }
   }
 
   /**
@@ -1343,15 +1244,25 @@ export class ForestRenderer {
    */
   private drawCanopy(g: Ground): void {
     const gl = this.gl!;
-    for (const [p, first, count] of [
-      [this.crown!, 0, this.crownBody],
-      [this.crownFringe!, this.crownBody, this.crownIdx - this.crownBody],
+    const p = this.p!;
+    for (const [cr, first, count] of [
+      [p.crown, 0, this.crownBody],
+      [p.crownFringe, this.crownBody, this.crownIdx - this.crownBody],
     ] as const) {
+      cr.use(this.common, {
+        uPieces: this.pieces,
+        uPieceShape: this.pieceShape,
+        uPieceCount: this.pieceCount,
+        uPieceLayer: SHADE_PIECE,
+        uPieceShade: this.pieceShade,
+        uCellSeed: CROWN_SEED,
+      });
+      gl.bindVertexArray(this.crownVao);
       let tree = -1;
       for (let i = this.order.length - 1; i >= 0; i--) {
         const s = this.order[i]!;
         if (s.piece < 0) continue;
-        if (s.tree !== tree) this.leaves(g, s, p);
+        if (s.tree !== tree) this.leaves(g, s, cr);
         tree = s.tree;
         this.at(s.slot);
         gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, (s.piece * this.crownIdx + first) * 2);
@@ -1366,75 +1277,59 @@ export class ForestRenderer {
    */
   private drawTrunks(g: Ground): void {
     const gl = this.gl!;
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.strip);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.mossFill);
-    gl.activeTexture(gl.TEXTURE4);
-    gl.bindTexture(gl.TEXTURE_2D, this.groundAtTex);
-    const tr = this.tree!;
-    gl.useProgram(tr.prog);
+    const tr = this.p!.tree;
+    tr.use(this.common, {
+      uSink: SINK,
+      uStrip: this.strip,
+      uCellSeed: 0,
+      uMossFill: this.mossFill,
+      uMossTile: this.mossTile,
+      uMossGain: this.floorMossGain,
+      uGroundAt: this.groundAtTex,
+      uGroundCols: [WORLD.x0 - MARGIN, COL],
+      uLift: LIFT * this.stripH,
+      uMossV: MOSS,
+    });
     gl.bindVertexArray(this.treeVao);
     for (const s of this.order) {
       if (s.piece >= 0) continue;
       const t = g.trees[s.tree]!;
       this.at(s.slot);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this.treeTex[t.trunk]!);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, this.reliefTex[t.trunk]!);
-      gl.uniform2f(tr.u.uSeed!, ...t.seed);
-      gl.uniform4f(tr.u.uGrade!, ...t.tint, t.saturation);
-      gl.uniform1f(tr.u.uClimb!, t.climb);
-      gl.uniform1f(tr.u.uShadeLayer!, SHADE_TRUNK + s.tree);
-      gl.uniform1f(tr.u.uHaze!, HAZE * t.depth);
+      tr.set({
+        uTree: this.treeTex[t.trunk]!,
+        uRelief: this.reliefTex[t.trunk]!,
+        uSeed: t.seed,
+        uGrade: [...t.tint, t.saturation],
+        uClimb: t.climb,
+        uShadeLayer: SHADE_TRUNK + s.tree,
+        uHaze: HAZE * t.depth,
+      });
       gl.drawElements(gl.TRIANGLES, this.treeIdx, gl.UNSIGNED_SHORT, s.tree * this.treeIdx * 2);
     }
-    gl.activeTexture(gl.TEXTURE0);
   }
 
-  /** step s's crown in program p: its kind of leaves, its season and its shade of it */
+  /** step s's crown in program p (in use): its kind of leaves, its season and its shade of it */
   private leaves(g: Ground, s: Step, p: Program): void {
-    const gl = this.gl!;
     const t = g.trees[s.tree]!;
-    gl.useProgram(p.prog);
-    gl.bindVertexArray(this.crownVao);
     const kind = t.leaves;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.canopyTex[kind]!);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.leafTex[kind]!);
-    gl.uniform1f(p.u.uSolid!, this.canopySolid[kind]!);
-    gl.uniform1f(p.u.uLeafTile!, LEAF_FILL[kind]!.w * LEAF_FILL[kind]!.s * LEAF_SCALE);
-    gl.uniform3f(p.u.uLeafGain!, ...this.leafGain[kind]!);
-    gl.uniform1f(p.u.uLeafLuma!, this.leafLuma[kind]!);
-    gl.uniform1i(p.u.uLeafKind!, kind);
-    gl.uniform1f(p.u.uSeason!, g.crown.seasons[s.tree]!);
-    gl.uniform3f(p.u.uFoliage!, ...t.foliage);
-    gl.uniform1f(p.u.uHaze!, HAZE * t.depth);
+    p.set({
+      uStrip: this.canopyTex[kind]!,
+      uLeafFill: this.leafTex[kind]!,
+      uSolid: this.canopySolid[kind]!,
+      uLeafTile: LEAF_FILL[kind]!.w * LEAF_FILL[kind]!.s * LEAF_SCALE,
+      uLeafGain: this.leafGain[kind]!,
+      uLeafLuma: this.leafLuma[kind]!,
+      uLeafKind: kind,
+      uSeason: g.crown.seasons[s.tree]!,
+      uFoliage: t.foliage,
+      uHaze: HAZE * t.depth,
+    });
   }
 
   /** draws from here on lie at this slot's depth (SLOT; every vertex shader puts z at 0, so the range is the depth) */
   private at(slot: number): void {
     const d = 1 - (slot + 1) / (this.slots + 1);
     this.gl!.depthRange(d, d);
-  }
-
-  /** the canopy's pieces, for a program that reads their shapes (shaders/crown.glsl) */
-  private crownUniforms(p: Program): void {
-    const gl = this.gl!;
-    gl.uniform4fv(p.u.uPieces ?? null, this.pieces);
-    gl.uniform2fv(p.u.uPieceShape ?? null, this.pieceShape);
-    gl.uniform1i(p.u.uPieceCount ?? null, this.pieceCount);
-  }
-
-  /** the shade map (bound to SHADE_UNIT for the frame), the world a tile covers and the tiles, for a program that
-   * reads it */
-  private shadeUniforms(p: Program): void {
-    const gl = this.gl!;
-    gl.uniform1i(p.u.uShadeMap!, SHADE_UNIT);
-    gl.uniform4f(p.u.uShadeRect!, WORLD.x0, WORLD.bottom, 1 / (SHADE_W * SHADE_TEXEL), 1 / (SHADE_H * SHADE_TEXEL));
-    gl.uniform4f(p.u.uShadeGrid!, SHADE_COLS, SHADE_ROWS, 0.5 / SHADE_W, 0.5 / SHADE_H);
   }
 
   /**
@@ -1445,7 +1340,7 @@ export class ForestRenderer {
    */
   private bakeShade(): void {
     const gl = this.gl;
-    const sh = this.shade;
+    const sh = this.p?.shade;
     if (!gl || this.lost || !sh || !this.shadeFbo) return;
     const n = this.pieceCount;
     const hw = (SHADE_W * SHADE_TEXEL) / 2;
@@ -1453,9 +1348,7 @@ export class ForestRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadeFbo);
     gl.disable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
-    gl.useProgram(sh.prog);
-    gl.uniform4f(sh.u.uCam!, WORLD.x0 + hw, WORLD.bottom + hh, hw, hh);
-    this.crownUniforms(sh);
+    sh.use(null, { uCam: [WORLD.x0 + hw, WORLD.bottom + hh, hw, hh], uPieces: this.pieces, uPieceShape: this.pieceShape, uPieceCount: n });
     gl.bindVertexArray(this.empty);
     gl.enable(gl.SCISSOR_TEST);
     // layer i: its tile as the viewport (the full-screen triangle spans the world in it), the scissor within it
@@ -1464,9 +1357,7 @@ export class ForestRenderer {
       const y = Math.floor(i / SHADE_COLS) * SHADE_H;
       gl.viewport(x, y, SHADE_W, SHADE_H);
       gl.scissor(x + box[0], y + box[1], box[2], box[3]);
-      gl.uniform1f(sh.u.uCrownShadow!, dark);
-      gl.uniform3i(sh.u.uCast!, ...cast);
-      gl.uniform1i(sh.u.uFirst!, first);
+      sh.set({ uCrownShadow: dark, uCast: cast, uFirst: first });
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
     // a trunk's or a piece's layer is only ever read where it is drawn: baked within its mesh's bounds; the floor's
@@ -1522,41 +1413,40 @@ export class ForestRenderer {
    * triangles of sky and post are the same one (corners -1,-1 / 3,-1 / -1,3): its edges run along the screen's
    * left and bottom borders and off screen, so at most a line on the border shows; the legend lists them anyway.
    */
-  private drawWire(hw: number, hh: number): void {
+  private drawWire(): void {
     const gl = this.gl!;
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    const s = this.wireScreen!;
-    gl.useProgram(s.prog);
+    const s = this.p!.wireScreen;
+    s.use(null);
     gl.bindVertexArray(this.empty);
     for (const c of [WIRE_COLOR.post, WIRE_COLOR.sky]) {
-      gl.uniform4f(s.u.uColor!, ...c);
+      s.set({ uColor: c });
       gl.drawArrays(gl.LINE_LOOP, 0, 3);
     }
-    const w = this.wireP!;
-    gl.useProgram(w.prog);
-    gl.uniform4f(w.u.uCam!, this.cam.x, this.cam.y, hw, hh);
+    const w = this.p!.wire;
+    w.use(this.common);
     gl.bindVertexArray(this.wireRidgeVao);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.body);
+    w.set({ uColor: WIRE_COLOR.body });
     gl.drawElements(gl.LINES, this.wireBody, gl.UNSIGNED_SHORT, this.wireBand * 2);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.band);
+    w.set({ uColor: WIRE_COLOR.band });
     gl.drawElements(gl.LINES, this.wireBand, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireVao);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.strip);
+    w.set({ uColor: WIRE_COLOR.strip });
     gl.drawElements(gl.LINES, this.wireStrip, gl.UNSIGNED_SHORT, 0);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.soil);
+    w.set({ uColor: WIRE_COLOR.soil });
     gl.drawElements(gl.LINES, this.wireSoil, gl.UNSIGNED_SHORT, this.wireStrip * 2);
     gl.bindVertexArray(this.wireTreeVao);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.tree);
+    w.set({ uColor: WIRE_COLOR.tree });
     gl.drawElements(gl.LINES, this.treeCount * this.wireTreeIdx, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireCrownVao);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.crown);
+    w.set({ uColor: WIRE_COLOR.crown });
     gl.drawElements(gl.LINES, this.pieceCount * this.wireCrownIdx, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(this.wireBuriedVao);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.buried);
+    w.set({ uColor: WIRE_COLOR.buried });
     const things = this.buriedCount.reduce((s, n) => s + n, 0);
     gl.drawElements(gl.LINES, things * 10, gl.UNSIGNED_SHORT, 0);
-    gl.uniform4f(w.u.uColor!, ...WIRE_COLOR.halo);
+    w.set({ uColor: WIRE_COLOR.halo });
     gl.drawElements(gl.LINES, this.haloCount.reduce((s, n) => s + n, 0) * 10, gl.UNSIGNED_SHORT, things * 20);
     gl.disable(gl.BLEND);
   }
