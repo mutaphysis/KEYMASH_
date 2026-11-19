@@ -173,7 +173,8 @@ drop in); **clear** empties the dish (for
 six seconds the button undoes it); the **time** button shows the speed running and steps through
 **1×**, **3×** and **pause** (time stops: the cells freeze, flagella and cilia too, while the
 water still moves; a cell put down in a pause shows at its small starting size and grows once
-time runs, a cell killed in a pause begins to dissolve and finishes once time runs).
+time runs, a cell killed in a pause begins to dissolve and finishes once time runs). While the
+browser window has no focus the whole lab stops — time, water and music — and goes on when you come back.
 
 Under the toolbar (on the left in split view) is the specimen drawer: the eight body types
 (the amoeba among them a hunter, the lab's one predator),

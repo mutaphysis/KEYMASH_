@@ -121,6 +121,8 @@ export class Lab {
   private fedAt = -Infinity;
   /** seconds until the next save */
   private saveIn = SAVE_EVERY;
+  /** the browser window lost focus: the dish stops (time, water, music) until it comes back */
+  private away = false;
 
   constructor(audio: AudioEngine) {
     this.audio = audio;
@@ -206,6 +208,8 @@ export class Lab {
     const leave = () => this.petri && this.persist(true);
     window.addEventListener('pagehide', leave);
     document.addEventListener('visibilitychange', () => document.hidden && leave());
+    window.addEventListener('blur', () => this.setAway(true));
+    window.addEventListener('focus', () => this.setAway(false));
   }
 
   private button(parent: HTMLElement, variant: 'header' | 'tool', icon: IconName, text: string, onClick: () => void): KmButton {
@@ -236,13 +240,34 @@ export class Lab {
     this.saveIn = SAVE_EVERY;
     this.persist(true);
     this.amb.configure(hash(from?.src ?? 'lab'));
-    this.audio.init();
-    this.amb.start();
     this.root.classList.add('on');
     this.fit();
-    this.last = performance.now();
     cancelAnimationFrame(this.raf);
+    // a lab reopened by a reload in a window behind others starts paused
+    this.away = !document.hasFocus();
+    if (!this.away) this.run();
+  }
+
+  /** the loop and the music start (again) */
+  private run(): void {
+    this.audio.init();
+    this.amb.start();
+    this.last = performance.now();
     this.raf = requestAnimationFrame(this.loop);
+  }
+
+  /** pause while the browser is elsewhere: nobody watches, and a throttled window would only stutter. A press is let
+   * go, since its pointerup may never come */
+  private setAway(away: boolean): void {
+    if (away === this.away) return;
+    this.away = away;
+    if (!this.petri) return;
+    if (!away) return this.run();
+    this.letGo();
+    this.feeding = null;
+    this.pointer = null;
+    cancelAnimationFrame(this.raf);
+    this.amb.stop();
   }
 
   close(): void {
