@@ -400,6 +400,7 @@ async function bench(o: BenchOptions): Promise<BenchResult> {
   const assets = await fetchAssets();
   const t0 = performance.now();
   const main = rig(o);
+  await main.r.ready;
   main.r.upload(assets);
   const setup = performance.now() - t0;
   const info = main.trace.gl.getExtension('WEBGL_debug_renderer_info');

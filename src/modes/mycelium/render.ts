@@ -278,6 +278,9 @@ function shadeBox(v: Float32Array, at: number, count: number, stride: number): [
 export class ForestRenderer {
   /** false: no WebGL2 */
   readonly ok: boolean;
+  /** settles once the programs are compiled (they compile in the background, frame() draws nothing before);
+   * rejects with the ShaderError of one that doesn't */
+  ready: Promise<void> = Promise.resolve();
   gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** where the camera looks, in view units; clamped to the world each frame */
   cam = { x: 0, y: 0 };
@@ -296,8 +299,10 @@ export class ForestRenderer {
   private budget: PixelBudget;
   private scene: Target | null = null;
 
-  /** every program (shaders/index.ts) */
+  /** every program (shaders/index.ts), once compiled; setups counts setup() calls, so a context lost and restored
+   * while they compiled keeps the newer ones */
   private p: Programs | null = null;
+  private setups = 0;
   /** what the frame's programs share, each taking what it declares (frame() refreshes it) */
   private common = {
     uCam: new Float32Array(4),
@@ -440,7 +445,13 @@ export class ForestRenderer {
     const gl = this.gl;
     if (!gl) return;
     // a saved shader file (dev) relinks them in place; the baked shade comes from one of them
-    this.p = programs(gl, () => this.bakeShade());
+    const setup = ++this.setups;
+    this.p = null;
+    this.ready = programs(gl, () => this.bakeShade()).then((p) => {
+      if (setup !== this.setups) return;
+      this.p = p;
+      this.bakeShade();
+    });
     this.empty = gl.createVertexArray();
     // the ground: pos xy, uv, depth, where the moss ends; two quads per column pair: strip (rows 0–1) and soil below
     // it (rows 1–2). Its wireframe: row 1's horizontals count as strip
@@ -1028,6 +1039,7 @@ export class ForestRenderer {
     if (
       !gl ||
       this.lost ||
+      !this.p ||
       !this.shown ||
       !this.strip ||
       !this.soils ||

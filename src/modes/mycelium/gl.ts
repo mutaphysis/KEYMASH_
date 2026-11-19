@@ -38,6 +38,12 @@ const SAMPLERS: Record<number, number> = {
   [WebGL2RenderingContext.SAMPLER_CUBE]: WebGL2RenderingContext.TEXTURE_CUBE_MAP,
 };
 
+/** a compile and link queued with the driver, its outcome not asked for yet */
+interface Linking {
+  prog: WebGLProgram;
+  stages: [WebGLShader, Source][];
+}
+
 /**
  * A linked program and a setter per active uniform, picked by its GLSL type: `set({ uTint: AIR.tint, uStrip: tex })`.
  * Each sampler has a texture unit of its own, so setting one binds the texture there. A name the program's source
@@ -47,47 +53,57 @@ export class Program {
   prog!: WebGLProgram;
   private setters = new Map<string, (v: Value) => void>();
   private declared = new Set<string>();
+  private linking: Linking | null;
 
+  /** queues the compile and link; link() takes the outcome (programs() lets the driver finish first) */
   constructor(
     private gl: GL,
     readonly name: string,
     vs: Source,
     fs: Source,
   ) {
-    this.relink(vs, fs);
+    this.linking = this.queue(vs, fs);
   }
 
-  /** compile and link (again: a hot-reloaded shader); throws a ShaderError and keeps what it had if that fails */
+  /** compile and link again (a hot-reloaded shader), waiting for it; throws a ShaderError and keeps what it had */
   relink(vs: Source, fs: Source): void {
+    this.linking = this.queue(vs, fs);
+    this.link();
+  }
+
+  /** whether the driver is done with the queued link, so link() won't wait for it (KHR_parallel_shader_compile's
+   * COMPLETION_STATUS_KHR) */
+  done(completion: number): boolean {
+    const l = this.linking;
+    return !l || this.gl.isContextLost() || !!this.gl.getProgramParameter(l.prog, completion);
+  }
+
+  /** the queued link's outcome: the program and its setters, or a ShaderError (keeping the program it had) */
+  link(): void {
     const gl = this.gl;
-    const a = this.compile(gl.VERTEX_SHADER, vs);
-    let b: WebGLShader;
-    try {
-      b = this.compile(gl.FRAGMENT_SHADER, fs);
-    } catch (e) {
-      gl.deleteShader(a);
+    const l = this.linking;
+    if (!l) return;
+    this.linking = null;
+    if (!gl.getProgramParameter(l.prog, gl.LINK_STATUS) && !gl.isContextLost()) {
+      // a stage that didn't compile says why (asked only now: each status query waits for the driver); else the link
+      const failed = l.stages.find(([sh]) => !gl.getShaderParameter(sh, gl.COMPILE_STATUS));
+      const e = failed
+        ? this.compileError(failed[0], failed[1])
+        : new ShaderError(this.name, `link: ${(gl.getProgramInfoLog(l.prog) ?? '').replace(/\0/g, '').trim()}`, []);
+      for (const [sh] of l.stages) gl.deleteShader(sh);
+      gl.deleteProgram(l.prog);
       throw e;
     }
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, a);
-    gl.attachShader(prog, b);
-    gl.linkProgram(prog);
-    gl.deleteShader(a);
-    gl.deleteShader(b);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS) && !gl.isContextLost()) {
-      const log = gl.getProgramInfoLog(prog) ?? '';
-      gl.deleteProgram(prog);
-      throw new ShaderError(this.name, `link: ${log.replace(/\0/g, '').trim()}`, []);
-    }
+    for (const [sh] of l.stages) gl.deleteShader(sh);
     if (this.prog) gl.deleteProgram(this.prog);
-    this.prog = prog;
+    this.prog = l.prog;
     this.setters.clear();
-    this.declared = declared(vs.text + '\n' + fs.text);
-    gl.useProgram(prog);
-    const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) as number;
+    this.declared = declared(l.stages.map(([, src]) => src.text).join('\n'));
+    gl.useProgram(l.prog);
+    const n = gl.getProgramParameter(l.prog, gl.ACTIVE_UNIFORMS) as number;
     for (let i = 0, unit = 0; i < n; i++) {
-      const info = gl.getActiveUniform(prog, i);
-      const loc = info && gl.getUniformLocation(prog, info.name);
+      const info = gl.getActiveUniform(l.prog, i);
+      const loc = info && gl.getUniformLocation(l.prog, info.name);
       if (info && loc) this.setters.set(info.name.replace(/\[0\]$/, ''), setter(gl, info.type, loc, SAMPLERS[info.type] ? unit++ : -1));
     }
   }
@@ -108,24 +124,32 @@ export class Program {
     }
   }
 
-  private compile(type: number, src: Source): WebGLShader {
+  private queue(vs: Source, fs: Source): Linking {
     const gl = this.gl;
-    const sh = gl.createShader(type)!;
-    gl.shaderSource(sh, src.text);
-    gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS) && !gl.isContextLost()) {
-      // ANGLE's log: "ERROR: <source string>:<line>: <what>", one per line, NUL at the end
-      const log = (gl.getShaderInfoLog(sh) ?? '').replace(/\0/g, '').trim();
-      gl.deleteShader(sh);
-      const at: ShaderAt[] = [];
-      const mapped = log.replace(/^(ERROR|WARNING): (\d+):(\d+): (.*)$/gm, (_, kind: string, n: string, line: string, text: string) => {
-        const file = src.files[+n] ?? '?';
-        at.push({ file, line: +line, text });
-        return `${kind}: ${file}:${line}: ${text}`;
-      });
-      throw new ShaderError(this.name, mapped, at);
-    }
-    return sh;
+    const prog = gl.createProgram()!;
+    const stages = ([gl.VERTEX_SHADER, gl.FRAGMENT_SHADER] as const).map((type, i): [WebGLShader, Source] => {
+      const src = i ? fs : vs;
+      const sh = gl.createShader(type)!;
+      gl.shaderSource(sh, src.text);
+      gl.compileShader(sh);
+      gl.attachShader(prog, sh);
+      return [sh, src];
+    });
+    gl.linkProgram(prog);
+    return { prog, stages };
+  }
+
+  /** ANGLE's log ("ERROR: <source string>:<line>: <what>", one per line, NUL at the end) with each line moved to the
+   * file it came from */
+  private compileError(sh: WebGLShader, src: Source): ShaderError {
+    const log = (this.gl.getShaderInfoLog(sh) ?? '').replace(/\0/g, '').trim();
+    const at: ShaderAt[] = [];
+    const mapped = log.replace(/^(ERROR|WARNING): (\d+):(\d+): (.*)$/gm, (_, kind: string, n: string, line: string, text: string) => {
+      const file = src.files[+n] ?? '?';
+      at.push({ file, line: +line, text });
+      return `${kind}: ${file}:${line}: ${text}`;
+    });
+    return new ShaderError(this.name, mapped, at);
   }
 }
 

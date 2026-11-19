@@ -82,8 +82,13 @@ const hot = import.meta.hot;
 /** dev: the programs made so far, per context; kept across this module's reloads */
 const live: Map<GL, Live> | undefined = hot ? (hot.data.live ??= new Map()) : undefined;
 
-/** every program, compiled for gl; in dev `onSwap` runs after a saved shader file relinked some */
-export function programs(gl: GL, onSwap?: () => void): Programs {
+/**
+ * Every program, compiled for gl; in dev `onSwap` runs after a saved shader file relinked some. All are queued at
+ * once; with KHR_parallel_shader_compile the driver compiles them on its own threads while the page goes on (the
+ * forest's pictures download meanwhile), and their outcome is asked for only once all are done: asking any sooner
+ * would wait for it.
+ */
+export async function programs(gl: GL, onSwap?: () => void): Promise<Programs> {
   try {
     const src = sources();
     const ps = {} as Programs;
@@ -92,6 +97,9 @@ export function programs(gl: GL, onSwap?: () => void): Programs {
       ps[k] = new Program(gl, k, src[k].vs, src[k].fs);
       linked[k] = src[k].vs.text + src[k].fs.text;
     }
+    const ext = gl.getExtension('KHR_parallel_shader_compile');
+    if (ext) while (!NAMES.every((k) => ps[k].done(ext.COMPLETION_STATUS_KHR))) await new Promise((res) => setTimeout(res, 4));
+    for (const k of NAMES) ps[k].link();
     live?.set(gl, { ps, linked, onSwap });
     return ps;
   } catch (e) {

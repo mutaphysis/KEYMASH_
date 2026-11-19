@@ -143,7 +143,7 @@ export class ForestPlayer implements ModePlayer {
     }
     const line = document.createTextNode('');
     boot.append(line);
-    // the scene's pictures and this forest's trunks, one byte count for both
+    // the scene's pictures and this forest's trunks, one byte count for both; the shaders compile meanwhile
     const g = readGround(src);
     const bytes = [0, 0, 0, 0];
     const progress = (k: number) => (n: number, total: number) => {
@@ -154,7 +154,7 @@ export class ForestPlayer implements ModePlayer {
     let assets: Assets;
     let trunks: Map<number, Trunk>;
     try {
-      [assets, trunks] = await Promise.all([fetchAssets(progress(0)), fetchTrunks(trunksOf(g), progress(1))]);
+      [assets, trunks] = await Promise.all([fetchAssets(progress(0)), fetchTrunks(trunksOf(g), progress(1)), this.r.ready]);
     } catch (e) {
       if (run === this.run) line.textContent = t('bootFailed', { err: e instanceof Error ? e.message : String(e) });
       return;
