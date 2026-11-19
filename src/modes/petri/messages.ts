@@ -86,6 +86,8 @@ const en = {
   toolNormal: '1×',
   toolFast: '3×',
   toolAutoFeed: 'auto feed',
+  /** over the dish while the browser window has no focus */
+  labPaused: 'PAUSED',
   labFull: 'DISH FULL',
   labSaved: 'IN THE DRAWER',
   labHave: 'ALREADY IN THE DRAWER',
@@ -217,6 +219,7 @@ const de: Translation<typeof en> = {
   toolNormal: '1×',
   toolFast: '3×',
   toolAutoFeed: 'Autofutter',
+  labPaused: 'PAUSIERT',
   labFull: 'SCHALE VOLL',
   labSaved: 'IN DER SCHUBLADE',
   labHave: 'SCHON IN DER SCHUBLADE',

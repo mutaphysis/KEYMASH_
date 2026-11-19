@@ -24,7 +24,7 @@ import type { AudioEngine } from '../../../engine/audio';
 import type { KmButton } from '../../../ui/components/button';
 import type { KmToast } from '../../../ui/components/toast';
 import { $ } from '../../../ui/dom';
-import { iconCursor } from '../../../ui/icon';
+import { iconCursor, iconEl } from '../../../ui/icon';
 import type { IconName } from '../../../ui/icon';
 import { hash } from '../../../lang/rng';
 import { readJson, writeJson } from '../../../ui/storage';
@@ -90,6 +90,7 @@ export class Lab {
   private root = document.createElement('div');
   private dishEl = document.createElement('div');
   private canvas = document.createElement('canvas');
+  private pausedEl = document.createElement('div');
   private toolsEl = document.createElement('div');
   private statusEl = document.createElement('div');
   private shelf: Shelf;
@@ -170,7 +171,12 @@ export class Lab {
     this.dishEl.className = css.dish;
     this.dishEl.dataset.drop = 'dish';
     this.canvas.className = css.canvas;
-    this.dishEl.append(this.canvas);
+    this.pausedEl.className = css.paused;
+    this.pausedEl.hidden = true;
+    const pausedText = document.createElement('span');
+    pausedText.textContent = t('labPaused');
+    this.pausedEl.append(iconEl('pause'), pausedText);
+    this.dishEl.append(this.canvas, this.pausedEl);
     this.toolsEl.className = css.tools;
     this.toolsEl.setAttribute('role', 'toolbar');
     this.root.append(top, this.shelf.benchEl, this.dishEl, this.toolsEl, this.shelf.drawer, this.viewer.el, this.shelf.ghost);
@@ -243,9 +249,11 @@ export class Lab {
     this.root.classList.add('on');
     this.fit();
     cancelAnimationFrame(this.raf);
-    // a lab reopened by a reload in a window behind others starts paused
+    // a lab reopened by a reload in a window behind others starts paused, its dish drawn once under the veil
     this.away = !document.hasFocus();
+    this.pausedEl.hidden = !this.away;
     if (!this.away) this.run();
+    else this.r.frame(0, this.petri.world, 0, 0);
   }
 
   /** the loop and the music start (again) */
@@ -261,6 +269,7 @@ export class Lab {
   private setAway(away: boolean): void {
     if (away === this.away) return;
     this.away = away;
+    this.pausedEl.hidden = !away;
     if (!this.petri) return;
     if (!away) return this.run();
     this.letGo();

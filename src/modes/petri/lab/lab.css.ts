@@ -45,6 +45,25 @@ export const dish = style({
 
 export const canvas = style({ position: 'absolute', left: 0, top: 0, touchAction: 'none' });
 
+/** over the dish while the browser window has no focus: the lab stands still, and the veil keeps the tools off it */
+export const paused = style({
+  position: 'absolute',
+  inset: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+  background: `color-mix(in srgb, ${vars.color.bg} 55%, transparent)`,
+  color: rgba(fg, 0.95),
+  letterSpacing: 3,
+  fontSize: 13,
+  textShadow: `0 0 12px ${rgba(fg, 0.5)}`,
+  transition: 'opacity .3s',
+  selectors: { '&[hidden]': { display: 'flex', opacity: 0, pointerEvents: 'none' } },
+});
+globalStyle(`${paused} i`, { fontSize: 44 });
+
 export const tools = style({
   gridArea: 'tools',
   display: 'flex',
