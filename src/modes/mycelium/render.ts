@@ -348,12 +348,11 @@ export class ForestRenderer {
   private haloCount: number[] = ATLASES.map(() => 0);
   /** the soil's colour (straight), what buried things are stained toward */
   private earth: RGB = [0.3, 0.22, 0.15];
-  /** the trees: the trunks fetched so far and their pictures and reliefs as textures (by TRUNKS index), their meshes
-   * one after the other (TREE_COLS + 1 columns of TREE_ROWS each), indices per tree (triangles, and edges for the
-   * wireframe) */
+  /** the trees: the trunks the forest stands (and the one easing in) and their pictures and reliefs as textures (by
+   * TRUNKS index; dropTrunks frees the others), their meshes one after the other (TREE_COLS + 1 columns of TREE_ROWS
+   * each), indices per tree (triangles, and edges for the wireframe) */
   private trunks = new Map<number, Trunk>();
-  private treeTex: WebGLTexture[] = [];
-  private reliefTex: WebGLTexture[] = [];
+  private trunkTex = new Map<number, { picture: WebGLTexture; relief: WebGLTexture }>();
   private treeVao: WebGLVertexArrayObject | null = null;
   private treeVbo: WebGLBuffer | null = null;
   private treeIdx = 0;
@@ -429,6 +428,7 @@ export class ForestRenderer {
       if (this.assets) this.upload(this.assets);
       const trunks = this.trunks;
       this.trunks = new Map();
+      this.trunkTex.clear();
       this.addTrunks(trunks);
       if (this.shown) this.build(this.shown);
     });
@@ -632,8 +632,7 @@ export class ForestRenderer {
       if (this.trunks.has(i)) continue;
       this.trunks.set(i, t);
       if (!gl || this.lost) continue;
-      this.treeTex[i] = texture(gl, t.picture, 'clamp', 'clamp');
-      this.reliefTex[i] = texture(gl, t.relief, 'clamp', 'clamp');
+      this.trunkTex.set(i, { picture: texture(gl, t.picture, 'clamp', 'clamp'), relief: texture(gl, t.relief, 'clamp', 'clamp') });
     }
   }
 
@@ -644,7 +643,23 @@ export class ForestRenderer {
       this.shown = g;
       this.morph = 0;
       this.build(g);
+      this.dropTrunks(g);
     } else this.morph = MORPH;
+  }
+
+  /**
+   * Frees the textures of the trunks `g` doesn't stand, once it is all that is shown: a trunk is 10 MB or more on the
+   * GPU, and each new text stands others. One that comes back is uploaded again from assets.ts' cache (a few ms).
+   */
+  private dropTrunks(g: Ground): void {
+    const keep = new Set(g.trees.map((t) => t.trunk));
+    for (const [i, tex] of this.trunkTex) {
+      if (keep.has(i)) continue;
+      this.gl?.deleteTexture(tex.picture);
+      this.gl?.deleteTexture(tex.relief);
+      this.trunkTex.delete(i);
+      this.trunks.delete(i);
+    }
   }
 
   /** the camera at rest: the floor under x at FLOOR_AT of the view */
@@ -1028,6 +1043,7 @@ export class ForestRenderer {
       this.morph = Math.max(0, this.morph - dt);
       this.shown = this.morph > 0 ? mixGround(this.shown, this.goal, 1 - Math.exp(-dt * 7)) : this.goal;
       this.build(this.shown);
+      if (this.morph === 0) this.dropTrunks(this.goal);
     }
     this.clamp();
     const g = this.shown;
@@ -1193,8 +1209,8 @@ export class ForestRenderer {
       const t = g.trees[s.tree]!;
       this.at(s.slot);
       tr.set({
-        uTree: this.treeTex[t.trunk]!,
-        uRelief: this.reliefTex[t.trunk]!,
+        uTree: this.trunkTex.get(t.trunk)!.picture,
+        uRelief: this.trunkTex.get(t.trunk)!.relief,
         uSeed: t.seed,
         uGrade: [...t.tint, t.saturation],
         uClimb: t.climb,
