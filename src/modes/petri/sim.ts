@@ -359,6 +359,20 @@ export class World {
     return c;
   }
 
+  /** take the oldest food out until n more pieces fit, so the lab's food tool always feeds; outside a step only */
+  makeRoom(n: number): void {
+    let live = 0;
+    for (const f of this.food) if (!f.gone) live++;
+    // food is pushed in order, so the oldest lies first; a cell chasing a piece taken out lets go on its next step
+    for (let i = 0; i < this.food.length && live + n > MAX_FOOD; i++) {
+      const f = this.food[i]!;
+      if (f.gone) continue;
+      f.gone = true;
+      live--;
+    }
+    this.food = this.food.filter((f) => !f.gone);
+  }
+
   addFood(x: number, y: number, n: number, kind: FoodKind, spread = 40, sp: Species | null = null): number {
     let made = 0;
     for (let i = 0; i < n && this.food.length < MAX_FOOD; i++) {

@@ -615,7 +615,9 @@ export class Lab {
   private feed(): void {
     const f = this.feeding;
     if (!f || !this.petri) return;
-    this.petri.world.addFood(f.x, f.y, 2, 'algae', 18);
+    const W = this.petri.world;
+    W.makeRoom(2);
+    W.addFood(f.x, f.y, 2, 'algae', 18);
     this.r.ripple(f.x, f.y, 4, 40, 1.4, 100, 0.5);
     this.amb.touch(f.x);
     f.next = FEED_EVERY;

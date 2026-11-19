@@ -158,7 +158,7 @@ toolbar under the dish (in a column beside it in split view) picks what a touch 
 | look | open the cell's genes (or a piece of debris that still carries a genome) |
 | mutate | one to three of its genes change: a new species, named and introduced |
 | divide | it divides at once (unless the dish or the species is full) |
-| food | drop algae where you touch, more while you hold |
+| food | drop algae where you touch, more while you hold; on a full dish the oldest food goes to make room |
 | stream | drag: a current along the arrow, stronger the longer; tap: a swirl |
 | light | a pool of light: algae bloom in it, photosynthetic cells swim to it and feed (as ☀️ in a text) |
 | toxin | a cloud of poison: cells that aren't toxic themselves starve in it |

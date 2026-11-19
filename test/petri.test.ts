@@ -229,6 +229,18 @@ test('lab: forceDivide starts a division, retype moves the cell to a new species
   expect(cells[1]!.sp).toBe(m);
 });
 
+test('lab: makeRoom lets food in on a full dish by taking out the oldest', () => {
+  const { W } = labDish();
+  W.addFood(-300, 0, MAX_FOOD, 'algae', 20);
+  expect(W.addFood(300, 0, 2, 'algae', 10)).toBe(0);
+  const oldest = W.food.slice(0, 2);
+  W.makeRoom(2);
+  expect(W.addFood(300, 0, 2, 'algae', 10)).toBe(2);
+  expect(W.food.length).toBe(MAX_FOOD);
+  expect(oldest.every((f) => f.gone && !W.food.includes(f))).toBe(true);
+  expect(W.food.filter((f) => f.x > 0).length).toBe(2);
+});
+
 test('lab: clear empties the dish and restore brings it back', () => {
   const { W, a } = labDish();
   const before = W.cells;
