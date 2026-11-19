@@ -41,13 +41,16 @@ const HOLD_PX = 8;
 /** how long clear can be undone (ms) */
 const UNDO_MS = 6000;
 /** auto feed: algae per second of dish time, a trickle for an empty dish plus FEED_SHARE times the energy the cells
- * burn (a hungrier dish is fed faster; most algae rot or lie out of reach before they are found) */
+ * burn, but never more than FEED_KEEP cells of them burn (most algae rot or lie out of reach before they are found) */
 const FEED_BASE = 0.2;
 const FEED_SHARE = 4;
+/** a dish fed for this many cells settles around 14 (8 at the least, headless runs over 30 min) instead of growing
+ * until the dish is full: a bigger one starves back down */
+const FEED_KEEP = 4;
 /** the algae drop in clumps of this many, this far apart: patches to find and graze, as the play mode's feeder makes */
 const FEED_CLUMP = 5;
 const FEED_SPREAD = 40;
-/** it pauses while this much food lies about: a base and so many pieces per cell */
+/** it pauses while this much food lies about: a base and so many pieces per cell fed for */
 const FOOD_ENOUGH = [16, 12] as const;
 /** seconds between saves while the lab is open: a tab that is killed loses at most this much */
 const SAVE_EVERY = 5;
@@ -681,10 +684,14 @@ export class Lab {
     this.feedBtn.icon = on ? 'autoFeed' : 'autoFeedOff';
   }
 
-  /** auto feed: clumps of algae at random spots, faster the more energy the dish's cells burn; true when some dropped */
+  /** auto feed: clumps of algae at random spots, faster the more energy the dish's cells burn, up to what FEED_KEEP of
+   * them burn; true when some dropped */
   private feedDish(W: World, dt: number): boolean {
-    if (W.food.length >= FOOD_ENOUGH[0] + W.cells.length * FOOD_ENOUGH[1]) return false;
-    this.feedAcc += dt * (FEED_BASE + (W.burn * FEED_SHARE) / FOOD_ENERGY.algae);
+    const n = W.cells.length,
+      keep = Math.min(n, FEED_KEEP);
+    if (W.food.length >= FOOD_ENOUGH[0] + keep * FOOD_ENOUGH[1]) return false;
+    const burn = n > FEED_KEEP ? (W.burn * FEED_KEEP) / n : W.burn;
+    this.feedAcc += dt * (FEED_BASE + (burn * FEED_SHARE) / FOOD_ENERGY.algae);
     let fed = false;
     for (; this.feedAcc >= FEED_CLUMP; this.feedAcc -= FEED_CLUMP) {
       const a = Math.random() * Math.PI * 2,

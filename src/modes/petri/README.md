@@ -167,7 +167,8 @@ toolbar under the dish (in a column beside it in split view) picks what a touch 
 The cell the tool would act on is marked with a reticle and a glow. At the toolbar's end (the
 bottom in split view) sit the buttons that act at once: **auto feed** (on when the lab opens;
 struck through when off) drops clumps of algae at random spots by itself, a trickle for the bare
-dish and faster the more energy its cells burn, and holds back while plenty lies about (its button pulses green as they
+dish and faster the more energy its cells burn, but only ever enough for a small dish (it settles around
+fourteen cells; a fuller one starves back down), and holds back while plenty lies about (its button pulses green as they
 drop in); **clear** empties the dish (for
 six seconds the button undoes it); the **time** button shows the speed running and steps through
 **1×**, **3×** and **pause** (time stops: the cells freeze, flagella and cilia too, while the
