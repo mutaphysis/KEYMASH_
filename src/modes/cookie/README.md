@@ -119,7 +119,7 @@ burnt batch comes out of the oven to a sad trombone.
 
 ## How it is drawn
 
-One raymarched distance field in hand-written WebGL2 (`render.ts`, `shader.ts`): soft shadows,
+One raymarched distance field in hand-written WebGL2 (`render.ts`, `shaders/`): soft shadows,
 ambient occlusion and procedural materials, no textures. Each cookie's outline, its bites and
 its piped letters live in a small distance texture (`shapes.ts`, `Field`). Crumbs and the motes in
 the air are instanced on top of it. The scene renders into a smaller target (up to 1.4 million

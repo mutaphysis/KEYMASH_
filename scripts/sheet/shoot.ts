@@ -83,19 +83,21 @@ function petri(card: SheetCard, cv: HTMLCanvasElement): void {
   }
 }
 
-function cookie(card: SheetCard, cv: HTMLCanvasElement): void {
+async function cookie(card: SheetCard, cv: HTMLCanvasElement): Promise<void> {
   const r = new CookieRenderer(cv);
+  await r.ready;
   r.gentle = false;
   r.zoom = card.zoom;
   r.resize(W, H);
-  // the whole bake in simulated time, then one frame: toDataURL runs in the same task, so the drawing buffer is still there
+  // the whole bake in simulated time, then one frame: toDataURL runs right after in the same task (shots() awaits this
+  // in a microtask), so the drawing buffer is still there
   const b = new Bakery(card.code, W / H);
   for (let now = 0; now < card.at; now += 1 / 30) b.tick(1 / 30);
   r.snap(b);
   r.frame(0, b, 0.3);
 }
 
-const SHOOT: Record<string, (card: SheetCard, cv: HTMLCanvasElement) => void> = { keymash, petri, cookie };
+const SHOOT: Record<string, (card: SheetCard, cv: HTMLCanvasElement) => void | Promise<void>> = { keymash, petri, cookie };
 
 export interface Shot {
   mode: string;
@@ -113,7 +115,7 @@ async function shots(): Promise<Shot[]> {
       Math.random = mulberry32(hash(m.id + ':' + card.id));
       const cv = document.createElement('canvas');
       document.body.replaceChildren(cv); // in the document, so fonts and emoji resolve like in the app
-      SHOOT[m.id]!(card, cv);
+      await SHOOT[m.id]!(card, cv);
       out.push({ mode: m.id, id: card.id, code: card.code, name: card.name, webp: cv.toDataURL('image/webp', 0.82) });
     }
   }

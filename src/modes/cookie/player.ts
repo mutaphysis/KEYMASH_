@@ -179,8 +179,13 @@ export class CookiePlayer implements ModePlayer {
       return;
     }
     this.r.snap(b);
-    this.r.frame(0, b, 0); // the shader compiles behind the boot text
-    await this.bootSequence(b);
+    // the shaders compile behind the boot text, on the driver's threads
+    try {
+      await Promise.all([this.bootSequence(b), this.r.ready]);
+    } catch (e) {
+      if (run === this.run) this.announce(t('noOven', { err: e instanceof Error ? e.message : String(e) }));
+      return;
+    }
     if (run !== this.run) return; // stopped or restarted meanwhile
     this.jingle.start();
     this.running = true;

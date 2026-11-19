@@ -7,9 +7,11 @@ import { DOUGHS } from './recipe';
 import type { Recipe, RGB, Stage, Topping } from './recipe';
 import { anchors, distanceTransform, FIELD_EXT, FIELD_N } from './shapes';
 import type { Field } from './shapes';
-import { program, uniforms, target, freeTarget, perspective, lookAt, mul } from './gl';
-import type { GL, Target, Uniforms, Vec3 } from './gl';
-import { FULL_VS, SCENE_FS, CRUMB_VS, CRUMB_FS, BLIT_FS, MOTE_VS, MOTE_FS } from './shader';
+import { target, freeTarget, perspective, lookAt, mul } from './gl';
+import type { Target, Vec3 } from './gl';
+import type { GL, Value, Values } from '../../engine/gl';
+import { programs } from './shaders';
+import type { Programs } from './shaders';
 import { ROUNDED } from './theme.css';
 import { PixelBudget } from '../../ui/budget';
 
@@ -61,6 +63,9 @@ interface Cam {
 export class CookieRenderer {
   /** false: no WebGL2 */
   readonly ok: boolean;
+  /** settles once the shaders are compiled (in the background: frame() draws nothing before); rejects with the
+   * ShaderError of one that doesn't */
+  ready: Promise<void> = Promise.resolve();
   gentle = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** CSS pixels at the bottom of the stage covered by the play buttons */
   reserveBottom = 0;
@@ -75,14 +80,10 @@ export class CookieRenderer {
   private lost = false;
   private W = 1;
   private H = 1;
-  private scene: WebGLProgram | null = null;
-  private sceneU: Uniforms = {};
-  private crumb: WebGLProgram | null = null;
-  private crumbU: Uniforms = {};
-  private blit: WebGLProgram | null = null;
-  private blitU: Uniforms = {};
-  private mote: WebGLProgram | null = null;
-  private moteU: Uniforms = {};
+  /** the programs (shaders/index.ts), once compiled; builds counts build() calls, so a context lost and restored
+   * while they compiled keeps the newer ones */
+  private p: Programs | null = null;
+  private builds = 0;
   private moteVao: WebGLVertexArrayObject | null = null;
   private tgt: Target | null = null;
   private budget: PixelBudget;
@@ -129,14 +130,11 @@ export class CookieRenderer {
   /** everything that lives in the GL context; again after the context came back */
   private build(): void {
     const gl = this.gl!;
-    this.scene = program(gl, FULL_VS, SCENE_FS);
-    this.sceneU = uniforms(gl, this.scene);
-    this.crumb = program(gl, CRUMB_VS, CRUMB_FS);
-    this.crumbU = uniforms(gl, this.crumb);
-    this.blit = program(gl, FULL_VS, BLIT_FS);
-    this.blitU = uniforms(gl, this.blit);
-    this.mote = program(gl, MOTE_VS, MOTE_FS);
-    this.moteU = uniforms(gl, this.mote);
+    const build = ++this.builds;
+    this.p = null;
+    this.ready = programs(gl).then((p) => {
+      if (build === this.builds) this.p = p;
+    });
     this.tgt = null;
 
     this.atlas = gl.createTexture();
@@ -348,7 +346,7 @@ export class CookieRenderer {
 
   frame(dt: number, b: Bakery, level: number): void {
     const gl = this.gl;
-    if (!gl || this.lost || !this.scene || !this.crumb || !this.blit) return;
+    if (!gl || this.lost || !this.p) return;
 
     // too slow for this many pixels: the next frame takes a smaller target (fitTarget)
     this.budget.frame(dt);
@@ -381,87 +379,83 @@ export class CookieRenderer {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.ALWAYS);
     gl.depthMask(true);
-    gl.useProgram(this.scene);
-    this.sceneUniforms(gl, b, cam, tgt, level);
+    this.p.scene.use(null, this.sceneValues(b, cam, tgt, level));
     gl.bindVertexArray(this.fullVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    this.drawCrumbs(gl, b, cam);
-    this.drawMotes(gl, b, cam);
+    this.drawCrumbs(gl, b, cam, this.p);
+    this.drawMotes(gl, b, cam, this.p);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.cv.width, this.cv.height);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
-    gl.useProgram(this.blit);
-    gl.bindTexture(gl.TEXTURE_2D, tgt.tex);
-    gl.uniform1i(this.blitU.uTex!, 0);
-    gl.uniform2f(this.blitU.uRes!, this.cv.width, this.cv.height);
-    gl.uniform2f(this.blitU.uFocus ?? null, this.band[0], this.band[1]);
-    gl.uniform1f(this.blitU.uHeat ?? null, this.gentle ? 0 : b.look.heat);
-    gl.uniform1f(this.blitU.uTime ?? null, this.time);
+    this.p.blit.use(null, {
+      uTex: tgt.tex,
+      uRes: [this.cv.width, this.cv.height],
+      uFocus: this.band,
+      uHeat: this.gentle ? 0 : b.look.heat,
+      uTime: this.time,
+    });
     gl.bindVertexArray(this.fullVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
   }
 
-  private sceneUniforms(gl: GL, b: Bakery, cam: Cam, tgt: Target, level: number): void {
-    const u = this.sceneU;
-    const f1 = (n: string, v: number) => gl.uniform1f(u[n] ?? null, v);
-    const i1 = (n: string, v: number) => gl.uniform1i(u[n] ?? null, v);
-    const f2 = (n: string, x: number, y: number) => gl.uniform2f(u[n] ?? null, x, y);
-    const f3 = (n: string, v: readonly number[]) => gl.uniform3f(u[n] ?? null, v[0]!, v[1]!, v[2]!);
+  /** the scene's uniforms for this frame, by name (each is set as its GLSL type says) */
+  private sceneValues(b: Bakery, cam: Cam, tgt: Target, level: number): Values {
+    const u: Record<string, Value> = {};
     const r = b.recipe;
     const L = b.look;
 
-    f2('uRes', tgt.w, tgt.h);
-    f3('uCamPos', cam.pos);
-    f3('uCamRight', cam.right);
-    f3('uCamUp', cam.up);
-    f3('uCamFwd', cam.fwd);
-    f1('uTanFov', TAN);
-    f1('uShift', cam.shift);
-    gl.uniformMatrix4fv(u.uViewProj ?? null, false, cam.viewProj);
-    f1('uTime', this.time);
-    f1('uGentle', this.gentle ? 1 : 0);
-    f1('uSpot', b.sheetR + 1);
+    u.uRes = [tgt.w, tgt.h];
+    u.uCamPos = cam.pos;
+    u.uCamRight = cam.right;
+    u.uCamUp = cam.up;
+    u.uCamFwd = cam.fwd;
+    u.uTanFov = TAN;
+    u.uShift = cam.shift;
+    u.uViewProj = cam.viewProj;
+    u.uTime = this.time;
+    u.uGentle = this.gentle ? 1 : 0;
+    u.uSpot = b.sheetR + 1;
 
     // dough, pin, cutters
     const pinY = 2 * L.tAfter + 0.28 + (1 - L.pin) * 6;
-    f1('uLift', Math.max(0, L.ballY - L.doughT));
-    f1('uDoughR', L.doughR);
-    f1('uRAfter', L.rAfter);
+    u.uLift = Math.max(0, L.ballY - L.doughT);
+    u.uDoughR = L.doughR;
+    u.uRAfter = L.rAfter;
     // the dough rises from the pressed thickness under the pin to the full one ahead of it; a big step needs room
-    f1('uPinW', 0.3 + 1.2 * Math.max(0, L.tBefore - L.tAfter));
-    f1('uSquash', L.squash);
-    f1('uPinX', L.pinX);
-    f1('uPinDir', L.pinDir);
-    f1('uPin', L.pin);
-    f1('uPinY', pinY);
-    f1('uPinLen', b.sheetR + 0.3);
-    f1('uTBefore', L.tBefore);
-    f1('uTAfter', L.tAfter);
-    f1('uFlour', L.flour);
-    f1('uDoughOn', L.gap < 3.9 && L.erode < 1.99 ? 1 : 0);
+    u.uPinW = 0.3 + 1.2 * Math.max(0, L.tBefore - L.tAfter);
+    u.uSquash = L.squash;
+    u.uPinX = L.pinX;
+    u.uPinDir = L.pinDir;
+    u.uPin = L.pin;
+    u.uPinY = pinY;
+    u.uPinLen = b.sheetR + 0.3;
+    u.uTBefore = L.tBefore;
+    u.uTAfter = L.tAfter;
+    u.uFlour = L.flour;
+    u.uDoughOn = L.gap < 3.9 && L.erode < 1.99 ? 1 : 0;
     // the bakery lifts the cutters to CUTTER_UP; a far camera (portrait, three cookies) needs them higher to be out of sight
     const cutterY = L.cutterY * Math.max(1, (cam.pos[1] + 0.5) / CUTTER_UP);
-    f1('uCutterY', cutterY);
-    f1('uCutter', L.cutter);
-    f1('uGap', L.gap);
-    f1('uEdge', L.edge);
-    f1('uChipT', L.chipT);
-    f1('uHeat', L.heat);
-    f1('uBaked', L.baked);
-    f1('uPuff', L.puff);
-    f1('uCoatReveal', L.coat);
-    f1('uPattern', L.pattern);
-    f1('uTopT', L.topT);
-    f1('uLevel', sat(level));
-    f1('uDeco', L.deco);
-    f1('uErode', L.erode);
+    u.uCutterY = cutterY;
+    u.uCutter = L.cutter;
+    u.uGap = L.gap;
+    u.uEdge = L.edge;
+    u.uChipT = L.chipT;
+    u.uHeat = L.heat;
+    u.uBaked = L.baked;
+    u.uPuff = L.puff;
+    u.uCoatReveal = L.coat;
+    u.uPattern = L.pattern;
+    u.uTopT = L.topT;
+    u.uLevel = sat(level);
+    u.uDeco = L.deco;
+    u.uErode = L.erode;
     const dropping = (L.chipT >= 0 && L.chipT < 1.2) || (L.topT >= 0 && L.topT < 1.6);
     const dropH = dropping ? 0.55 * r.size : 0;
-    f1('uDropH', dropH);
+    u.uDropH = dropH;
 
     // nothing is higher than this: the march starts there
     let top = L.ballY + L.doughT * 1.2 + 0.05;
@@ -469,7 +463,7 @@ export class CookieRenderer {
     if (L.cutter > 0) top = Math.max(top, cutterY + 0.5);
     if (L.gap > 0) top = Math.max(top, b.top + 0.32 + dropH);
     if (L.pour > 0) top = Math.max(top, b.top + L.pourTail + 0.1);
-    f1('uTopY', top);
+    u.uTopY = top;
 
     // the cookies
     const a = anchors(r.shape, r.variant, r.face !== 'none');
@@ -488,34 +482,34 @@ export class CookieRenderer {
       if (r.face !== 'none') a.eyes.forEach(([x, y], k) => put(k, x, y, 1, pop(L.deco * 2.2 - k * 0.25)));
       if (r.extra) put(2, a.letters[0], a.letters[1], r.extra === 'cherry' ? 2 : 3, pop(L.deco * 2 - 0.9));
     });
-    gl.uniform4fv(u.uCookie ?? null, ck);
-    gl.uniform2fv(u.uRot ?? null, rot);
-    gl.uniform4fv(u.uFix ?? null, fix);
-    i1('uCount', Math.min(3, b.cookies.length));
-    f1('uSize', r.size);
-    f1('uThick', r.thickness);
-    f1('uRise', r.rise);
-    f1('uEyeR', a.eyeR);
+    u.uCookie = ck;
+    u.uRot = rot;
+    u.uFix = fix;
+    u.uCount = Math.min(3, b.cookies.length);
+    u.uSize = r.size;
+    u.uThick = r.thickness;
+    u.uRise = r.rise;
+    u.uEyeR = a.eyeR;
 
     const shape = r.coat === 'none' ? [0, 0.05] : COAT_SHAPE[r.flow];
     const margin = shape[1]!;
-    f2('uCoat', COAT_KIND[r.coat], FLOW_KIND[r.flow]);
-    f2('uCoatP', shape[0]! * (r.coat === 'glaze' ? 0.5 : 1), margin);
+    u.uCoat = [COAT_KIND[r.coat], FLOW_KIND[r.flow]];
+    u.uCoatP = [shape[0]! * (r.coat === 'glaze' ? 0.5 : 1), margin];
     const dip = -0.6 + (r.seed % 7) * 0.2;
     const half = r.pattern === 'half' && r.coat !== 'none';
-    f3('uHalf', [Math.cos(dip), Math.sin(dip), half ? 1 : 0]);
+    u.uHalf = [Math.cos(dip), Math.sin(dip), half ? 1 : 0];
     // the stream lands in the middle of what gets coated; a thick coat pours in a fatter stream
-    f2('uPourAt', half ? -0.4 * Math.cos(dip) : 0, half ? -0.4 * Math.sin(dip) : 0);
-    f3('uPour', [L.pourFront, L.pourTail, L.pour * POUR_R[r.flow] * r.size]);
+    u.uPourAt = [half ? -0.4 * Math.cos(dip) : 0, half ? -0.4 * Math.sin(dip) : 0];
+    u.uPour = [L.pourFront, L.pourTail, L.pour * POUR_R[r.flow] * r.size];
     const d = DOUGH[r.dough];
-    f3('uColor', lin(r.color));
-    f3('uAccent', lin(r.accent));
-    f3('uRaw', lin(d.raw));
-    f3('uBakedCol', lin(d.baked));
-    f3('uInside', lin([0, 1, 2].map((k) => Math.min(1, mix(d.raw[k]!, d.baked[k]!, 0.35) * 1.1)) as RGB));
-    i1('uDoughKind', DOUGHS.indexOf(r.dough));
-    f1('uChips', r.chips > 0 ? 0.1 + (0.85 * r.chips) / 16 : 0);
-    f1('uChipMelt', r.coat === 'none' ? L.puff : 0);
+    u.uColor = lin(r.color);
+    u.uAccent = lin(r.accent);
+    u.uRaw = lin(d.raw);
+    u.uBakedCol = lin(d.baked);
+    u.uInside = lin([0, 1, 2].map((k) => Math.min(1, mix(d.raw[k]!, d.baked[k]!, 0.35) * 1.1)) as RGB);
+    u.uDoughKind = DOUGHS.indexOf(r.dough);
+    u.uChips = r.chips > 0 ? 0.1 + (0.85 * r.chips) / 16 : 0;
+    u.uChipMelt = r.coat === 'none' ? L.puff : 0;
     // per layer: kind, cell size, share of cells that hold a piece
     const tops = new Float32Array(9);
     let layer = 0;
@@ -537,28 +531,29 @@ export class CookieRenderer {
         tops.set([TOP_KIND[t.kind], cell, keep], 3 * layer++);
       }
     }
-    gl.uniform3fv(u.uTop ?? null, tops);
-    f1('uPowder', powder);
-    f1('uGlitter', r.glitter);
-    i1('uPatternKind', PATTERN_KIND[r.pattern]);
-    f1('uBorder', r.border ? 1 : 0);
-    f1('uBorderIn', margin / r.size + 0.07);
+    u.uTop = tops;
+    u.uPowder = powder;
+    u.uGlitter = r.glitter;
+    u.uPatternKind = PATTERN_KIND[r.pattern];
+    u.uBorder = r.border ? 1 : 0;
+    u.uBorderIn = margin / r.size + 0.07;
     const piped = PATTERN_KIND[r.pattern] > 0 || r.border || r.letters.length > 0 || r.face === 'smile' || r.face === 'frown';
-    f1('uPipeOn', piped ? 1 : 0);
-    i1('uField', 0);
+    u.uPipeOn = piped ? 1 : 0;
+    u.uField = this.atlas;
+    return u;
   }
 
   /** the motes, added onto the scene where nothing stands in front of them; they hold still for reduced motion */
-  private drawMotes(gl: GL, b: Bakery, cam: Cam): void {
-    const u = this.moteU;
-    gl.useProgram(this.mote);
+  private drawMotes(gl: GL, b: Bakery, cam: Cam, p: Programs): void {
+    p.mote.use(null, {
+      uViewProj: cam.viewProj,
+      uCamRight: cam.right,
+      uCamUp: cam.up,
+      uTime: this.gentle ? 0 : this.time,
+      uSpot: b.sheetR + 1,
+      uHeat: b.look.heat,
+    });
     gl.bindVertexArray(this.moteVao);
-    gl.uniformMatrix4fv(u.uViewProj ?? null, false, cam.viewProj);
-    gl.uniform3f(u.uCamRight ?? null, cam.right[0], cam.right[1], cam.right[2]);
-    gl.uniform3f(u.uCamUp ?? null, cam.up[0], cam.up[1], cam.up[2]);
-    gl.uniform1f(u.uTime ?? null, this.gentle ? 0 : this.time);
-    gl.uniform1f(u.uSpot ?? null, b.sheetR + 1);
-    gl.uniform1f(u.uHeat ?? null, b.look.heat);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.depthMask(false);
@@ -570,7 +565,7 @@ export class CookieRenderer {
   }
 
   /** blob shadows on the tray first, then the crumbs themselves, both against the scene's depth */
-  private drawCrumbs(gl: GL, b: Bakery, cam: Cam): void {
+  private drawCrumbs(gl: GL, b: Bakery, cam: Cam, p: Programs): void {
     const n = b.crumbs.length;
     if (!n) return;
     if (this.crumbData.length < n * 8) this.crumbData = new Float32Array(Math.max(n, 64) * 8);
@@ -579,27 +574,22 @@ export class CookieRenderer {
       const col = lin(c.color);
       data.set([c.x, c.y, c.z, c.r * sat(c.life), col[0], col[1], col[2], c.seed % 100], i * 8);
     });
-    const u = this.crumbU;
-    gl.useProgram(this.crumb);
+    const crumb = p.crumb;
+    crumb.use(null, { uViewProj: cam.viewProj, uCamRight: cam.right, uCamUp: cam.up, uCamFwd: cam.fwd, uHeat: b.look.heat });
     gl.bindVertexArray(this.crumbVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.crumbBuf);
     gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, n * 8), gl.DYNAMIC_DRAW);
-    gl.uniformMatrix4fv(u.uViewProj ?? null, false, cam.viewProj);
-    gl.uniform3f(u.uCamRight ?? null, cam.right[0], cam.right[1], cam.right[2]);
-    gl.uniform3f(u.uCamUp ?? null, cam.up[0], cam.up[1], cam.up[2]);
-    gl.uniform3f(u.uCamFwd ?? null, cam.fwd[0], cam.fwd[1], cam.fwd[2]);
-    gl.uniform1f(u.uHeat ?? null, b.look.heat);
     gl.depthFunc(gl.LEQUAL);
 
     gl.depthMask(false);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.DST_COLOR, gl.ZERO);
-    gl.uniform1f(u.uShadow ?? null, 1);
+    crumb.set({ uShadow: 1 });
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, n);
 
     gl.depthMask(true);
     gl.disable(gl.BLEND);
-    gl.uniform1f(u.uShadow ?? null, 0);
+    crumb.set({ uShadow: 0 });
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, n);
   }
 }

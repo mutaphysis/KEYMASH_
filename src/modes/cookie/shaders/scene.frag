@@ -1,24 +1,6 @@
-// COOKIE_'s shaders. The scene is one raymarched distance field: dough, cookies (their footprints
-// come from the field atlas), coating, piping, toppings, the rolling pin and the cutters. Crumbs are
-// instanced billboards drawn into the same target against the scene's depth.
-import { FIELD_EXT, FIELD_N } from './shapes';
+// The scene, one raymarched distance field: dough, cookies (their footprints come from the field atlas), coating,
+// piping, toppings, the rolling pin and the cutters.
 
-/** one triangle that covers the screen */
-export const FULL_VS = `#version 300 es
-void main() {
-  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-  gl_Position = vec4(p * 2. - 1., 0., 1.);
-}`;
-
-const TONE = `
-vec3 aces(vec3 x) { return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
-vec3 display(vec3 c) { return pow(aces(c * .72), vec3(1. / 2.2)); }
-const vec3 KEY_DIR = vec3(-.4497, .7995, .3997);
-vec3 keyLight(float heat) { return vec3(1., .94, .84) * 1.75 * mix(1., .25, heat); }
-vec3 skyLight(float up, float heat) { return mix(vec3(.2, .15, .11), vec3(.42, .5, .62), up * .5 + .5) * .6 * mix(1., .45, heat); }
-`;
-
-export const SCENE_FS = `#version 300 es
 precision highp float;
 precision highp sampler2D;
 
@@ -49,12 +31,12 @@ uniform vec4 uFix[12];   // per cookie 4: local x, y, kind (1 eye, 2 cherry, 3 a
 uniform sampler2D uField;
 out vec4 fragColor;
 
-const float EXT = ${FIELD_EXT.toFixed(4)};
-const float FN = ${FIELD_N.toFixed(1)};
+const float EXT = FIELD_EXT; // shapes.ts: the field atlas' extent and texels per side, #defined by shaders/index.ts
+const float FN = FIELD_N;
 const vec3 CHAR = vec3(.006, .004, .003);
 const vec3 DARK_CHOC = vec3(.033, .01, .005);
 const float COAT_D = .7; // the blurred footprint where a coating stops at narrow tips
-${TONE}
+#include "tone.glsl"
 
 // ---- noise ----
 float h21(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -604,145 +586,4 @@ void main() {
   vec4 clip = uViewProj * vec4(p, 1.);
   gl_FragDepth = clamp(clip.z / clip.w * .5 + .5, 0., 1.);
   fragColor = vec4(display(col), 1.);
-}`;
-
-/** crumbs: per instance position, radius, colour, seed. uShadow = 1 draws their blob shadows on the tray. */
-export const CRUMB_VS = `#version 300 es
-layout(location = 0) in vec2 aCorner;
-layout(location = 1) in vec4 iPos;   // xyz, radius
-layout(location = 2) in vec4 iColor; // rgb, seed
-uniform mat4 uViewProj;
-uniform vec3 uCamRight, uCamUp;
-uniform float uShadow;
-out vec2 vUv;
-out vec3 vColor;
-out float vSeed, vLift;
-void main() {
-  vUv = aCorner;
-  vColor = iColor.rgb;
-  vSeed = iColor.a;
-  vLift = iPos.y;
-  vec3 p = uShadow > .5
-    ? vec3(iPos.x + aCorner.x * iPos.w * 2.2, .004, iPos.z + aCorner.y * iPos.w * 2.2)
-    : iPos.xyz + (uCamRight * aCorner.x + uCamUp * aCorner.y) * iPos.w * 1.3;
-  gl_Position = uViewProj * vec4(p, 1.);
-}`;
-
-export const CRUMB_FS = `#version 300 es
-precision highp float;
-in vec2 vUv;
-in vec3 vColor;
-in float vSeed, vLift;
-uniform vec3 uCamRight, uCamUp, uCamFwd;
-uniform float uShadow, uHeat;
-out vec4 fragColor;
-${TONE}
-void main() {
-  if (uShadow > .5) {
-    float a = .45 * exp(-3. * vLift) * smoothstep(1., .2, length(vUv));
-    fragColor = vec4(vec3(1. - a), 1.);
-    return;
-  }
-  vec2 uv = vUv * 1.3;
-  float th = atan(uv.y, uv.x);
-  float rad = 1. + .16 * sin(th * 3. + vSeed) + .1 * sin(th * 5. + vSeed * 2.3);
-  float l = length(uv) / rad;
-  if (l > 1.) discard;
-  vec3 n = normalize(uCamRight * uv.x + uCamUp * uv.y - uCamFwd * sqrt(1. - l * l) * rad);
-  n = normalize(n + .25 * vec3(sin(vSeed + uv.x * 9.), sin(vSeed * 1.7 + uv.y * 8.), 0.));
-  vec3 col = vColor * (max(dot(n, KEY_DIR) * .7 + .3, 0.) * keyLight(uHeat) + skyLight(n.y, uHeat));
-  fragColor = vec4(display(col), 1.);
-}`;
-
-/**
- * Motes: flour and dust in the air over the tray, one instance each, placed and moved entirely here
- * from their index and the time. A slow draft carries them across, each dances on its own, and they
- * light up in the beam from the soft box above. Added onto the scene, behind the cookies where they are.
- */
-export const MOTE_VS = `#version 300 es
-layout(location = 0) in vec2 aCorner;
-uniform mat4 uViewProj;
-uniform vec3 uCamRight, uCamUp;
-uniform float uTime, uSpot;
-out vec2 vUv;
-out float vGlow;
-${TONE}
-float h(float n) { return fract(sin(n * 127.1 + 31.7) * 43758.5453); }
-void main() {
-  float id = float(gl_InstanceID);
-  float t = uTime;
-  float W = uSpot * 1.3, H = 3.2;
-  vec3 p = vec3((h(id) * 2. - 1.) * W, h(id + .37) * H, (h(id + .71) * 2. - 1.) * W);
-  // the draft: sideways, a little up or down, round and round the box
-  p.x = mod(p.x + W + t * (.05 + .06 * h(id + 2.)), 2. * W) - W;
-  p.y = mod(p.y + t * .03 * (h(id + 3.) - .35), H);
-  // the dance
-  p += .2 * vec3(sin(t * (.3 + .4 * h(id + 4.)) + id), .6 * sin(t * (.25 + .3 * h(id + 5.)) + id * 1.3), cos(t * (.35 + .3 * h(id + 6.)) + id * .7));
-  p.y += .2;
-  // bright in the beam, a slow twinkle as they turn, gone at the edges of the box (no popping when they wrap)
-  float beam = length(cross(p, KEY_DIR));
-  vGlow = smoothstep(uSpot, uSpot * .15, beam) * (.55 + .45 * sin(t * (.8 + 1.6 * h(id + 7.)) + id * 3.))
-    * smoothstep(W, W * .8, abs(p.x)) * smoothstep(H + .2, H - .3, p.y) * smoothstep(.1, .4, p.y);
-  float r = .008 + .012 * h(id + 8.);
-  vUv = aCorner;
-  gl_Position = uViewProj * vec4(p + (uCamRight * aCorner.x + uCamUp * aCorner.y) * r * 2., 1.);
-}`;
-
-export const MOTE_FS = `#version 300 es
-precision highp float;
-in vec2 vUv;
-in float vGlow;
-uniform float uHeat;
-out vec4 fragColor;
-void main() {
-  float d = dot(vUv, vUv);
-  if (d > 1.) discard;
-  // warm white in daylight, embers by the oven; a small bright core, little halo
-  vec3 c = mix(vec3(1., .94, .82), vec3(1., .5, .16), uHeat) * exp(-7. * d) * vGlow * .4;
-  fragColor = vec4(c, 1.);
-}`;
-
-/**
- * The scene target stretched over the canvas: heat haze while the oven is on, a tilt-shift blur above
- * and below the band the cookies sit in, a soft vignette and a little dither against banding.
- */
-export const BLIT_FS = `#version 300 es
-precision highp float;
-uniform sampler2D uTex;
-uniform vec2 uRes;
-uniform vec2 uFocus; // the band that stays sharp: lower and upper edge, 0 bottom .. 1 top
-uniform float uHeat, uTime;
-out vec4 fragColor;
-float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
-float vnoise(vec2 p) {
-  vec2 i = floor(p), f = fract(p);
-  f = f * f * (3. - 2. * f);
-  return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x), mix(hash(i + vec2(0., 1.)), hash(i + 1.), f.x), f.y);
 }
-void main() {
-  vec2 uv = gl_FragCoord.xy / uRes;
-  if (uHeat > 0.) {
-    // hot air: ripples rising up the screen, sideways more than up and down, stronger higher up where the heat goes
-    vec2 q = vec2(uv.x * uRes.x / uRes.y * 6., uv.y * 9. - uTime * 2.2);
-    vec2 w = vec2(vnoise(q), vnoise(q * 1.7 + 17.3)) - .5;
-    w += .5 * (vec2(vnoise(q * 2.3 + 5.), vnoise(q * 2.9 + 31.)) - .5);
-    uv += w * uHeat * (.4 + .6 * uv.y) * vec2(.02, .01);
-  }
-  // tilt-shift: a disc of taps on a golden-angle spiral, turned per pixel, wider the further from the band
-  float blur = smoothstep(0., .3, max(uFocus.x - uv.y, uv.y - uFocus.y));
-  vec3 c;
-  if (blur > .01) {
-    vec2 r = blur * .018 * vec2(uRes.y / uRes.x, 1.);
-    float turn = hash(gl_FragCoord.xy) * 6.2832;
-    c = vec3(0.);
-    for (int i = 0; i < 16; i++) {
-      float a = float(i) * 2.39996 + turn;
-      c += texture(uTex, uv + r * sqrt((float(i) + .5) / 16.) * vec2(cos(a), sin(a))).rgb;
-    }
-    c /= 16.;
-  } else c = texture(uTex, uv).rgb;
-  vec2 v = gl_FragCoord.xy / uRes - .5;
-  c *= 1. - .3 * smoothstep(.3, 1., dot(v, v) * 2.);
-  c += (hash(gl_FragCoord.xy + 7.) - .5) / 255.;
-  fragColor = vec4(c, 1.);
-}`;

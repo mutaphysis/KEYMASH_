@@ -1,48 +1,6 @@
-// The little WebGL2 that COOKIE_ needs: programs, uniform lookup, one render target, 4x4 matrices.
+// The rest of the little WebGL2 that COOKIE_ needs (programs: src/engine/gl.ts): one render target, 4x4 matrices.
 // Matrices are column-major Float32Array(16), as GL wants them.
-
-export type GL = WebGL2RenderingContext;
-
-function compile(gl: GL, type: number, src: string): WebGLShader {
-  const sh = gl.createShader(type)!;
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS) && !gl.isContextLost()) {
-    const log = gl.getShaderInfoLog(sh) ?? '';
-    gl.deleteShader(sh);
-    throw new Error('shader: ' + log);
-  }
-  return sh;
-}
-
-/** compile and link; throws with the info log */
-export function program(gl: GL, vs: string, fs: string): WebGLProgram {
-  const prog = gl.createProgram()!;
-  const a = compile(gl, gl.VERTEX_SHADER, vs);
-  const b = compile(gl, gl.FRAGMENT_SHADER, fs);
-  gl.attachShader(prog, a);
-  gl.attachShader(prog, b);
-  gl.linkProgram(prog);
-  gl.deleteShader(a);
-  gl.deleteShader(b);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS) && !gl.isContextLost())
-    throw new Error('program: ' + (gl.getProgramInfoLog(prog) ?? ''));
-  return prog;
-}
-
-export type Uniforms = Record<string, WebGLUniformLocation | null>;
-
-/** name -> location of every active uniform; arrays under their bare name ("uCookie") */
-export function uniforms(gl: GL, prog: WebGLProgram): Uniforms {
-  const out: Uniforms = {};
-  const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) as number;
-  for (let i = 0; i < n; i++) {
-    const info = gl.getActiveUniform(prog, i);
-    if (!info) continue;
-    out[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(prog, info.name);
-  }
-  return out;
-}
+import type { GL } from '../../engine/gl';
 
 export interface Target {
   fbo: WebGLFramebuffer;

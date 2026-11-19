@@ -136,6 +136,8 @@ src/lang/keys.ts         shared: QWERTZ geometry (position, pitch, adjacency)
 src/lang/rng.ts          shared: seeded hash + PRNG
 src/engine/sound.ts      what the audio engine plays (notes, drums, sfx, phone tones): the modes' sound vocabulary
 src/engine/audio.ts      WebAudio synth, drums, sfx, reverb/delay, typing sounds, speech
+src/engine/gl.ts         WebGL2 programs (COOKIE_, MYCELIUM_): uniforms set by name and GLSL type, compile errors by file:line
+src/engine/shaders.ts    a mode's shaders/ folder: #include, #line, parallel compile, hot relink in dev
 src/ui/editor.ts         textarea, the mode's backdrop canvases, key bar
 src/ui/icon.ts           UI icons: SVGs in src/ui/icons/ (MingCute via Iconify, fetched by scripts/ui-icons.ts), drawn as a CSS mask
 src/ui/components/       light-DOM custom elements: km-button, km-mute, km-mode-icon, km-item, km-select, km-toast, km-drawer, km-card
